@@ -51,6 +51,9 @@ Public Class Form1
   Dim DB2Declares As New List(Of String)
   Dim MembersNames As New List(Of String)
 
+  Dim NumberOfJobsToProcess As Integer = 0
+  Dim ListOfJobs As New List(Of String)
+
   ' JCL
   Dim DirectoryName As String = ""
   Dim FileNameOnly As String = ""
@@ -79,8 +82,10 @@ Public Class Form1
   Dim procSequence As Integer = 0
   Dim execSequence As Integer = 0
 
+  Dim ProgramsRow As Integer = 0
   Dim RecordsRow As Integer = 0
   Dim FieldsRow As Integer = 0
+  Dim CommentsRow As Integer = 0
 
   Dim jclStmt As New List(Of String)
   Dim ListOfExecs As New List(Of String)        'array holding the executable programs
@@ -89,6 +94,9 @@ Public Class Form1
   Dim swDDFile As StreamWriter = Nothing
   Dim swPumlFile As StreamWriter = Nothing
   Dim LogFile As StreamWriter = Nothing
+  Dim LogStmtFile As StreamWriter = Nothing
+  Dim swBRFile As StreamWriter = Nothing
+  Dim swCallPgmsFile As StreamWriter = Nothing
 
   ' load the Excel References
   Dim objExcel As New Microsoft.Office.Interop.Excel.Application
@@ -96,29 +104,40 @@ Public Class Form1
   Dim worksheet As Microsoft.Office.Interop.Excel.Worksheet
   Dim RecordsWorksheet As Microsoft.Office.Interop.Excel.Worksheet
   Dim FieldsWorksheet As Microsoft.Office.Interop.Excel.Worksheet
+  Dim CommentsWorksheet As Microsoft.Office.Interop.Excel.Worksheet
   Dim rngRecordName As Microsoft.Office.Interop.Excel.Range
   Dim rngRecordsName As Microsoft.Office.Interop.Excel.Range
   Dim rngFieldsName As Microsoft.Office.Interop.Excel.Range
+  Dim rngComments As Microsoft.Office.Interop.Excel.Range
+  Dim DefaultFormat = Microsoft.Office.Interop.Excel.XlFileFormat.xlWorkbookDefault
 
   ' COBOL fields
   Dim SourceType As String = ""
+  Dim CalledMember As String = ""
   Dim SrcStmt As New List(Of String)
   Dim cWord As New List(Of String)
+  Dim lWord As New List(Of String)                    'Word Level value for IF syncs with cWord
   Dim ListOfFiles As New List(Of String)              'array to hold File & DB2 Table names
   Dim ListOfRecordNames As New List(Of String)          'array to hold read/written records
   Dim ListOfRecords As New List(Of String)              'array to hold read/written records
   Dim ListOfFields As New List(Of String)             'array to hold fields for each record
   Dim ListOfReadIntoRecords As New List(Of String)    'array to hold Read Into Records
   Dim ListOfWriteFromRecords As New List(Of String)   'array to hold Write from records
-  Dim IFLevelIndex As New List(Of Integer)     'where in cWord the 'IF' is located
+  Dim ListOfComments As New List(Of String)           'array to hold comments from source (cobol & easytrieve)
+  Dim ListOfParagraphs As New List(Of String)         'array to hold COBOL paragraph names
+  Dim ListOfCallPgms As New List(Of String)           'array to hold Call programs (sub routines)
+  Dim IFLevelIndex As New List(Of Integer)            'where in cWord the 'IF' is located
   Dim VerbNames As New List(Of String)
   Dim VerbCount As New List(Of Integer)
   Dim ProgramAuthor As String = ""
   Dim ProgramWritten As String = ""
   Dim IndentLevel As Integer = -1                  'how deep the if has gone
+  Dim BRLevel As Integer = -1                       'how deep the Business Rule has gone
   Dim FirstWhenStatement As Boolean = False
   Dim WithinReadStatement As Boolean = False
   Dim WithinReadConditionStatement As Boolean = False
+  Dim WithinPerformWithEndPerformStatement As Boolean = False
+  Dim WithinIF As Boolean = False
   Dim pgmSeq As Integer = 0
   Dim pumlFile As StreamWriter = Nothing          'File holding the Plantuml commands
 
@@ -165,22 +184,27 @@ Public Class Form1
   Dim List_Usage As New List(Of String)({"BINARY", "COMP", "COMP-1", "COMP-2", "COMP-3", "COMP-4", "COMP-5", "COMPUTATIONAL", "COMPUTATIONAL-1", "COMPUTATIONAL-2", "COMPUTATIONAL-3", "COMPUTATIONAL-4", "COMPUTATIONAL-5", "DISPLAY", "DISPLAY-1", "INDEX", "NATIONAL", "PACKED-DECIMAL", "POINTER", "PROCEDURE-POINTER", "FUNCTION-POINTER"})
 
   Private Sub btnJCLJOBFilename_Click(sender As Object, e As EventArgs) Handles btnJCLJOBFilename.Click
-    Dim ofd_InFile As New OpenFileDialog
-    ' browse for and select file name
-    ofd_InFile.Filter = "JCL|*.jcl|All|*.*"
-    ofd_InFile.Title = "Select the JCL JOB file"
-    If ofd_InFile.ShowDialog() = DialogResult.OK Then
-      txtJCLJOBFilename.Text = ofd_InFile.FileName
-      DirectoryName = Path.GetDirectoryName(ofd_InFile.FileName)
-      FileNameOnly = Path.GetFileNameWithoutExtension(ofd_InFile.FileName)
+    ' browse for and select folder name
+    Dim bfd_JobLibFolder As New FolderBrowserDialog With {
+      .Description = "Enter JCL JOBs folder name"
+    }
+    If bfd_JobLibFolder.ShowDialog() = DialogResult.OK Then
+      txtJCLJOBFolderName.Text = bfd_JobLibFolder.SelectedPath
+    Else
+      Exit Sub
     End If
+    NumberOfJobsToProcess = My.Computer.FileSystem.GetFiles(txtJCLJOBFolderName.Text).Count
+    lblJobFileCount.Text = "JCL Job files found:" & Str(NumberOfJobsToProcess)
+    For Each foundFile As String In My.Computer.FileSystem.GetFiles(txtJCLJOBFolderName.Text)
+      ListOfJobs.Add(foundFile)
+    Next
   End Sub
 
   Private Sub btnJCLProclibFolder_Click(sender As Object, e As EventArgs) Handles btnJCLProclibFolder.Click
     ' browse for and select folder name
     Dim bfd_ProclibFolder As New FolderBrowserDialog With {
       .Description = "Enter Proclib folder name",
-      .SelectedPath = DirectoryName
+      .SelectedPath = txtJCLJOBFolderName.Text
     }
     If bfd_ProclibFolder.ShowDialog() = DialogResult.OK Then
       txtJCLProclibFoldername.Text = bfd_ProclibFolder.SelectedPath
@@ -191,7 +215,7 @@ Public Class Form1
     ' browse for and select folder name
     Dim bfd_SourceFolder As New FolderBrowserDialog With {
       .Description = "Enter Source folder name",
-      .SelectedPath = DirectoryName
+      .SelectedPath = txtJCLJOBFolderName.Text
     }
     If bfd_SourceFolder.ShowDialog() = DialogResult.OK Then
       txtSourceFolderName.Text = bfd_SourceFolder.SelectedPath
@@ -202,7 +226,7 @@ Public Class Form1
     ' browse for and select folder name
     Dim bfd_OutputFolder As New FolderBrowserDialog With {
       .Description = "Enter OUTPUT folder name",
-      .SelectedPath = DirectoryName
+      .SelectedPath = txtJCLJOBFolderName.Text
     }
     If bfd_OutputFolder.ShowDialog() = DialogResult.OK Then
       txtOutputFoldername.Text = bfd_OutputFolder.SelectedPath
@@ -221,30 +245,49 @@ Public Class Form1
   End Sub
 
   Private Sub btnADDILite_Click(sender As Object, e As EventArgs) Handles btnADDILite.Click
+    DirectoryName = Path.GetDirectoryName(txtJCLJOBFolderName.Text)
+
     Delimiter = txtDelimiter.Text
+    lblCopybookMessage.Text = ""
 
     ' ready the progress bar
     ProgressBar1.Minimum = 0
-    ProgressBar1.Maximum = 11
+    ProgressBar1.Maximum = NumberOfJobsToProcess + 2
     ProgressBar1.Step = 1
     ProgressBar1.Value = 0
 
     Me.Cursor = Cursors.WaitCursor
 
-    Dim logFileName As String = txtOutputFoldername.Text & "\" & FileNameOnly & "_log.txt"
+    Dim logFileName As String = txtOutputFoldername.Text & "\ADDILite_log.txt"
     LogFile = My.Computer.FileSystem.OpenTextFileWriter(logFileName, False)
     LogFile.WriteLine(Date.Now & ",Program Starts," & Me.Text)
-    LogFile.WriteLine(Date.Now & ",JCL JOB Filename," & txtJCLJOBFilename.Text)
+    LogFile.WriteLine(Date.Now & ",JCL JOB Filename," & txtJCLJOBFolderName.Text)
     LogFile.WriteLine(Date.Now & ",JCL Proclib Folder," & txtJCLProclibFoldername.Text)
     LogFile.WriteLine(Date.Now & ",Source Folder," & txtSourceFolderName.Text)
     LogFile.WriteLine(Date.Now & ",Output Folder," & txtOutputFoldername.Text)
     LogFile.WriteLine(Date.Now & ",Delimiter," & txtDelimiter.Text)
+    LogFile.WriteLine(Date.Now & ",ScanModeOnly," & cbScanModeOnly.Checked)
 
     'validations
     If Not FileNamesAreValid() Then
       LogFile.WriteLine(Date.Now & ",File Names are not Valid,")
       Me.Cursor = Cursors.Default
       Exit Sub
+    End If
+
+    ' Prepare for CallPgms file which holds all the Called Programs within the sources
+    '  this file is processed as the last "JOB"
+    ' Remove previous CallPgms.jcl file
+    Dim CallPgmsFileName = txtJCLJOBFolderName.Text & "\CallPgms.jcl"
+    If File.Exists(CallPgmsFileName) Then
+      LogFile.WriteLine(Date.Now & ",Previous CallPgms.jcl file deleted," & CallPgmsFileName)
+      Try
+        File.Delete(CallPgmsFileName)
+      Catch ex As Exception
+        LogFile.WriteLine(Date.Now & ",Error deleting CallPgms.jcl file," & ex.Message)
+        lblCopybookMessage.Text = "Error deleting CallPgms.jcl file:" & ex.Message
+        Exit Sub
+      End Try
     End If
 
     'build a cross-reference table of DB2 Tablenames with source members
@@ -267,46 +310,100 @@ Public Class Form1
       Next index
     Next
 
+    ProgressBar1.PerformStep()
+    ProgressBar1.Show()
+
+    ' Open Excel file
     objExcel.Visible = False
 
-    Dim ProgramsFileName = DirectoryName & "\" & FileNameOnly & ".xlsx"
+    Dim ProgramsFileName = txtOutputFoldername.Text & "\ADDILite.xlsx"
     If File.Exists(ProgramsFileName) Then
-      LogFile.WriteLine(Date.Now & ",Previous Excel file deleted," & ProgramsFileName)
-      File.Delete(ProgramsFileName)
+      LogFile.WriteLine(Date.Now & ",Previous Model file deleted," & ProgramsFileName)
+      Try
+        File.Delete(ProgramsFileName)
+      Catch ex As Exception
+        LogFile.WriteLine(Date.Now & ",Error deleting Model," & ex.Message)
+        lblCopybookMessage.Text = "Error Deleting Model:" & ex.Message
+        Exit Sub
+      End Try
     End If
 
+    ' Process All the jobs in the JCL Folder.
+    '  An addtional job could be created if should there be call subroutines
+    Dim Jobcount As Integer = 0
+    For Each JobFile In ListOfJobs
+      Jobcount += 1
+      jobSequence += 1
+      lblProcessingJob.Text = "Processing Job #" & Jobcount & ": " & JobFile
+      LogFile.WriteLine(Date.Now & ",Processing Job," & Path.GetFileNameWithoutExtension(JobFile))
+      FileNameOnly = Path.GetFileNameWithoutExtension(JobFile)
+      ProcessJOBFile(JobFile)
+      ProcessSourceFiles()
+      ProgressBar1.PerformStep()
+      ProgressBar1.Show()
+      Call InitializeProgramVariables()
+    Next
 
-    ProcessJOBFile()
+    ProcessCallPgms(CallPgmsFileName)
+
+    ' Save Application Model Spreadsheet
+    If cbScanModeOnly.Checked Then
+      objExcel.DisplayAlerts = False
+      objExcel.Quit()
+    Else
+      ' Format, Save and close Excel
+      lblCopybookMessage.Text = "Saving Spreadsheet"
+      Call FormatWorksheets()
+      workbook.SaveAs(ProgramsFileName, DefaultFormat)
+      workbook.Close()
+      objExcel.Quit()
+    End If
 
     ProgressBar1.PerformStep()
     ProgressBar1.Show()
 
-    ProcessSourceFiles()
-
-    ProgressBar1.PerformStep()
-
-    '
-    ' Save and close
-    '
-    Dim DefaultFormat = Microsoft.Office.Interop.Excel.XlFileFormat.xlWorkbookDefault
-    workbook.SaveAs(ProgramsFileName, DefaultFormat)
-    workbook.Close()
-    objExcel.Quit()
-
     LogFile.WriteLine(Date.Now & ",Program Ends,")
     LogFile.Close()
-    ProgressBar1.PerformStep()
     Me.Cursor = Cursors.Default
+    lblCopybookMessage.Text = "Process Complete"
+    MessageBox.Show("Process Complete")
+  End Sub
+
+  Sub ProcessCallPgms(ByRef CallPgmsFileName As String)
+    If ListOfCallPgms.Count = 0 Then
+      Exit Sub
+    End If
+
+    ' create the CallPgms.jcl file
+    swCallPgmsFile = New StreamWriter(CallPgmsFileName, False)
+    Dim pgmCnt As Integer = 0
+    swCallPgmsFile.WriteLine("//CALLPGMS JOB 'SUBROUTINES CALLED'")
+    For Each callpgm In ListOfCallPgms
+      pgmCnt += 1
+      Dim execs As String() = callpgm.Split(Delimiter)
+      swCallPgmsFile.WriteLine("//PGM" & LTrim(Str(pgmCnt)) & " EXEC PGM=" & execs(0).Replace(Delimiter, ""))
+      swCallPgmsFile.WriteLine("//STEPLIB DD DSN=" & execs(2) & ",DISP=SHR")
+    Next
+    swCallPgmsFile.Close()
+
+    'process the CallPgms file
+    lblProcessingJob.Text = "Processing Job CallPgms" & ": " & CallPgmsFileName
+    LogFile.WriteLine(Date.Now & ",Processing Job," & CallPgmsFileName)
+    FileNameOnly = Path.GetFileNameWithoutExtension(CallPgmsFileName)
+    ProcessJOBFile(CallPgmsFileName)
+    ProcessSourceFiles()
+    ProgressBar1.PerformStep()
+    ProgressBar1.Show()
+    Call InitializeProgramVariables()
+
   End Sub
   Function FileNamesAreValid() As Boolean
     FileNamesAreValid = False
     Select Case True
-      Case txtJCLJOBFilename.TextLength = 0
-        LogFile.WriteLine(Date.Now & ",JCL JOB File name required,")
-      Case Not IsValidFileNameOrPath(txtJCLJOBFilename.Text)
-        LogFile.WriteLine(Date.Now & ",JCL JOB File name has invalid characters,")
-      Case Not My.Computer.FileSystem.FileExists(txtJCLJOBFilename.Text)
-        LogFile.WriteLine(Date.Now & ",JCL JOB File name not found,")
+      Case txtJCLJOBFolderName.TextLength = 0
+        LogFile.WriteLine(Date.Now & ",JCL JOB Folder name required,")
+      Case Not IsValidFileNameOrPath(txtJCLJOBFolderName.Text)
+        LogFile.WriteLine(Date.Now & ",JCL JOB Folder name has invalid characters,")
 
       Case txtOutputFoldername.TextLength = 0
         LogFile.WriteLine(Date.Now & ",OutFolder name required,")
@@ -314,8 +411,8 @@ Public Class Form1
         LogFile.WriteLine(Date.Now & ",OutFolder has invalid characters,")
       Case Not IsValidFileNameOrPath(txtSourceFolderName.Text)
         LogFile.WriteLine(Date.Now & ",Source folder name has invalid characters,")
-      Case Not IsValidFileNameOrPath(txtJCLProclibFoldername.Text)
-        LogFile.WriteLine(Date.Now & ",Proclib folder name has invalid characters,")
+        '      Case Not IsValidFileNameOrPath(txtJCLProclibFoldername.Text)
+        '        LogFile.WriteLine(Date.Now & ",Proclib folder name has invalid characters,")
       Case Else
         FileNamesAreValid = True
     End Select
@@ -335,28 +432,33 @@ Public Class Form1
   End Function
 
   ' * Subroutines
-  Sub ProcessJOBFile()
+  Sub ProcessJOBFile(JobFile As String)
+
     'Load the infile to the jclStmt List
-    Dim jclRecordsCount As Integer = LoadJCLStatementsToArray()
+    Dim jclRecordsCount As Integer = LoadJCLStatementsToArray(JobFile)
     If jclRecordsCount = 0 Then
-      MessageBox.Show("No JCL records")
+      MessageBox.Show("No JCL records read from file:" & JobFile)
       Exit Sub
     End If
 
     If jclStmt.Count = 0 Then
-      MessageBox.Show("No JCL statements found on inFile")
+      MessageBox.Show("No JCL statements loaded from File:" & JobFile)
     End If
 
-    ProgressBar1.PerformStep()
+    ' log file, optioned
+    If cbLogStmt.Checked Then
+      Call LogStmtArray(FileNameOnly, jclStmt)
+    End If
 
     If WriteOutput() = -1 Then
       MessageBox.Show("Error while building output. See log file")
     End If
 
-    ProgressBar1.PerformStep()
-
   End Sub
-  Function LoadJCLStatementsToArray() As Integer
+  Function LoadJCLStatementsToArray(JobFile As String) As Integer '
+    ' Clear out the JCL Statement array
+    jclStmt.Clear()
+
     ' Remove the temporary work file
     Try
       If My.Computer.FileSystem.FileExists(tempFileName) Then
@@ -376,109 +478,140 @@ Public Class Form1
     LoadJCLStatementsToArray = 0
     Dim debugCount As Integer = -1
 
-    Dim JCLLines As String() = File.ReadAllLines(txtJCLJOBFilename.Text)
-    '
-    ' Write any Instream PROC(s) to a Proclib and drop it and drop empty lines
-    ' Not handling Procs within Procs
-    '
-    Dim NumberOfInstreamProcsFound As Integer = 0
-    Dim swTemp As StreamWriter = Nothing
+    Dim JCLLines As String() = File.ReadAllLines(JobFile)
 
-    Dim ipName As String = ""
     '
-    ' Create a Proc file from the Instream proc, if any
-    ' And drop the instream proc lines 
-    ' And remove any columns 73-80 values
-    '
-    swTemp = New StreamWriter(tempFileName, False)
-    For index As Integer = 0 To JCLLines.Count - 1
-      Dim jline As String = JCLLines(index) & Space(72)
-      jline = jline.Substring(0, 72).Trim
-      If jline.Substring(0, 2) = "/*" Then
-        swTemp.WriteLine(jline)
-        Continue For
-      End If
-      If jline.Substring(0, 3) = "//*" Then
-        swTemp.WriteLine(jline)
-        Continue For
-      End If
-      Dim procLocation As Integer = jline.IndexOf(" PROC ")
-      If procLocation = -1 Then
-        swTemp.WriteLine(jline)
-        Continue For
-      End If
-      ipName = Trim(jline.Substring(2, procLocation - 3 + 1))
-      Dim ipFileName = txtJCLProclibFoldername.Text & "\" & ipName & ".jcl"
-      LogFile.WriteLine(Date.Now & ",Instream Proc Created," & ipFileName)
-      swIPFile = New StreamWriter(ipFileName, False)
-      For ipIndex As Integer = index To JCLLines.Count - 1
-        Dim pline As String = JCLLines(ipIndex) & Space(72)
-        pline = pline.Substring(0, 72).Trim
-        swIPFile.WriteLine(pline)
-        If pline.IndexOf(" PEND ") > -1 Then
-          index = ipIndex
-          Exit For
-        End If
-      Next
-      swIPFile.Close()
-    Next
-    swTemp.Close()
-    '
-    ' Now include all PROCs from the ProcLib and place after the EXEC PROC statement
-    '
-    Dim jclWords As New List(Of String)
-    JCLLines = File.ReadAllLines(tempFileName)
-    swTemp = New StreamWriter(tempFileName, False)
-    For index As Integer = 0 To JCLLines.Count - 1
-      If JCLLines(index).Substring(0, 2) = "/*" Then
-        swTemp.WriteLine(JCLLines(index))
-        Continue For
-      End If
-      If JCLLines(index).Substring(0, 3) = "//*" Then
-        swTemp.WriteLine(JCLLines(index))
-        Continue For
-      End If
-      Call GetJCLWords(JCLLines(index), jclWords)
-      If jclWords.Count >= 2 Then
-        jControl = jclWords(1)
-      End If
-      If jControl <> "EXEC" Then
-        swTemp.WriteLine(JCLLines(index))
-        Continue For
-      End If
-      procName = GetParm(JCLLines(index), "PROC=")
-      ' write all lines for this EXEC statement
-      For contIndex As Integer = index To JCLLines.Count - 1
-        swTemp.WriteLine(JCLLines(contIndex))
-        If JCLLines(contIndex).Substring(0, 3) = "//*" Then
-          Continue For
-        End If
-        If Microsoft.VisualBasic.
-            Right(Trim(JCLLines(contIndex).PadRight(80).Substring(0, 70)), 1) <> "," Then
-          index = contIndex
-          Exit For
-        End If
-      Next
+    '' Write any Instream PROC(s) to a Proclib and drop it and drop empty lines
+    '' Not handling Procs within Procs
+    ''
+    'Dim NumberOfInstreamProcsFound As Integer = 0
+    'Dim swTemp As StreamWriter = Nothing
 
-      If procName.Length = 0 Then
-        Continue For
-      End If
-      ' if it is an "EXEC PROC=" copy the PROC file into here
-      Dim ProcFileName As String = txtJCLProclibFoldername.Text & "\" & procName & ".jcl"
-      LogFile.WriteLine(Date.Now & ",Processing PROC source," & ProcFileName)
-      Dim procLines As String() = File.ReadAllLines(ProcFileName)
-      For procIndex = 0 To procLines.Count - 1
-        Dim jline As String = "++" & Mid(procLines(procIndex), 3) & Space(72)
-        jline = jline.Substring(0, 72).Trim
-        swTemp.WriteLine(jline)
-      Next
-    Next
-    swTemp.Close()
-    '
-    ' Load JCL lines to a JCL statements array. 
-    ' Basically dealing with continuations and removing comments
-    '
-    JCLLines = File.ReadAllLines(tempFileName)
+    'Dim ipName As String = ""
+    ''
+    '' Create a Proc file from the Instream proc, if any
+    '' And drop the instream proc lines 
+    '' And remove any columns 73-80 values
+    ''
+    'swTemp = New StreamWriter(tempFileName, False)
+    'For index As Integer = 0 To JCLLines.Count - 1
+    '  Dim jline As String = JCLLines(index) & Space(72)
+    '  jline = jline.Substring(0, 72).Trim
+    '  If jline.Substring(0, 2) = "/*" Then
+    '    swTemp.WriteLine(jline)
+    '    Continue For
+    '  End If
+    '  If jline.Substring(0, 3) = "//*" Then
+    '    swTemp.WriteLine(jline)
+    '    Continue For
+    '  End If
+    '  Dim procLocation As Integer = jline.IndexOf(" PROC ")
+    '  If procLocation = -1 Then
+    '    swTemp.WriteLine(jline)
+    '    Continue For
+    '  End If
+    '  ipName = Trim(jline.Substring(2, procLocation - 3 + 1))
+    '  Dim ipFileName = txtJCLProclibFoldername.Text & "\" & ipName & ".jcl"
+    '  LogFile.WriteLine(Date.Now & ",Instream Proc Created," & ipFileName)
+    '  swIPFile = New StreamWriter(ipFileName, False)
+    '  Dim PendFound As Boolean = False
+    '  For ipIndex As Integer = index To JCLLines.Count - 1
+    '    Dim pline As String = JCLLines(ipIndex) & Space(72)
+    '    pline = pline.Substring(0, 72).Trim
+    '    swIPFile.WriteLine(pline)
+    '    If pline.IndexOf(" PEND ") > -1 Then
+    '      index = ipIndex
+    '      PendFound = True
+    '      Exit For
+    '    End If
+    '    If pline.EndsWith(" PEND") Then
+    '      index = ipIndex
+    '      PendFound = True
+    '      Exit For
+    '    End If
+    '  Next
+    '  If Not PendFound Then
+    '    swIPFile.WriteLine("// PEND")
+    '    index = JCLLines.Count - 1
+    '  End If
+    '  swIPFile.Close()
+    'Next
+    'swTemp.Close()
+
+    '' Now include all PROCs from the ProcLib and place after the EXEC PROC statement
+    ''
+    'Dim jclWords As New List(Of String)
+    'JCLLines = File.ReadAllLines(tempFileName)
+    'swTemp = New StreamWriter(tempFileName, False)
+    'For index As Integer = 0 To JCLLines.Count - 1
+    '  If JCLLines(index).Substring(0, 2) = "/*" Then
+    '    swTemp.WriteLine(JCLLines(index))
+    '    Continue For
+    '  End If
+    '  If JCLLines(index).Substring(0, 3) = "//*" Then
+    '    swTemp.WriteLine(JCLLines(index))
+    '    Continue For
+    '  End If
+    '  Call GetJCLWords(JCLLines(index), jclWords)
+    '  If jclWords.Count >= 2 Then
+    '    jControl = jclWords(1)
+    '  End If
+    '  If jControl <> "EXEC" Then
+    '    swTemp.WriteLine(JCLLines(index))
+    '    Continue For
+    '  End If
+    '  procName = GetParm(JCLLines(index), "PROC=")
+    '  If procName.Length = 0 Then
+    '    procName = GetParm(JCLLines(index), "PROC")
+    '  End If
+    '  If procName.Length = 0 Then
+    '    If jclWords.Count >= 3 Then
+    '      If Not jclWords(2).StartsWith("PGM=") Then
+    '        procName = jclWords(2)
+    '      End If
+    '    End If
+    '  End If
+    '  ' write all lines for this EXEC statement
+    '  For contIndex As Integer = index To JCLLines.Count - 1
+    '    swTemp.WriteLine(JCLLines(contIndex))
+    '    If JCLLines(contIndex).Substring(0, 3) = "//*" Then
+    '      Continue For
+    '    End If
+    '    If Microsoft.VisualBasic.
+    '        Right(Trim(JCLLines(contIndex).PadRight(80).Substring(0, 70)), 1) <> "," Then
+    '      index = contIndex
+    '      Exit For
+    '    End If
+    '  Next
+
+    '  If procName.Length = 0 Then
+    '    Continue For
+    '  End If
+    '  ' if it is an "EXEC PROC=" copy the PROC file into here
+    '  ' if it is an "EXEC <name>" this is also a PROC File to be copied
+    '  Dim ProcFileName As String = txtJCLProclibFoldername.Text & "\" & procName & ".jcl"
+    '  LogFile.WriteLine(Date.Now & ",Processing PROC source," & ProcFileName)
+    '  Dim procLines As String() = File.ReadAllLines(ProcFileName)
+    '  For procIndex = 0 To procLines.Count - 1
+    '    Dim jline As String = "++" & Mid(procLines(procIndex), 3) & Space(72)
+    '    jline = jline.Substring(0, 72).Trim
+    '    swTemp.WriteLine(jline)
+    '  Next
+    'Next
+    'swTemp.Close()
+    ''
+    '' Load JCL lines to a JCL statements array. 
+    '' Basically dealing with continuations and removing comments
+    ''
+    'JCLLines = File.ReadAllLines(tempFileName)
+
+
+
+    ' Load JCL Lines to a JCL Statement Array
+    '   Remove continuations by combining to 1 line
+    '   and remove comments
+    '   and get rid of the slashes
+    '   all that should be stored is the Label, Control, and Parameters
 
     For index As Integer = 0 To JCLLines.Count - 1
       LoadJCLStatementsToArray += 1
@@ -493,6 +626,7 @@ Public Class Form1
       Else
         Continue For
       End If
+      ' drop JES commands
       If Mid(text1, 1, 14) = "//SEND OUTPUT " Then
         Continue For
       End If
@@ -516,7 +650,26 @@ Public Class Form1
       End If
     Next
 
+
   End Function
+
+  Sub LogStmtArray(ByRef theFileName As String, theStmtArray As List(Of String))
+    ' write the stmt array to a file for debugging purposes
+    Dim logStmtCount As Integer = -1
+    Dim logStmtFileName As String = txtOutputFoldername.Text & "\Debug\" & theFileName & "_logStmt.txt"
+    Try
+      LogStmtFile = My.Computer.FileSystem.OpenTextFileWriter(logStmtFileName, False)
+    Catch ex As Exception
+      LogFile.WriteLine(Date.Now & ",Error creating Log stmt file," & ex.Message)
+      Exit Sub
+    End Try
+    For Each statement In theStmtArray
+      logStmtCount += 1
+      LogStmtFile.WriteLine(LTrim(Str(logStmtCount)) & ":" & statement)
+    Next
+    LogStmtFile.Close()
+
+  End Sub
   Sub GetJCLWords(ByVal statement As String, ByRef jclWords As List(Of String))
     ' takes the input string and breaks into words surrouned by blanks
     ' and drops extra blanks
@@ -638,19 +791,24 @@ Public Class Form1
     WriteOutput = 0
 
     ' Write the details to the files
+    jobName = ""
+    jobClass = ""
+    msgClass = ""
 
     For Each statement As String In jclStmt
       Call GetLabelControlParms(statement, jLabel, jControl, jParameters)
       If Len(jControl) = 0 Then
-        MessageBox.Show("JCL control not found:" & statement)
-        WriteOutput = -1
-        Exit For
+        'MessageBox.Show("JCL control not found:" & statement)
+        LogFile.WriteLine(Date.Now & ",JCL control not found,'" & statement & ": " & FileNameOnly & "'")
+        'WriteOutput = -1
+        Continue For
       End If
 
       Select Case jControl
         Case "JOB"
           Call ProcessJOB()
         Case "PROC"
+          procName = jLabel
         Case "PEND"
         Case "EXEC"
           Call ProcessEXEC()
@@ -664,6 +822,7 @@ Public Class Form1
           Continue For
         Case "ENDIF"
           Continue For
+
         Case Else
           MessageBox.Show("Unknown JCL control value:" & statement)
           Exit For
@@ -673,14 +832,10 @@ Public Class Form1
     ' close the files
 
     swDDFile.Close()
-    ProgressBar1.PerformStep()
-
 
     Call CreatePuml()
-    ProgressBar1.PerformStep()
 
     Call CreatePrograms()
-    ProgressBar1.PerformStep()
 
   End Function
 
@@ -700,31 +855,51 @@ Public Class Form1
           jControl = Mid(statement, sPos + 1, 3)
           jParameters = Trim(Mid(statement, sPos + 5))
           Exit For
+
         Case Mid(statement, sPos, Len(PROCCARD)) = PROCCARD
           jLabel = RTrim(Mid(statement, 1, sPos - 1))
           jControl = Mid(statement, sPos + 1, 4)
           jParameters = Trim(Mid(statement, sPos + 6))
+          Exit For
+        Case Mid(statement, sPos, 5) = " PROC"
+          jLabel = RTrim(Mid(statement, 1, sPos - 1))
+          jControl = "PROC"
+          jParameters = Trim(Mid(statement, sPos + 5))
+          Exit For
+
+        Case statement = "PEND"
+          jLabel = ""
+          jControl = "PEND"
+          jParameters = ""
           Exit For
         Case Mid(statement, sPos, Len(PENDCARD)) = PENDCARD
           jLabel = RTrim(Mid(statement, 1, sPos - 1))
           jControl = Mid(statement, sPos + 1, 4)
           jParameters = Trim(Mid(statement, sPos + 6))
           Exit For
-        Case Microsoft.VisualBasic.Left(statement, 5) = "PEND "
+        Case statement.EndsWith("PEND ")
           jLabel = ""
           jControl = "PEND"
           jParameters = Trim(Mid(statement, 6))
           Exit For
+        Case statement.EndsWith(" PEND")
+          jLabel = ""
+          jControl = "PEND"
+          jParameters = ""
+          Exit For
+
         Case Mid(statement, sPos, Len(EXECCARD)) = EXECCARD
           jLabel = RTrim(Mid(statement, 1, sPos - 1))
           jControl = Mid(statement, sPos + 1, 4)
           jParameters = Trim(Mid(statement, sPos + 6))
           Exit For
+
         Case Mid(statement, sPos, Len(DDCARD)) = DDCARD
           jLabel = RTrim(Mid(statement, 1, sPos - 1))
           jControl = Mid(statement, sPos + 1, 2)
           jParameters = Trim(Mid(statement, sPos + 4))
           Exit For
+
         Case Mid(statement, sPos, Len(SETCARD)) = SETCARD
           jLabel = RTrim(Mid(statement, 1, sPos - 1))
           jControl = Mid(statement, sPos + 1, 3)
@@ -750,6 +925,11 @@ Public Class Form1
           jControl = Mid(statement, sPos, 2)
           jParameters = Trim(Mid(statement, sPos + 3))
           Exit For
+        Case Mid(statement, sPos, 1) = "("
+          jLabel = ""
+          jControl = "IF"
+          jParameters = Trim(Mid(statement, 1))
+          Exit For
         Case Mid(statement, sPos, Len(ENDIFCARD)) = ENDIFCARD
           jLabel = ""
           jControl = Trim(Mid(statement, sPos, 5))
@@ -760,7 +940,7 @@ Public Class Form1
     Next
   End Sub
   Sub ProcessJOB()
-    jobSequence += 1
+    'jobSequence += 1
     procSequence = 0
     execSequence = 0
     ddSequence = 0
@@ -778,6 +958,13 @@ Public Class Form1
     ' The "EXEC" control is for either PROC or a PGM
     ' For PROC it could be "EXEC <procname>" or "EXEC PROC=<procname"
     ' For PGM it is "EXEC PGM=<pgmname>"
+
+    ' If by this time we haven't gotten a JOBname then set the JOB details
+    If jobName.Length = 0 Then
+      jobName = FileNameOnly
+      jobClass = "?"
+      msgClass = "?"
+    End If
     '
     ddSequence = 0
 
@@ -793,6 +980,7 @@ Public Class Form1
       execSequence += 1
     End If
 
+    ' Length of zero means this is a PROC statement not a PGM statement
     If pgmName.Length > 0 Then
       SourceType = GetSourceType(pgmName)
     End If
@@ -939,20 +1127,18 @@ Public Class Form1
   Sub CreatePuml()
     ' Open the output file PUML
     Dim PumlFileName = txtOutputFoldername.Text & "\" & FileNameOnly & ".puml"
-
     swPumlFile = My.Computer.FileSystem.OpenTextFileWriter(PumlFileName, False)
+
     ' Write the top of file
     swPumlFile.WriteLine("@startuml " & FileNameOnly)
-    swPumlFile.WriteLine("header ParseJCL(c), by IBM")
+    swPumlFile.WriteLine("header ADDILite(c), by IBM")
     swPumlFile.WriteLine("title Flowchart of JOB: " & FileNameOnly)
 
     ' Read the DD CSV file back in and load to array
-
     Dim FileName = txtOutputFoldername.Text & "/" & FileNameOnly & "_DD.csv"
     If Not File.Exists(FileName) Then
       Exit Sub
     End If
-    '
     Dim csvCnt As Integer = 0
     Dim csvFile As FileIO.TextFieldParser = New FileIO.TextFieldParser(FileName)
     Dim csvRecord As String()           ' all fields(columns) for a given record
@@ -962,40 +1148,51 @@ Public Class Form1
     Dim ListOfSteps As New List(Of String)
 
     Do While Not csvFile.EndOfData
-
       csvRecord = csvFile.ReadFields
       csvCnt += 1
-      If csvCnt = 1 Then        'skip column heading row
-        Continue Do
-      End If
+      jobName = csvRecord(0)
+      jobSequence = Val(csvRecord(1))
+      procName = csvRecord(2)
+      procSequence = Val(csvRecord(3))
       stepName = csvRecord(4)
       pgmName = csvRecord(5)
       If pgmName.Length = 0 Then
         Continue Do
       End If
+      execSequence = Val(csvRecord(6))
       Dim DDName As String = csvRecord(7)
       Dim DDSeq As String = csvRecord(8)
-      jParameters = csvRecord(9)
-      Dim dsn As String = GetParm(jParameters, "DSN=")
+      ddConcatSeq = Val(csvRecord(9))
+      Dim dsn As String = csvRecord(10)
+      Dim dispStart As String = csvRecord(11)
+      Dim dispEnd As String = csvRecord(12)
+      Dim dispAbend As String = csvRecord(13)
+      Dim dcbRecFM As String = csvRecord(14)
+      Dim dcbLrecl As String = csvRecord(15)
+      Dim db2 As String = csvRecord(16)
+      Dim reportID As String = csvRecord(17)
+      Dim reportDescription As String = csvRecord(18)
+      SourceType = csvRecord(19)
 
-      Dim disp As String = GetParm(jParameters, "DISP=")
+      If stepName = "STEPLIB" And ddConcatSeq > 0 Then
+        stepName = stepName & LTrim(Str(ddConcatSeq))
+      End If
+
       Dim InOrOut As String = " <-left- "
-      If disp.Length >= 4 Then
-        If disp.Substring(0, 4) = "(NEW" Then
-          InOrOut = " -right->"
-        End If
-      End If
-      If disp.Length >= 2 Then
-        If disp.Substring(0, 2) = "(," Then
+      Select Case dispStart
+        Case "INPUT"
+          InOrOut = " <-left- "
+        Case "OUTPUT"
           InOrOut = " -right-> "
-        End If
-      End If
+      End Select
 
-      If Val(DDSeq) = 1 Then
+      If Val(DDSeq) = 1 And Val(ddConcatSeq) = 0 Then
         ListOfSteps.Add(stepName)
         swPumlFile.WriteLine()
         swPumlFile.WriteLine("node " & Chr(34) & pgmName & Chr(34) & " as " & stepName)
       End If
+
+
       Select Case DDName
         Case "STEPLIB"
         Case "SYSOUT"
@@ -1003,6 +1200,12 @@ Public Class Form1
         Case "SYSUDUMP"
         Case Else
           If dsn.Length > 0 Then
+            If ddConcatSeq > 0 Then
+              DDName = DDName & LTrim(Str(ddConcatSeq))
+            End If
+            If dispEnd = "DELETE" Then
+              dsn = "<s:red>" & dsn & "</s>"
+            End If
             swPumlFile.WriteLine("file " & Chr(34) & dsn & Chr(34) & " as " & stepName & "." & DDName)
             swPumlFile.WriteLine(stepName & InOrOut & stepName & "." & DDName)
           End If
@@ -1040,6 +1243,8 @@ Public Class Form1
             DetermineStartDisp = "INPUT"
           Case "MOD", "NEW"
             DetermineStartDisp = "OUTPUT"
+          Case Else
+            DetermineStartDisp = "INPUT"
         End Select
       End If
     Else
@@ -1096,33 +1301,35 @@ Public Class Form1
 
   Sub CreatePrograms()
 
-    ' Build the spreadsheet. First sheet is a list of all programs and DD's.
-
-    workbook = objExcel.Workbooks.Add
-    worksheet = workbook.Sheets.Item(1)
-    worksheet.Name = "Programs"
-
-    ' Write the column headings row
-    worksheet.Range("A1").Value = "JobName"
-    worksheet.Range("B1").Value = "JobSeq"
-    worksheet.Range("C1").Value = "ProcName"
-    worksheet.Range("D1").Value = "ProcSeq"
-    worksheet.Range("E1").Value = "StepName"
-    worksheet.Range("F1").Value = "PgmName"
-    worksheet.Range("G1").Value = "PgmSeq"
-    worksheet.Range("H1").Value = "DD"
-    worksheet.Range("I1").Value = "DDSeq"
-    worksheet.Range("J1").Value = "DDConcatSeq"
-    worksheet.Range("K1").Value = "DatasetName"
-    worksheet.Range("L1").Value = "StartDisp"
-    worksheet.Range("M1").Value = "EndDisp"
-    worksheet.Range("N1").Value = "AbendDisp"
-    worksheet.Range("O1").Value = "RecFM"
-    worksheet.Range("P1").Value = "LRECL"
-    worksheet.Range("Q1").Value = "DBMS"
-    worksheet.Range("R1").Value = "ReportId"
-    worksheet.Range("S1").Value = "ReportDescription"
-    worksheet.Range("T1").Value = "SourceType"
+    ' Build the spreadsheet. First sheet is a list of all JCL Jobs with programs and DD details.
+    lblProcessingWorksheet.Text = "Processing Worksheet: " & FileNameOnly & " : Programs"
+    If ProgramsRow = 0 Then
+      workbook = objExcel.Workbooks.Add
+      worksheet = workbook.Sheets.Item(1)
+      worksheet.Name = "Programs"
+      ' Write the column headings row
+      worksheet.Range("A1").Value = "JobName"
+      worksheet.Range("B1").Value = "JobSeq"
+      worksheet.Range("C1").Value = "ProcName"
+      worksheet.Range("D1").Value = "ProcSeq"
+      worksheet.Range("E1").Value = "StepName"
+      worksheet.Range("F1").Value = "PgmName"
+      worksheet.Range("G1").Value = "PgmSeq"
+      worksheet.Range("H1").Value = "DD"
+      worksheet.Range("I1").Value = "DDSeq"
+      worksheet.Range("J1").Value = "DDConcatSeq"
+      worksheet.Range("K1").Value = "DatasetName"
+      worksheet.Range("L1").Value = "StartDisp"
+      worksheet.Range("M1").Value = "EndDisp"
+      worksheet.Range("N1").Value = "AbendDisp"
+      worksheet.Range("O1").Value = "RecFM"
+      worksheet.Range("P1").Value = "LRECL"
+      worksheet.Range("Q1").Value = "DBMS"
+      worksheet.Range("R1").Value = "ReportId"
+      worksheet.Range("S1").Value = "ReportDescription"
+      worksheet.Range("T1").Value = "SourceType"
+      ProgramsRow = 1
+    End If
 
     ' Write the data
 
@@ -1138,12 +1345,10 @@ Public Class Form1
     csvFile.Delimiters = New String() {"|"}
     csvFile.HasFieldsEnclosedInQuotes = True
     Dim row As String = ""
-    Dim rowcnt As Integer = 1
-    ProgressBar1.PerformStep()
-
+    Dim cnt As Integer = 0
     Do While Not csvFile.EndOfData
       csvRecord = csvFile.ReadFields
-
+      cnt += 1
       jobName = csvRecord(0)
       jobSequence = Val(csvRecord(1))
       procName = csvRecord(2)
@@ -1164,8 +1369,8 @@ Public Class Form1
       Dim reportID As String = csvRecord(17)
       Dim reportDescription As String = csvRecord(18)
       SourceType = csvRecord(19)
-      rowcnt += 1
-      row = LTrim(Str(rowcnt))
+      ProgramsRow += 1
+      row = LTrim(Str(ProgramsRow))
       worksheet.Range("A" & row).Value = jobName
       worksheet.Range("B" & row).Value = LTrim(Str(jobSequence))
       worksheet.Range("C" & row).Value = procName
@@ -1186,38 +1391,36 @@ Public Class Form1
       worksheet.Range("R" & row).Value = reportID
       worksheet.Range("S" & row).Value = reportDescription
       worksheet.Range("T" & row).Value = SourceType
-      ' load up a list of programs to analyze
+      ' load up a list of executable programs to analyze
       If ddSequence = 1 And ddConcatSeq = 0 Then
         Select Case pgmName
           Case "IEFBR14", "SORT", "IEBGENER", "IEBCOPY", "IDCAMS", "DSNUTILB",
-               "SRCHPRNT", "CMSAUTO1"
+               "SRCHPRNT", "CMSAUTO1", "PKZIP", "IKJEFT01", "A4204030", "OFORMAT", "ODATE", "DFSRRC00", "FTP",
+               "ICETOOL", "FILEMGR", "IRXJCL", "INITFILE", "EZTPA00"
           Case Else
-            If ListOfExecs.IndexOf(pgmName) = -1 Then
+            If ListOfExecs.IndexOf(pgmName & Delimiter & SourceType) = -1 Then
               ListOfExecs.Add(pgmName & Delimiter & SourceType)
             End If
         End Select
       End If
+      If cnt Mod 100 = 0 Then
+        lblProcessingWorksheet.Text = "Processing Worksheet: " & FileNameOnly & " : Programs = " & cnt
+      End If
     Loop
-    ' Format the Sheet - first row bold the columns
-    rngRecordName = worksheet.Range("A1:T1")
-    rngRecordName.Font.Bold = True
-    ' data area autofit all columns
-    rngRecordName = worksheet.Range("A1:T" & row)
-    'rngRecordName.AutoFilter()
-    workbook.Worksheets("Programs").Range("A1").AutoFilter
-    rngRecordName.Columns.AutoFit()
-    ' ignore error flag that numbers being loaded into a text field
-    objExcel.ErrorCheckingOptions.NumberAsText = False
-    '
-    ProgressBar1.PerformStep()
+    lblProcessingWorksheet.Text = "Processing Worksheet: " & FileNameOnly & " : Programs Complete"
 
   End Sub
   Sub ProcessSourceFiles()
     Dim SourceRecordsCount As Integer = 0
+    ' loop through the list of executables. Note we may be adding while processing (called members)
     For Each exec In ListOfExecs
+      lblProcessingSource.Text = "Processing Source: " & exec
       Dim execs As String() = exec.Split(Delimiter)
-      exec = execs(0)
-      SourceType = execs(1)
+      If execs.Count >= 2 Then
+        exec = execs(0).Replace(Delimiter, "")
+        SourceType = execs(1)
+      End If
+
       'Load the infile to the stmt List
 
       Select Case SourceType
@@ -1228,7 +1431,6 @@ Public Class Form1
         Case Else
           Continue For
       End Select
-
       If SourceRecordsCount = -1 Then
         Continue For
       End If
@@ -1242,12 +1444,26 @@ Public Class Form1
         Continue For
       End If
 
-      ' Analyze Source Statement array (SrcStmt)
+      ' log file, optioned
+      If cbLogStmt.Checked Then
+        Call LogStmtArray(exec, SrcStmt)
+      End If
+
+      ' Analyze Source Statement array (SrcStmt) to get list of programs
       listOfPrograms.Clear()
       listOfPrograms = GetListOfPrograms()      'list of programs within the exec source
 
+      ' Analyze Source Statement array (SrcStmt) to get list of paragraph names
+      ListOfParagraphs.Clear()
+      Call GetListOfParagraphs()
+
+
       If pgm.ProcedureDivision = -1 Then
         LogFile.WriteLine(Date.Now & ",Source is not complete," & exec)
+        Continue For
+      End If
+
+      If cbScanModeOnly.Checked Then
         Continue For
       End If
 
@@ -1266,17 +1482,21 @@ Public Class Form1
       End Select
 
     Next
-    ProgressBar1.PerformStep()
+    If Not cbScanModeOnly.Checked Then
+      Call CreateCommentsWorksheet()
+    End If
+    lblProcessingSource.Text = "Processing Sources: complete"
+    lblProcessingWorksheet.Text = "Processing Worksheet: complete"
 
   End Sub
-  Function LoadCobolStatementsToArray(ByRef CobolFile) As Integer
+  Function LoadCobolStatementsToArray(ByRef CobolFile As String) As Integer
     '*---------------------------------------------------------
     ' Load COBOL lines to a Cobol statements array. 
     '*---------------------------------------------------------
     '
     'Assign the TempFileName for this particular cobolfile
     '
-    tempCobFileName = DirectoryName & "\" & CobolFile & "_expandedCOB.txt"
+    tempCobFileName = txtOutputFoldername.Text & "\" & CobolFile & "_expandedCOB.txt"
 
     ' Remove the temporary work file
     Try
@@ -1297,7 +1517,7 @@ Public Class Form1
 
     Dim swTemp As StreamWriter = Nothing
     Dim CopybookName As String = ""
-    Dim CompilerDirective As String = ""
+    Dim IncludeDirective As String = ""
     Dim SQLDirective As String = ""
     Dim NumberOfCopysFound As Integer = 0
     Dim NumberOfScans As Integer = 0
@@ -1320,44 +1540,74 @@ Public Class Form1
     Dim startIndex As Integer = -1
     Dim endIndex As Integer = -1
     Dim WithinDataDivision As Boolean = False
+    Dim Division As String = ""
+
+    ' Verify COBOL FILE exists
+
     Dim CobolFileName = txtSourceFolderName.Text & "\" & CobolFile
     If Not File.Exists(CobolFileName) Then
-      LogFile.WriteLine(Date.Now & ",Source not found," & CobolFileName)
+      LogFile.WriteLine(Date.Now & ",Source not found," & CobolFile)
       LoadCobolStatementsToArray = -1
       Exit Function
     End If
-    LogFile.WriteLine(Date.Now & ",Processing Source," & CobolFileName)
+    LogFile.WriteLine(Date.Now & ",Processing Source," & CobolFile)
 
+    ' Load the COBOL file into the working Array
     Dim CobolLines As String() = File.ReadAllLines(CobolFileName)
-    '
-    ' Identify if this file is COBOL or Easytrieve
-    '
+
+    ' Look for Program Written and Program Author
     For index As Integer = 0 To CobolLines.Count - 1
-      If Len(Trim(CobolLines(index))) = 0 Then
-        Continue For
+      If ProgramAuthor.Length = 0 Then
+        If CobolLines(index).Length >= 60 Then
+          If CobolLines(index).PadRight(80).Substring(7, 7) = "AUTHOR." Then
+            ProgramAuthor = CobolLines(index).PadRight(80).Substring(14, 40).Trim
+          End If
+        End If
       End If
-      If CobolLines(index).IndexOf("IDENTIFICATION DIVISION.") > -1 Then
-        SourceType = "COBOL"
-        Exit For
-      End If
-      If CobolLines(index).Length >= 5 Then
-        If CobolLines(index).Substring(0, 5) = "PARM " Then
-          SourceType = "Easytrieve"
-          Exit For
+      If ProgramWritten.Length = 0 Then
+        If CobolLines(index).PadRight(80).Substring(7, 13) = "DATE-WRITTEN." Then
+          ProgramWritten = CobolLines(index).PadRight(80).Substring(20, 40).Trim
         End If
       End If
     Next
-    '
-    ' Expand all copy/include members into a single file, we also drop empty lines
-    '
+
+    ' Save the COMMENTS found in the program to the ListOfComments array
+    Division = "PRE IDENT"
+    For index As Integer = 0 To CobolLines.Count - 1
+      ' determine which Division we are in
+      Dim tempDiv As Integer = CobolLines(index).PadRight(80).IndexOf(" DIVISION")
+      If tempDiv > -1 Then
+        If CobolLines(index).Substring(6, 1) <> "*" Then
+          Division = CobolLines(index).Substring(7, tempDiv - 8 + 1)
+          Continue For
+        End If
+      End If
+      ' write cobol line if this is a Comment and we have Division value
+      If CobolLines(index).Length >= 7 Then
+        If CobolLines(index).Substring(6, 1) = "*" And Division.Length > 0 Then
+          Call ProcessComment(index, CobolLines(index), Division, CobolFile)
+        End If
+        If CobolLines(index).Substring(6, 1) = "/" And Division.Length > 0 Then
+          Mid(CobolLines(index), 7, 1) = "*"
+          Call ProcessComment(index, CobolLines(index), Division, CobolFile)
+        End If
+
+      End If
+    Next
+    Division = ""
+
+    ' Expand all copy/include members into a single file, 
+    '   we also change empty lines to comment lines
+    '   we also remove EJECT and SKIP compiler directives
     Do
       NumberOfScans += 1
       NumberOfCopysFound = 0
       debugCnt = 0
       swTemp = New StreamWriter(tempCobFileName, False)
+      ' Process through the Cobol Lines
       For index As Integer = 0 To CobolLines.Count - 1
         debugCnt += 1
-        ' make a blank/empty line a comment line
+        ' make a whole blank/empty line a comment line
         If Len(Trim(CobolLines(index))) = 0 Then
           swTemp.WriteLine(Space(6) & "*")
           Continue For
@@ -1365,44 +1615,58 @@ Public Class Form1
 
         Call FillInAreas(CobolLines(index),
                          SequenceNumberArea, IndicatorArea, AreaA, AreaB, CommentArea)
+
+        ' special adjustment for slash in column 7, must be a Telon artifact
+        If IndicatorArea = "/" Then
+          IndicatorArea = "*"
+          Mid(CobolLines(index), 7, 1) = "*"
+        End If
+
         ' write the comment line back out
         If IndicatorArea = "*" Then
           swTemp.WriteLine(CobolLines(index))
           Continue For
         End If
 
+        ' keep the blank/empty line as a comment line, ignore the CommentArea
+        Dim IndicatorAreadAreaAAreaB As String = IndicatorArea & AreaA & AreaB
+        If IndicatorAreadAreaAAreaB.Trim.Length = 0 Then
+          swTemp.WriteLine(Space(6) & "*")
+          Continue For
+        End If
+
         ' get the Compiler directive, if any
         AreaAandB = AreaA & AreaB
 
+        ' remove EJECT And SKIP compiler directives
         If AreaAandB.Trim.Length >= 5 Then
           If AreaAandB.Trim.Substring(0, 5) = "EJECT" Then
+            mid(CobolLines(index), 7, 1) = "*"
+            swTemp.WriteLine(CobolLines(index))
             Continue For
           End If
         End If
         If AreaAandB.Trim.Length >= 4 Then
           If AreaAandB.Trim.Substring(0, 4) = "SKIP" Then
+            mid(CobolLines(index), 7, 1) = "*"
+            swTemp.WriteLine(CobolLines(index))
             Continue For
           End If
         End If
 
-        CompilerDirective = AreaAandB.ToUpper
-        Dim tDirective As String() = CompilerDirective.Trim.Split(New Char() {" "c})
-        ' determine if within Data Division section.
-        If tDirective.Count >= 2 Then
-          If tDirective(1) = "DIVISION." Then
-            If tDirective(0) = "DATA" Then
-              WithinDataDivision = True
-            Else
-              WithinDataDivision = False
-            End If
-          End If
-        End If
+        IncludeDirective = AreaAandB.ToUpper
+        Dim IDirective As String() = IncludeDirective.Trim.Split(New Char() {" "c})
+
         ' Checking for copy/include statement to process
+        Dim CopyType As String = ""
         Select Case True
-          Case tDirective(0) = "COPY"
-          Case tDirective(0) = "++INCLUDE"
-            CopybookName = Trim(tDirective(1).Replace(".", " "))
-          Case tDirective(0) = "EXEC"
+          Case IDirective(0) = "COPY"
+            CopybookName = Trim(IDirective(1).Replace(".", " "))
+            CopyType = IDirective(0)
+          Case IDirective(0) = "++INCLUDE"
+            CopybookName = Trim(IDirective(1).Replace(".", " "))
+            CopyType = IDirective(0)
+          Case IDirective(0) = "EXEC"
             ' need to "string together" this till END-EXEC 
             combinedEXEC = ""
             startIndex = index
@@ -1431,6 +1695,7 @@ Public Class Form1
             ' check to see if this an SQL INCLUDE or some other SQL command
             Dim execDirective As String() = combinedEXEC.Trim.Split(New Char() {" "c})
             If execDirective(1) = "SQL" And execDirective(2) = "INCLUDE" Then
+              CopyType = "SQL"
               CopybookName = execDirective(3)
               ' comment out these SQL INCLUDE statement(s)
               For execIndex As Integer = startIndex To endIndex
@@ -1449,33 +1714,21 @@ Public Class Form1
             '
           Case Else
             swTemp.WriteLine(CobolLines(index))
-            If ProgramAuthor.Length = 0 Then
-              If CobolLines(index).Length >= 60 Then
-                If CobolLines(index).PadRight(80).Substring(7, 7) = "AUTHOR." Then
-                  ProgramAuthor = CobolLines(index).PadRight(80).Substring(14, 40).Trim
-                End If
-              End If
-            End If
-            If ProgramWritten.Length = 0 Then
-              If CobolLines(index).PadRight(80).Substring(7, 13) = "DATE-WRITTEN." Then
-                ProgramWritten = CobolLines(index).PadRight(80).Substring(20, 40).Trim
-              End If
-            End If
             Continue For
         End Select
 
+        If Len(CopybookName) > 8 Then
+          CopybookName = Mid(CopybookName, 1, 8)
+        End If
+
         ' Expand copybooks/includes into the source
         NumberOfCopysFound += 1
-
-        If Len(CopybookName) > 8 Then
-          MessageBox.Show("somehow Member name > 8:" & CopybookName)
-          LoadCobolStatementsToArray = -1
-          Exit Function
-        End If
         Dim CopybookFileName As String = txtSourceFolderName.Text &
                                          "\" & CopybookName
-        LogFile.WriteLine(Date.Now & ",Including COBOL copybook," & CopybookFileName)
+        swTemp.WriteLine(Space(6) & "*" & CopyType & " " & CopybookName & " Begin Include")
+        LogFile.WriteLine(Date.Now & ",Including COBOL copybook," & CopybookName)
         Call IncludeCopyMember(CopybookFileName, swTemp)
+        swTemp.WriteLine(Space(6) & "*" & CopyType & " " & CopybookName & " End Include")
       Next
       swTemp.Close()
 
@@ -1507,23 +1760,22 @@ Public Class Form1
         Continue For
       End If
       Call FillInAreas(text1, SequenceNumberArea, IndicatorArea, AreaA, AreaB, CommentArea)
-      'If IndicatorArea = "*" Then
-      ' Continue For
-      'End If
       AreaAandB = AreaA & AreaB
-      CompilerDirective = AreaAandB.ToUpper
-      Dim tDirective As String() = CompilerDirective.Trim.Split(New Char() {" "c})
+      IncludeDirective = AreaAandB.ToUpper
+      Dim tDirective As String() = IncludeDirective.Trim.Split(New Char() {" "c})
       If tDirective(0) = "REPLACE" Then
         Call ReplaceAll(AreaAandB, CobolLines, cIndex)
       End If
     Next
-    '
+
     ' Process the WHOLE/ALL the cobol lines now that copybooks are now embedded
     ' and replace is done.
     ' This is also where we concatenate the lines, as needed, into a single statement.
     '
     Dim hlkcounter As Integer = 0
-    Dim Division As String = ""
+    Division = ""
+    SrcStmt.Clear()
+
     For Each text1 As String In CobolLines
       hlkcounter += 1
       LoadCobolStatementsToArray += 1
@@ -1551,8 +1803,8 @@ Public Class Form1
         PeriodIsPresent = False
       End If
 
-      CompilerDirective = DropDuplicateSpaces(AreaAandB.ToUpper)
-      Dim tDirective As String() = CompilerDirective.Trim.Split(New Char() {" "c})
+      IncludeDirective = DropDuplicateSpaces(AreaAandB.ToUpper)
+      Dim tDirective As String() = IncludeDirective.Trim.Split(New Char() {" "c})
       cWord.Clear()
       For Each word In tDirective
         If word.Trim.Length > 0 Then
@@ -1588,6 +1840,10 @@ Public Class Form1
 
   End Function
   Function GetListOfPrograms() As List(Of ProgramInfo)
+    ' Scan through the source looking for the programs.
+    ' Each program could have multiple sub programs inline (especially COBOL).
+    ' Also a program could call a sub program, which we will store out to a
+    '  separate file (CallPgms.jcl) for later analysis.
     pgm.IdentificationDivision = -1
     pgm.ProcedureDivision = -1
     pgm.EnvironmentDivision = -1
@@ -1595,11 +1851,17 @@ Public Class Form1
     pgm.ProcedureDivision = -1
     pgm.EndProgram = -1
     pgm.ProgramId = ""
+
+    Dim srcWords As New List(Of String)
+
     Select Case SourceType
       Case "COBOL"
         For stmtIndex As Integer = 0 To SrcStmt.Count - 1
           Select Case True
-            Case SrcStmt(stmtIndex).IndexOf("IDENTIFICATION DIVISION.") > -1
+            Case SrcStmt(stmtIndex).Substring(0, 1) = "*"
+              Continue For
+            Case (SrcStmt(stmtIndex).IndexOf("IDENTIFICATION DIVISION.") > -1) Or
+                (SrcStmt(stmtIndex).IndexOf("ID DIVISION.") > -1)
               If pgm.ProcedureDivision >= 1 Then
                 pgm.EndProgram = stmtIndex - 1
                 listOfPrograms.Add(pgm)
@@ -1613,11 +1875,16 @@ Public Class Form1
               pgm.EnvironmentDivision = stmtIndex
             Case SrcStmt(stmtIndex).IndexOf("DATA DIVISION.") > -1
               pgm.DataDivision = stmtIndex
-            Case SrcStmt(stmtIndex).IndexOf("PROCEDURE DIVISION.") > -1
+            Case SrcStmt(stmtIndex).IndexOf("PROCEDURE DIVISION") > -1
               pgm.ProcedureDivision = stmtIndex
             Case SrcStmt(stmtIndex).IndexOf("PROGRAM-ID.") > -1
               pgm.ProgramId = SrcStmt(stmtIndex).Substring(11).Replace(".", "").Trim
           End Select
+          If pgm.ProcedureDivision > -1 Then
+            If SrcStmt(stmtIndex).IndexOf(" CALL ") > -1 Then
+              Call AddToListOfCallPgms(SrcStmt(stmtIndex), srcWords)
+            End If
+          End If
         Next
         If Not IsNothing(pgm) Then
           pgm.EndProgram = SrcStmt.Count - 1
@@ -1627,18 +1894,25 @@ Public Class Form1
       Case "Easytrieve"
         pgm.EndProgram = SrcStmt.Count - 1
         pgm.IdentificationDivision = 0
+        'the first one will be the "Division"
         For stmtIndex As Integer = 0 To SrcStmt.Count - 1
+          Call GetSourceWords(SrcStmt(stmtIndex), srcWords)
           Select Case True
-            Case SrcStmt(stmtIndex).IndexOf("FILE") > -1 Or
-                SrcStmt(stmtIndex).IndexOf("SQL") > -1
-              pgm.EnvironmentDivision = stmtIndex
-              pgm.DataDivision = stmtIndex
-            Case SrcStmt(stmtIndex).IndexOf("JOB") > -1 Or
-                 SrcStmt(stmtIndex).IndexOf("SORT") > -1
-              pgm.ProcedureDivision = stmtIndex
             Case SrcStmt(stmtIndex).IndexOf("PROGRAM-ID.") > -1
               pgm.ProgramId = SrcStmt(stmtIndex).Substring(13).Trim
-              Exit For
+            Case SrcStmt(stmtIndex).Substring(0, 1) = "*"
+              Continue For
+            Case srcWords(0) = "FILE" Or
+                srcWords(0) = "SQL"
+              If pgm.EnvironmentDivision = -1 Then
+                pgm.EnvironmentDivision = stmtIndex
+                pgm.DataDivision = stmtIndex
+              End If
+            Case srcWords(0) = "JOB" Or
+                 srcWords(0) = "SORT"
+              If pgm.ProcedureDivision = -1 Then
+                pgm.ProcedureDivision = stmtIndex
+              End If
           End Select
         Next
         listOfPrograms.Add(pgm)
@@ -1646,11 +1920,78 @@ Public Class Form1
 
     GetListOfPrograms = listOfPrograms
   End Function
+  Sub AddToListOfCallPgms(ByRef statement As String, ByRef srcWords As List(Of String))
+    Dim CalledFileName As String = ""
+    Dim CalledSourceType As String = ""
+    CalledMember = ""
+    Call GetSourceWords(statement, srcWords)
+    For x As Integer = 0 To srcWords.Count - 1
+      If srcWords(x) = "CALL" Then
+        CalledMember = srcWords(x + 1)
+        If Mid(CalledMember, 1, 1) <> "'" Then         'skip dynamic called routines
+          LogFile.WriteLine(Date.Now & ",Called Member is not Static called so skipped," & CalledMember)
+          Continue For
+        End If
+        CalledMember = CalledMember.Replace("'", "").Trim
+        ' if a utility, ie ABEND do not add to list
+        Select Case CalledMember
+          Case "DSNHADDR", "DSNHADD2", "DSNHLI", "ADRABND", "ABEND", "DSNTIAR", "CBLTDLI",
+               "DHSFINAL", "ADMAAB0", "ADMAABT", "BINCONV", "CNTYNAME", "ICOMMA2",
+               "OCDATE", "OCDATE9", "OCNTRYDT", "ODATE", "OFORMAT", "OMOCNTRY",
+               "R8460720", "PA8403AB", "PA1581BA"
+            LogFile.WriteLine(Date.Now & ",Called Member is Utility so skipped," & CalledMember)
+            Exit Sub
+        End Select
+        CalledFileName = txtSourceFolderName.Text & "\" & CalledMember
+        If File.Exists(CalledFileName) Then
+          CalledSourceType = GetSourceType(CalledFileName)
+          If ListOfCallPgms.IndexOf(CalledMember & Delimiter & CalledSourceType & Delimiter & pgm.ProgramId) = -1 Then
+            ListOfCallPgms.Add(CalledMember & Delimiter & CalledSourceType & Delimiter & pgm.ProgramId)
+            LogFile.WriteLine(Date.Now & ",Called Member added to ListOfCallPgms," & CalledMember)
+          End If
+        Else
+          LogFile.WriteLine(Date.Now & ",Called Member Source Not Found," & CalledMember)
+        End If
+      End If
+    Next
+  End Sub
+  Sub GetListOfParagraphs()
+    For Each pgm In listOfPrograms
+      Select Case SourceType
+        Case "COBOL"
+          For stmtIndex As Integer = pgm.ProcedureDivision + 1 To SrcStmt.Count - 1
+            If SrcStmt(stmtIndex).Substring(0, 1) = "*" Then
+              Continue For
+            End If
+            If SrcStmt(stmtIndex).Length > 5 Then
+              If SrcStmt(stmtIndex).Substring(0, 4) <> Space(4) Then
+                Call GetSourceWords(SrcStmt(stmtIndex), cWord)
+                ListOfParagraphs.Add(cWord(0))
+              End If
+            End If
+          Next stmtIndex
+
+        Case "Easytrieve"
+      End Select
+    Next pgm
+
+  End Sub
+
   Function GetSourceType(ByRef FileName As String) As String
-    ' Identify if this file is COBOL or Easytrieve
+    ' Identify if this file is COBOL or Easytrieve or Utility
+    Select Case FileName
+      Case "IEFBR14", "IDCAMS", "SORT", "ICETOOL", "IEBGENER", "PKZIP", "IKJEFT01", "DFSRRC00",
+           "FTP", "FILEMGR"
+        GetSourceType = "UTILITY"
+        Exit Function
+      Case "SRCHPRNT", "CMSAUTO1", "DSNUTILB", "OFORMAT", "ODATE", "A4204030", "IRXJCL", "INITFILE", "EZTPA00"
+        GetSourceType = "UTILITY"
+        Exit Function
+    End Select
     Dim SourceFileName As String = txtSourceFolderName.Text & "\" & FileName
     GetSourceType = ""
     If Not File.Exists(SourceFileName) Then
+      LogFile.WriteLine(Date.Now & ",Source File Not found," & FileName)
       GetSourceType = ""
       Exit Function
     End If
@@ -1659,7 +2000,8 @@ Public Class Form1
       If Len(Trim(CobolLines(index))) = 0 Then
         Continue For
       End If
-      If CobolLines(index).IndexOf("IDENTIFICATION DIVISION.") > -1 Then
+      If (CobolLines(index).IndexOf("IDENTIFICATION DIVISION.") > -1) Or
+        (CobolLines(index).IndexOf("ID DIVISION.") > -1) Then
         GetSourceType = "COBOL"
         Exit Function
       End If
@@ -1671,7 +2013,7 @@ Public Class Form1
         End Select
       End If
     Next
-    LogFile.WriteLine(Date.Now & ",Unknow Type of Source File," & SourceFileName)
+    LogFile.WriteLine(Date.Now & ",Unknown Type of Source File," & FileName)
 
   End Function
   Sub FillInAreas(ByVal CobolLine As String,
@@ -1699,12 +2041,15 @@ Public Class Form1
       swTemp.Write(Space(6) & "*Member not found:")
       swTemp.WriteLine(Path.GetFileNameWithoutExtension(CopyMember))
       lblCopybookMessage.Text = "Copy Member not found:" & CopyMember
-      LogFile.WriteLine(Date.Now & ",Copy Member not found," & CopyMember)
+      LogFile.WriteLine(Date.Now & ",Copy Member not found," & Path.GetFileNameWithoutExtension(CopyMember))
       Exit Sub
     End If
+    'Dim debugName As String = Path.GetFileNameWithoutExtension(CopyMember)
+    Dim debugCnt As Integer = 0
     Dim IncludeLines As String() = File.ReadAllLines(CopyMember)
     ' append copymember to temp file and drop blank lines
     For Each line As String In IncludeLines
+      debugCnt += 1
       If Len(Trim(line)) > 0 Then
         swTemp.WriteLine(line)
       End If
@@ -1716,7 +2061,7 @@ Public Class Form1
     If Microsoft.VisualBasic.Right(tLine, 1).Equals(".") Then        'remove the period
       tLine = tLine.Remove(tLine.Length - 1, 1)
     End If
-    Dim tWord = tLine.Split(New Char() {" "c})
+    Dim tWord = tLine.Trim.Split(New Char() {" "c})
     Dim SearchFor As String = tWord(1).Replace("=", " ").Trim
     Dim ReplaceWith As String = tWord(3).Replace("=", " ").Trim
     ' loop through the CobolLines array replacing all <SearchFor> with <ReplaceWith>
@@ -1735,7 +2080,7 @@ Public Class Form1
     End If
     If cWord(1).IndexOf("DIVISION") > -1 Then
       Select Case cWord(0)
-        Case "IDENTIFICATION",
+        Case "IDENTIFICATION", "ID",
              "ENVIRONMENT",
              "DATA",
              "PROCEDURE"
@@ -1747,7 +2092,7 @@ Public Class Form1
   Function WriteOutputEasytrieve(ByRef exec As String) As Integer
     WriteOutputEasytrieve = 0
     ' Create a Plantuml file, step by step, based on the Procedure division.
-    'Call CreatePumlEasytrieve(exec)
+    Call CreatePumlEasytrieve(exec)
 
     ' Create a Records/Fields spreadsheet
     Call CreateRecordFile()
@@ -1769,6 +2114,9 @@ Public Class Form1
     ' Create a Records/Fields spreadsheet
     Call CreateRecordFile()
 
+    ' Create the Business Rules
+    Call CreateBRCOBOL(exec)
+
     ' Call CreateComponentsFile()
 
   End Function
@@ -1779,7 +2127,7 @@ Public Class Form1
     '
     'Assign the Temporay File Name for this particular Easytrieve file
     '
-    tempEZTFileName = DirectoryName & "\" & exec & "_expandedEZT.txt"
+    tempEZTFileName = txtOutputFoldername.Text & "\" & exec & "_expandedEZT.txt"
 
     ' Remove the temporary work file
     Try
@@ -1798,26 +2146,62 @@ Public Class Form1
       LoadEasytrieveStatementsToArray = -1
       Exit Function
     Else
-      LogFile.WriteLine(Date.Now & ",Processing Source," & FileName)
+      LogFile.WriteLine(Date.Now & ",Processing Source," & exec)
     End If
 
     ' put all the lines into the array
     Dim EztLinesLoaded As String() = File.ReadAllLines(FileName)
 
+    ' Load the COMMENTS found in the program to the ListOfComments array
+    Dim Division As String = "IDENTIFICATION"
+    For index As Integer = 0 To EztLinesLoaded.Count - 1
+      ' determine which "Division" we are in
+      ' Easytrieve anything before "FILE" or "SQL" is IDENTIFICATION
+      '   anything before "JOB" or "SORT" is DATA
+      '   anything after "JOB" or "SORT" is PROCEDURE
+      If EztLinesLoaded(index).Length >= 5 Then
+        If EztLinesLoaded(index).Substring(0, 5) = "FILE " Then
+          Division = "DATA"
+        End If
+        If EztLinesLoaded(index).Substring(0, 4) = "SQL " Then
+          Division = "DATA"
+        End If
+        If EztLinesLoaded(index).Substring(0, 4) = "JOB " Then
+          Division = "PROCEDURE"
+        End If
+        If EztLinesLoaded(index).Substring(0, 5) = "SORT " Then
+          Division = "PROCEDURE"
+        End If
+      End If
+      ' write line if this is a Comment and we have Division value
+      If EztLinesLoaded(index).Length >= 1 Then
+        If EztLinesLoaded(index).Substring(0, 1) = "*" And Division.Length > 0 Then
+          Call ProcessComment(index, EztLinesLoaded(index), Division, exec)
+        End If
+      End If
+    Next
+    Division = ""
+
+
     Dim statement As String = ""
     Dim newLine As String = ""
     Dim swTemp As StreamWriter = Nothing
     swTemp = New StreamWriter(tempEZTFileName, False)
+    swTemp.WriteLine("*PROGRAM-ID. " & exec)
     Dim reccnt As Integer = 0
 
     ' process the eztlinesloaded array
-    '  we will drop empty/blank lines, trim off leading spaces, and combine continued lines
+    '  we will drop empty/blank lines, trim off leading spaces,
+    '  and combine continued lines
+    '
     For index As Integer = 0 To EztLinesLoaded.Length - 1
+      ' remove columns 73-80 and trim off extra spaces
+      EztLinesLoaded(index) = Trim(Microsoft.VisualBasic.Left(EztLinesLoaded(index) & Space(72), 72))
       If Trim(EztLinesLoaded(index)).Length = 0 Then
         Continue For
       End If
       If Mid(EztLinesLoaded(index), 1, 1) = "*" Then
-        swTemp.WriteLine(statement)
+        swTemp.WriteLine(EztLinesLoaded(index))
         Continue For
       End If
 
@@ -1854,7 +2238,6 @@ Public Class Form1
       Call GetSourceWords(statement, srcWords)
       If srcWords.Count >= 4 Then
         If srcWords(0) = "SQL" And srcWords(1) = "INCLUDE" And srcWords(2) = "FROM" Then
-          swTemp.WriteLine("*" & statement & " Begin Include")
           Dim tableParameters As String() = srcWords(3).Split(".")
           If tableParameters.Count = 2 Then
             db2TableName = tableParameters(1)
@@ -1873,6 +2256,8 @@ Public Class Form1
           Next
           ' Include the member
           If db2Found Then
+            swTemp.WriteLine("*%COPYBOOK SQL " & MembersNames(db2Index))
+            swTemp.WriteLine("*" & statement & " Begin Include")
             CBFileName = txtSourceFolderName.Text & "\" & MembersNames(db2Index)
             Call IncludeCopyMember(CBFileName, swTemp)
           Else
@@ -1886,6 +2271,7 @@ Public Class Form1
       End If
       If statement.Length > 0 Then
         If statement.Substring(0, 1) = "%" Then
+          swTemp.WriteLine("*%COPYBOOK FILE " & statement.Substring(1).Trim)
           swTemp.WriteLine("*" & statement & " Begin Include")
           CBFileName = txtSourceFolderName.Text & "\" & statement.Substring(1)
           Call IncludeCopyMember(CBFileName, swTemp)
@@ -1899,18 +2285,20 @@ Public Class Form1
 
     ' load the Source Statement Array with final content
     SrcStmt.Clear()
-    SrcStmt.Add("*PROGRAM-ID. " & exec)
+
     reccnt = 0
     EztLinesLoaded = File.ReadAllLines(tempEZTFileName)
     For index = 0 To EztLinesLoaded.Count - 1
-      SrcStmt.Add(EztLinesLoaded(index))
+      SrcStmt.Add(EztLinesLoaded(index).Trim)
       reccnt += 1
     Next
 
     LoadEasytrieveStatementsToArray = reccnt
   End Function
   Sub CreateRecordFile()
-    ' This creates the *_filename.xlxs file which will hold all things about DATA.
+    ' This creates the tabs Records & Fields for the xlxs file which will
+    ' hold all things about DATA.
+    ' This routine supports both COBOL and Easytrieve syntax
     ' 
     Dim srcWords As New List(Of String)
     Dim statement As String = ""
@@ -2017,6 +2405,7 @@ Public Class Form1
     '
     ' Create the Excel Records sheet.
     '
+    lblProcessingWorksheet.Text = "Processing Worksheet: " & FileNameOnly & " : Records = " & ListOfRecords.Count
     If RecordsRow = 0 Then
       RecordsWorksheet = workbook.Sheets.Add(After:=workbook.Worksheets(workbook.Worksheets.Count))
       RecordsWorksheet.Name = "Records"
@@ -2043,8 +2432,10 @@ Public Class Form1
 
     Dim DelimText As String()
     Dim row As Integer = LTrim(Str(RecordsRow))
+    Dim cnt As Integer = 0
     If ListOfRecords.Count > 0 Then
       For Each record In ListOfRecords
+        cnt += 1
         RecordsRow += 1
         row = LTrim(Str(RecordsRow))
         DelimText = record.Split(Delimiter)
@@ -2065,23 +2456,20 @@ Public Class Form1
           RecordsWorksheet.Range("N" & row).Value = DelimText(13)      'Copybook
           RecordsWorksheet.Range("O" & row).Value = DelimText(14)      'FDOrg
         End If
+        If cnt Mod 100 = 0 Then
+          lblProcessingWorksheet.Text = "Processing Worksheet: " & FileNameOnly &
+            " : Records = " & ListOfRecords.Count &
+            " # " & cnt
+        End If
       Next
 
-      ' Format the Records Sheet - first row bold the columns
-
-      rngRecordsName = RecordsWorksheet.Range("A1:O1")
-      rngRecordsName.Font.Bold = True
-      ' data area autofit all columns
-      rngRecordsName = RecordsWorksheet.Range("A1:O" & row)
-      workbook.Worksheets("Records").Range("A1").AutoFilter
-      rngRecordsName.Columns.AutoFit()
-      ' ignore error flag that numbers being loaded into a text field
-      objExcel.ErrorCheckingOptions.NumberAsText = False
     End If
-
+    lblProcessingWorksheet.Text = "Processing Worksheet: " & FileNameOnly & " : Records Complete"
     '
     ' Create the Fields worksheet
     '
+    lblProcessingWorksheet.Text = "Processing Worksheet: " & FileNameOnly & " : Fields = " & ListOfFields.Count
+
     If FieldsRow = 0 Then
       FieldsWorksheet = workbook.Sheets.Add(After:=workbook.Worksheets(workbook.Worksheets.Count))
       FieldsWorksheet.Name = "Fields"
@@ -2106,8 +2494,10 @@ Public Class Form1
     ' write the Fields data
     '
     row = LTrim(Str(FieldsRow))
+    cnt = 0
     If ListOfFields.Count > 0 Then
       For Each FieldRow In ListOfFields
+        cnt += 1
         FieldsRow += 1
         DelimText = FieldRow.Split(Delimiter)
         row = LTrim(Str(FieldsRow))
@@ -2127,8 +2517,55 @@ Public Class Form1
           FieldsWorksheet.Range("M" & row).Value = DelimText(12)      'End
           FieldsWorksheet.Range("N" & row).Value = DelimText(13)      'Length
         End If
+        If cnt Mod 100 = 0 Then
+          lblProcessingWorksheet.Text = "Processing Worksheet: " & FileNameOnly &
+            " : Fields = " & ListOfFields.Count &
+            " # " & cnt
+        End If
       Next
+    End If
+    lblProcessingWorksheet.Text = "Processing Worksheet: " & FileNameOnly & " : Fields Complete"
+
+  End Sub
+  Sub FormatWorksheets()
+
+    ' Format the Programs sheet - first row bold the columns
+    If ProgramsRow > 1 Then
+      Dim row As Integer = LTrim(Str(ProgramsRow))
       ' Format the Sheet - first row bold the columns
+      rngRecordName = worksheet.Range("A1:T1")
+      rngRecordName.Font.Bold = True
+      ' data area autofit all columns
+      rngRecordName = worksheet.Range("A1:U" & row)
+      'rngRecordName.AutoFilter()
+      workbook.Worksheets("Programs").Range("A1").AutoFilter
+      rngRecordName.Columns.AutoFit()
+      ' ignore error flag that numbers being loaded into a text field
+      objExcel.ErrorCheckingOptions.NumberAsText = False
+      'worksheet.Select(1)
+      'worksheet.Activate()
+      'worksheet.FreezePanes(2, 1)
+    End If
+
+    ' Format the Records Sheet - first row bold the columns
+    If RecordsRow > 0 Then
+      Dim row As Integer = LTrim(Str(RecordsRow))
+      rngRecordsName = RecordsWorksheet.Range("A1:O1")
+      rngRecordsName.Font.Bold = True
+      ' data area autofit all columns
+      rngRecordsName = RecordsWorksheet.Range("A1:O" & row)
+      workbook.Worksheets("Records").Range("A1").AutoFilter
+      rngRecordsName.Columns.AutoFit()
+      ' ignore error flag that numbers being loaded into a text field
+      objExcel.ErrorCheckingOptions.NumberAsText = False
+      'RecordsWorksheet.Select(2)
+      'RecordsWorksheet.Activate()
+      'RecordsWorksheet.FreezePanes(2, 1)
+    End If
+
+    ' Format the Fields worksheet - first row bold the columns
+    If FieldsRow > 0 Then
+      Dim row As Integer = LTrim(Str(FieldsRow))
       rngFieldsName = FieldsWorksheet.Range("A1:N1")
       rngFieldsName.Font.Bold = True
       ' data area autofit all columns
@@ -2137,13 +2574,85 @@ Public Class Form1
       rngFieldsName.Columns.AutoFit()
       ' ignore error flag that numbers being loaded into a text field
       objExcel.ErrorCheckingOptions.NumberAsText = False
+      'FieldsWorksheet.Select(3)
+      'FieldsWorksheet.Activate()
+      'FieldsWorksheet.FreezePanes(2, 1)
     End If
-    '
-    ' how to navigate back to the first sheet '*here????
-    ' how to autofilter'*here ????
+
+    If CommentsRow > 0 Then
+      Dim row As Integer = LTrim(Str(CommentsRow))
+      ' Format the Sheet - first row bold the columns
+      rngComments = CommentsWorksheet.Range("A1:F1")
+      rngComments.Font.Bold = True
+      ' data area autofit all columns
+      rngComments = CommentsWorksheet.Range("A1:F" & row)
+      workbook.Worksheets("Comments").Range("A1").AutoFilter
+      rngComments.Columns.AutoFit()
+      rngComments.VerticalAlignment = Excel.XlVAlign.xlVAlignTop
+      ' ignore error flag that numbers being loaded into a text field
+      objExcel.ErrorCheckingOptions.NumberAsText = False
+      'CommentsWorksheet.Select(4)
+      'CommentsWorksheet.Activate()
+      'CommentsWorksheet.FreezePanes(2, 1)
+    End If
+
+    worksheet.Select(1)
+    worksheet.Activate()
 
   End Sub
+  Sub CreateCommentsWorksheet()
+    '* Create the Comments worksheet from the listofcomments array
+    lblProcessingWorksheet.Text = "Processing Worksheet: " & FileNameOnly & " : Comments = " & ListOfComments.Count
+
+    Dim cnt As Integer = 0
+    Dim row As Integer = 0
+    If CommentsRow = 0 Then
+      CommentsWorksheet = workbook.Sheets.Add(After:=workbook.Worksheets(workbook.Worksheets.Count))
+      CommentsWorksheet.Name = "Comments"
+      ' Write the Column Headers row
+      CommentsWorksheet.Range("A1").Value = "Source"
+      CommentsWorksheet.Range("B1").Value = "Program"
+      CommentsWorksheet.Range("C1").Value = "Type"
+      CommentsWorksheet.Range("D1").Value = "Division"
+      CommentsWorksheet.Range("E1").Value = "Line#"
+      CommentsWorksheet.Range("F1").Value = "Comment"
+      CommentsRow = 1
+    End If
+    ' load comments to spreadsheet. Merge sequential lines numbers into one row/cell
+    Dim prevLineNum As Integer = -1
+    Dim currLineNum As Integer = 0
+    Dim prevProgram As String = ""
+    Dim currProgram As String = ""
+    For Each comment In ListOfComments
+      cnt += 1
+      Dim commentColumns As String() = comment.Split(Delimiter)
+      currLineNum = Val(commentColumns(4))
+      currProgram = commentColumns(1)
+      If currLineNum - 1 <> prevLineNum Or currProgram <> prevProgram Then
+        CommentsRow += 1
+        row = LTrim(Str(CommentsRow))
+        CommentsWorksheet.Range("A" & row).Value = commentColumns(0)       'Source
+        CommentsWorksheet.Range("B" & row).Value = commentColumns(1)       'Program
+        CommentsWorksheet.Range("C" & row).Value = commentColumns(2)       'TYPE
+        CommentsWorksheet.Range("D" & row).Value = commentColumns(3)       'division
+        CommentsWorksheet.Range("E" & row).Value = commentColumns(4)       'Line#
+        CommentsWorksheet.Range("F" & row).Value = commentColumns(5)       'Comment
+      Else
+        CommentsWorksheet.Range("F" & row).Value &= vbNewLine & commentColumns(5)
+      End If
+      prevLineNum = currLineNum
+      prevProgram = currProgram
+      If cnt Mod 100 = 0 Then
+        lblProcessingWorksheet.Text = "Processing Worksheet: " & FileNameOnly &
+          " : Comments = " & ListOfComments.Count &
+          " # " & cnt
+      End If
+    Next
+    lblProcessingWorksheet.Text = "Processing Worksheet: " & FileNameOnly & " : Comments Complete"
+  End Sub
   Sub CreatePumlCOBOL(ByRef exec As String)
+    ' create the flowchart (puml) file for COBOL
+
     Dim EndCondIndex As Integer = -1
     Dim StartCondIndex As Integer = -1
     Dim ParagraphStarted As Boolean = False
@@ -2153,6 +2662,11 @@ Public Class Form1
     Dim imperativeStatementCR As String = ""
     Dim statement As String = ""
     Dim vwordIndex As Integer = -1
+    WithinReadConditionStatement = False
+    WithinReadStatement = False
+    WithinPerformWithEndPerformStatement = False
+    Dim IfCnt As Integer = 0
+
 
     ' Open the output file Puml 
     Dim PumlFileName = txtOutputFoldername.Text & "\" & exec & ".puml"
@@ -2161,14 +2675,14 @@ Public Class Form1
     Try
       pumlFile = My.Computer.FileSystem.OpenTextFileWriter(PumlFileName, False)
     Catch ex As Exception
-      MessageBox.Show(ex.Message, "Error opening PumlFile")
+      MessageBox.Show(ex.Message, "Error opening PumlFile COBOL")
       Exit Sub
     End Try
 
     ' Write the top of file
-    pumlFile.WriteLine("@startuml " & FileNameOnly)
-    pumlFile.WriteLine("header ParseCob(c), by IBM")
-    pumlFile.WriteLine("title Flowchart of Program: " & FileNameOnly &
+    pumlFile.WriteLine("@startuml " & exec)
+    pumlFile.WriteLine("header ADDILite(c), by IBM")
+    pumlFile.WriteLine("title Flowchart of COBOL Program: " & exec &
                        "\nProgram Author: " & ProgramAuthor &
                        "\nDate written: " & ProgramWritten)
 
@@ -2188,6 +2702,9 @@ Public Class Form1
         ' break the statement in words
         Call GetSourceWords(SrcStmt(index).Trim, cWord)
 
+        ' Analyze this statement for Logic Levels
+        Call AnalyzeLevelsCobol(cWord, lWord)
+
         ' Process every VERB word in this statement 
         ' Every verb should be a plum object created.
 
@@ -2199,13 +2716,18 @@ Public Class Form1
         For wordIndex = 0 To cWord.Count - 1
           Select Case cWord(wordIndex)
             Case "IF"
+              IfCnt += 1
               IFLevelIndex.Add(wordIndex)
               Call ProcessPumlIF(wordIndex)
             Case "ELSE"
               Call ProcessPumlELSE(wordIndex)
             Case "END-IF"
+              IfCnt -= 1
               IndentLevel -= 1
               pumlFile.WriteLine(Indent() & "endif")
+              If IfCnt = 0 Then
+                WithinIF = False
+              End If
             Case "EVALUATE"
               Call ProcessPumlEVALUATE(wordIndex)
             Case "WHEN"
@@ -2216,8 +2738,11 @@ Public Class Form1
               Call ProcessPumlPERFORM(wordIndex)
             Case "END-PERFORM"
               Call ProcessPumlENDPERFORM(wordIndex)
+              WithinPerformWithEndPerformStatement = False
             Case "COMPUTE"
               Call ProcessPumlCOMPUTE(wordIndex)
+            Case "SEARCH"
+              Call ProcessPumlSEARCH(wordIndex)
             Case "READ"
               Call ProcessPumlREAD(wordIndex)
             Case "AT", "END", "NOT"
@@ -2226,6 +2751,32 @@ Public Class Form1
               ProcessPumlENDREAD(wordIndex)
             Case "GO"
               Call ProcessPumlGOTO(wordIndex)
+              If WithinIF Then
+                ' if next word is available, if NOT an end-if then write the end-if 
+                '   if there is an ELSE just leave it alone
+                '   otherwise just write the end-if
+                If wordIndex + 1 > cWord.Count - 1 Then
+                  Continue For
+                End If
+                If cWord(wordIndex + 1) = "ELSE" Then
+                  'IndentLevel -= 1
+                  'pumlFile.WriteLine(Indent() & "endif")
+                  'IfCnt -= 1
+                  'If IfCnt = 0 Then
+                  '  WithinIF = False
+                  'End If
+                  Continue For
+                End If
+                If cWord(wordIndex + 1) <> "END-IF" Then
+                  IndentLevel -= 1
+                  pumlFile.WriteLine(Indent() & "endif")
+                  IfCnt -= 1
+                  If IfCnt = 0 Then
+                    WithinIF = False
+                  End If
+                  Continue For
+                End If
+              End If
             Case "EXEC"
               ProcessPumlEXEC(wordIndex)
             Case Else
@@ -2234,6 +2785,181 @@ Public Class Form1
               Call GetStatement(wordIndex, EndIndex, MiscStatement)
               pumlFile.WriteLine(Indent() & ":" & MiscStatement.Trim & ";")
               wordIndex = EndIndex
+          End Select
+        Next wordIndex
+        If WithinReadStatement And WithinReadConditionStatement Then
+          IndentLevel -= 1
+          pumlFile.WriteLine(Indent() & "endif")
+        End If
+        If WithinIF Or IfCnt > 0 Then
+          For x As Integer = 1 To IfCnt
+            IndentLevel -= 1
+            pumlFile.WriteLine(Indent() & "endif")
+          Next
+          IfCnt = 0
+          WithinIF = False
+        End If
+        WithinReadConditionStatement = False
+        WithinReadStatement = False
+        WithinIF = False
+      Next index
+
+      If ParagraphStarted = True Then
+        pumlFile.WriteLine("end")
+        ParagraphStarted = False
+      End If
+
+    Next
+    pumlFile.WriteLine("@enduml")
+
+    pumlFile.Close()
+  End Sub
+  Sub AnalyzeLevelsCobol(ByRef cWord As List(Of String), ByRef lWord As List(Of String))
+    ' Assign a logic level number to each word. Always start at 0 until there is an IF
+    lWord.Clear()
+    For x As Integer = 0 To cWord.Count - 1
+      lWord.Add(0)
+    Next
+    Dim EndIndex As Integer = 0
+    Dim level As Integer = 0
+    For cIndex As Integer = 0 To cWord.Count - 1
+      If cWord(cIndex) = "IF" Then
+        EndIndex = IndexToNextVerb(cIndex)
+        For x As Integer = cIndex To EndIndex
+          lWord(x) = level
+        Next
+        level += 1
+        cIndex = EndIndex
+        Continue For
+      End If
+      If cWord(cIndex) = "ELSE" Then
+        level -= 1
+        lWord(cIndex) = level
+        level += 1
+        Continue For
+      End If
+      If cWord(cIndex) = "END-IF" Then
+        level -= 1
+        lWord(cIndex) = level
+        Continue For
+      End If
+      lWord(cIndex) = level
+    Next
+  End Sub
+  Sub CreatePumlEasytrieve(ByRef exec As String)
+    ' create the flowchart (puml) file for Easytrieve
+    Dim EndCondIndex As Integer = -1
+    Dim StartCondIndex As Integer = -1
+    Dim ParagraphStarted As Boolean = False
+    Dim condStatement As String = ""
+    Dim condStatementCR As String = ""
+    Dim imperativeStatement As String = ""
+    Dim imperativeStatementCR As String = ""
+    Dim statement As String = ""
+    Dim vwordIndex As Integer = -1
+
+    ' Open the output file Puml 
+    Dim PumlFileName = txtOutputFoldername.Text & "\" & exec & ".puml"
+
+    ' Open and write at least one time. Not worrying (try/catch) about subsequent writes
+    Try
+      pumlFile = My.Computer.FileSystem.OpenTextFileWriter(PumlFileName, False)
+    Catch ex As Exception
+      MessageBox.Show(ex.Message, "Error opening PumlFile for Easytrieve")
+      Exit Sub
+    End Try
+
+    ' Write the top of file
+    pumlFile.WriteLine("@startuml " & exec)
+    pumlFile.WriteLine("header ADDILite(c), by IBM")
+    pumlFile.WriteLine("title Flowchart of Easytrieve Program: " & exec)
+
+    For Each pgm In listOfPrograms
+      pgmName = pgm.ProgramId
+
+      For index As Integer = pgm.ProcedureDivision To pgm.EndProgram
+        ' skip comments
+        If SrcStmt(index).Length >= 1 Then
+          If SrcStmt(index).Substring(0, 1) = "*" Then
+            Continue For
+          End If
+        End If
+
+        ' break the statement in words
+        Call GetSourceWords(SrcStmt(index).Trim, cWord)
+
+        ' Process every VERB word in this statement 
+        ' Every verb should/could be a plum object created.
+
+        IndentLevel = 1
+        IFLevelIndex.Clear()
+
+        For wordIndex = 0 To cWord.Count - 1
+          Select Case cWord(wordIndex)
+            Case "JOB"
+              Call ProcessPumlParagraphEasytrieve(ParagraphStarted, cWord(wordIndex))
+            Case "INPUT"
+              Call ProcessPumlInput(wordIndex)
+            Case "SORT"
+              Call ProcessPumlSortEasytrieve(wordIndex)
+            Case "START"
+              Call ProcessPumlStart(wordIndex)
+            Case "FINISH"
+              Call ProcessPumlStart(wordIndex)
+            Case "IF"
+              IFLevelIndex.Add(wordIndex)
+              Call ProcessPumlIFEasytrieve(wordIndex)
+            Case "ELSE"
+              Call ProcessPumlELSE(wordIndex)
+            Case "END-IF"
+              IndentLevel -= 1
+              pumlFile.WriteLine(Indent() & "endif")
+            Case "CASE"
+              Call ProcessPumlEVALUATE(wordIndex)
+            Case "WHEN"
+              Call ProcessPumlWHEN(wordIndex)
+            Case "END-EVALUATE"
+              Call ProcessPumlENDEVALUATE(wordIndex)
+            'Case "PERFORM"
+            '  Call ProcessPumlPERFORM(wordIndex)
+            'Case "END-PERFORM"
+            '  Call ProcessPumlENDPERFORM(wordIndex)
+            Case "DO"
+              Call ProcessPumlDO(wordIndex)
+            Case "END-DO"
+              Call ProcessPumlENDPERFORM(wordIndex)
+            Case "COMPUTE"
+              Call ProcessPumlCOMPUTE(wordIndex)
+            'Case "READ"
+            '  Call ProcessPumlREAD(wordIndex)
+            Case "GET"
+              Call ProcessPumlGET(wordIndex)
+            'Case "AT", "END", "NOT"
+            '  ProcessPumlReadCondition(wordIndex)
+            'Case "END-READ"
+            '  ProcessPumlENDREAD(wordIndex)
+            Case "GO"
+              Call ProcessPumlGOTO(wordIndex)
+            Case "EXEC"
+              ProcessPumlEXEC(wordIndex)
+            Case "STOP", "END-PROC"
+              pumlFile.WriteLine("end")
+              pumlFile.WriteLine("")
+              ParagraphStarted = False
+            Case Else
+              If cWord(wordIndex).IndexOf(".") > -1 Then
+                ' handle performed paragraph name
+                If wordIndex < cWord.Count - 1 Then
+                  Call ProcessPumlParagraphEasytrieve(ParagraphStarted, cWord(wordIndex))
+                  wordIndex += 1
+                End If
+              Else
+                Dim EndIndex As Integer = 0
+                Dim MiscStatement As String = ""
+                Call GetStatement(wordIndex, EndIndex, MiscStatement)
+                pumlFile.WriteLine(Indent() & ":" & MiscStatement.Trim & ";")
+                wordIndex = EndIndex
+              End If
           End Select
         Next wordIndex
       Next index
@@ -2248,6 +2974,140 @@ Public Class Form1
 
     pumlFile.Close()
   End Sub
+
+  Sub CreateBRCOBOL(ByRef exec As String)
+    ' create the Business Rules file for COBOL
+
+    Dim EndCondIndex As Integer = -1
+    Dim StartCondIndex As Integer = -1
+    Dim IFStarted As Boolean = False
+    Dim ELSEStarted As Boolean = False
+    Dim condStatement As String = ""
+    Dim condStatementCR As String = ""
+    Dim imperativeStatementTrue As String = ""
+    Dim imperativeStatementFalse = ""
+    Dim imperativeStatementCR As String = ""
+    Dim statement As String = ""
+    Dim IfStatement As String = ""
+    Dim IFLevel As Integer = 0
+    Dim vwordIndex As Integer = -1
+    Dim RuleNumber As Integer = 0
+    Dim wordIndex As Integer = -1
+
+    ' Open the output file BR
+    Dim BRFileName = txtOutputFoldername.Text & "\" & exec & "_BR.csv"
+
+    ' Open and write at least one time. Not worrying (try/catch) about subsequent writes
+    Try
+      swBRFile = My.Computer.FileSystem.OpenTextFileWriter(BRFileName, False)
+    Catch ex As Exception
+      MessageBox.Show(ex.Message, "Error opening BRFile COBOL")
+      Exit Sub
+    End Try
+
+    ' Write the top of file (row 1 header)
+    swBRFile.WriteLine("Source" & Delimiter &
+                       "Program" & Delimiter &
+                       "Rule#" & Delimiter &
+                       "Level" & Delimiter &
+                       "Condition" & Delimiter &
+                       "Then when true" & Delimiter &
+                       "Else when false")
+
+    For Each pgm In listOfPrograms
+      pgmName = pgm.ProgramId
+
+      For index As Integer = pgm.ProcedureDivision + 1 To pgm.EndProgram
+        ' ignore comments
+        If SrcStmt(index).Substring(0, 1) = "*" Then
+          Continue For
+        End If
+        ' ignore paragraphs
+        If SrcStmt(index).Length >= 1 Then
+          If SrcStmt(index).Substring(0, 1) <> Space(1) Then
+            Continue For
+          End If
+        End If
+
+        ' break the statement in words
+        Call GetSourceWords(SrcStmt(index).Trim, cWord)
+
+        ' Process every VERB word in this statement 
+        ' Every IF / Evaluate verb should be a Business Rule created.
+
+        BRLevel = 1
+        IFLevel = 0
+        IFStarted = False
+        ELSEStarted = False
+        imperativeStatementTrue = ""
+        imperativeStatementFalse = ""
+        For wordIndex = 0 To cWord.Count - 1
+          Select Case cWord(wordIndex)
+            Case "IF"
+              IFLevel += 1
+              RuleNumber += 1
+              BRLevel += 1
+              IFStarted = True
+              imperativeStatementTrue = ""
+              Dim EndIndex As Integer = 0
+              'to next cobol verb and next index
+              Call GetStatement(wordIndex, EndIndex, IfStatement)
+              wordIndex = EndIndex
+
+            Case "ELSE"
+              imperativeStatementFalse = ""
+              ELSEStarted = True
+
+            Case "END-IF"
+              IFLevel -= 1
+              IFStarted = False
+              ELSEStarted = False
+              swBRFile.WriteLine(FileNameOnly & Delimiter &
+                                 pgm.ProgramId & Delimiter &
+                                 LTrim(Str(index)) & Delimiter &
+                                 LTrim(Str(wordIndex)) & Delimiter &
+                                 IfStatement & Delimiter &
+                                 imperativeStatementTrue & Delimiter &
+                                 imperativeStatementFalse)
+              imperativeStatementTrue = ""
+              imperativeStatementFalse = ""
+              BRLevel = 1
+
+            Case Else
+              If IFStarted Then
+                Dim EndIndex As Integer = 0
+                Dim MiscStatement As String = ""
+                Call GetStatement(wordIndex, EndIndex, MiscStatement)
+                If ELSEStarted Then
+                  imperativeStatementFalse &= MiscStatement & " "
+                Else
+                  imperativeStatementTrue &= MiscStatement & " "
+                End If
+                wordIndex = EndIndex
+              End If
+          End Select
+        Next wordIndex
+        If IFStarted = True Then
+          IFStarted = False
+          ELSEStarted = False
+          IFLevel = -1
+          swBRFile.WriteLine(FileNameOnly & Delimiter &
+                                 pgm.ProgramId & Delimiter &
+                                 LTrim(Str(index)) & Delimiter &
+                                 LTrim(Str(wordIndex)) & Delimiter &
+                                 IfStatement & Delimiter &
+                                 imperativeStatementTrue & Delimiter &
+                                 imperativeStatementFalse)
+        End If
+
+      Next index
+
+
+    Next pgm
+
+    swBRFile.Close()
+  End Sub
+
   Function GetListOfFiles() As List(Of String)
     ' Scan through the stmt array looking for all data "FILES"
     '   A "FILE" is something stated with either "SELECT" or "EXEC SQL DECLARE"
@@ -2420,6 +3280,10 @@ Public Class Form1
                 If recname.Length > 0 Then
                   If ListOfReadIntoRecords.IndexOf(recname) = -1 Then
                     recordNameIndex = FindWSRecordNameIndex(pgm.DataDivision, recname)
+                    ' if 01 Recname not found, skip this record name
+                    If recordNameIndex = -1 Then
+                      Continue For
+                    End If
                     recordLength = GetRecordLength(recordNameIndex)
                     ListOfReadIntoRecords.Add(recname)
                     ListOfRecordNames.Add(recname & Delimiter &
@@ -2455,6 +3319,10 @@ Public Class Form1
                 If recname.Length > 0 Then
                   If ListOfWriteFromRecords.IndexOf(recname) = -1 Then
                     recordNameIndex = FindWSRecordNameIndex(pgm.DataDivision, recname)
+                    ' if 01 Recname not found, skip this record name
+                    If recordNameIndex = -1 Then
+                      Continue For
+                    End If
                     recordLength = GetRecordLength(recordNameIndex)
                     ListOfWriteFromRecords.Add(recname)
                     ListOfRecordNames.Add(recname & Delimiter &
@@ -2516,13 +3384,14 @@ Public Class Form1
     For stmtindex As Integer = StartOf01 + 1 To pgm.ProcedureDivision
       Call GetSourceWords(SrcStmt(stmtindex), DataWords)
       Select Case DataWords(0)
-        Case "FD", "01", "LINKAGE", "PROCEDURE"
+        Case "FD", "01", "LINKAGE", "PROCEDURE", "FILE", "SQL", "JOB", "SORT"
           EndOf01 = stmtindex - 1
           Exit For
       End Select
     Next
     If EndOf01 = -1 Then
-      MessageBox.Show("Not able to find End of 01, start of 01-Level:" & StartOf01)
+      MessageBox.Show("Not able to find End of 01, start of 01-Level@" & StartOf01 &
+                      ", Pgm=" & pgm.ProgramId)
       GetRecordLength = 0
       Exit Function
     End If
@@ -2690,9 +3559,13 @@ Public Class Form1
     'Dim RecordWords As New List(Of String)
     ' look upward to see if we find 'COPY/INCLUDE/SQL INCLUDE' statement
     ' here are some examples:
+    '  COBOL
     '*COPY CRCALC.
     '    EXEC SQL INCLUDE SQLCA END-EXEC.
-    '*INCLUDE++ PM044016
+    '*INCLUDE++ PM044016  (from Panvalet)
+    '* Easytrieve
+    '*%COPYBOOK SQL CRPVBI
+    '*%COPYBOOK FILE PM044025
     ' we can stop searching at a NON-commented line.
     FindCopybookName = ""
     For CopyIndex As Integer = DataIndex - 1 To pgm.DataDivision Step -1
@@ -2733,6 +3606,25 @@ Public Class Form1
     pumlFile.WriteLine(":**" & Trim(statement.Replace(".", "")) & "**;")
     ParagraphStarted = True
   End Sub
+  Sub ProcessPumlParagraphEasytrieve(ByRef ParagraphStarted As Boolean, ByRef statement As String)
+    'If ParagraphStarted = True Then
+    '  pumlFile.WriteLine("end")
+    '  pumlFile.WriteLine("")
+    'End If
+    pumlFile.WriteLine("start")
+    pumlFile.WriteLine(":**" & statement.Trim & "**;")
+    ParagraphStarted = True
+  End Sub
+  Sub ProcessPumlSortEasytrieve(ByRef WordIndex As Integer)
+    ' note that cWord is global
+    Dim EndIndex As Integer = cWord.Count - 1
+    Dim TogetherWords As String = StringTogetherWords(WordIndex, (cWord.Count - 1))
+    Dim SortStatement As String = AddNewLineAboutEvery30Characters(TogetherWords)
+
+    pumlFile.WriteLine("start")
+    pumlFile.WriteLine(":" & SortStatement.Trim & ";")
+    WordIndex = cWord.Count - 1
+  End Sub
   Sub ProcessPumlIF(ByRef WordIndex As Integer)
     ' find the 'IF' aka Conditional statement
     ' Indentlevel is global
@@ -2742,7 +3634,28 @@ Public Class Form1
     pumlFile.WriteLine(Indent() & "if (" & Statement.Trim & ") then (yes)")
     IndentLevel += 1
     WordIndex = EndIndex
+    WithinIF = True
   End Sub
+  Sub ProcessBRIF(ByRef WordIndex As Integer, ByRef IFStatement As String)
+    ' find the 'IF' aka Conditional statement
+    ' Indentlevel is global
+    Dim EndIndex As Integer = 0
+    Call GetStatement(WordIndex, EndIndex, IFStatement) 'to next cobol verb
+    BRLevel += 1
+    WordIndex = EndIndex
+    IndentLevel += 1
+  End Sub
+  Sub ProcessPumlIFEasytrieve(ByRef WordIndex As Integer)
+    ' find the 'IF' aka Conditional statement
+    ' Indentlevel is global
+    Dim EndIndex As Integer = cWord.Count - 1
+    Dim Statement As String = ""
+    Call GetStatement(WordIndex, EndIndex, Statement)
+    pumlFile.WriteLine(Indent() & "if (" & Statement.Trim & ") then (yes)")
+    IndentLevel += 1
+    WordIndex = EndIndex
+  End Sub
+
   Sub ProcessPumlELSE(ByRef WordIndex As Integer)
     ' Does current 'ELSE' belong to my 'IF' or another 'IF'???
     ' cWord is global
@@ -2755,7 +3668,7 @@ Public Class Form1
   End Sub
   Sub ProcessPumlEVALUATE(ByRef wordIndex As Integer)
     'TODO: need to fix embedded Evaluates
-    ' find the end of 'EVALUATE' statement which should be at the first 'WHEN' clause
+    ' find the end of 'EVALUATE' / 'CASE' statement which should be at the first 'WHEN' clause
     'cWord is global
     'IndentLevel is global
     Dim Statement As String = ""
@@ -2817,8 +3730,16 @@ Public Class Form1
     Dim EndIndex As Integer = 0
     Dim Statement As String = ""
     Call GetStatement(WordIndex, EndIndex, Statement)
-    pumlFile.WriteLine(Indent() & ":" & Statement.Trim & ";")
-    'pumlFile.WriteLine("detach")
+    pumlFile.WriteLine(Indent() & "#pink:" & Statement.Trim & ";")
+    pumlFile.WriteLine(Indent() & "detach")
+    WordIndex = EndIndex
+  End Sub
+  Sub ProcessPumlGET(ByRef WordIndex As Integer)
+    ' Next word is file/record name
+    Dim EndIndex As Integer = WordIndex + 1
+    Dim Statement As String = ""
+    Call GetStatement(WordIndex, EndIndex, Statement)
+    pumlFile.WriteLine(Indent() & ":" & Statement.Trim & "/")
     WordIndex = EndIndex
   End Sub
   Sub ProcessPumlREAD(ByRef WordIndex As Integer)
@@ -2850,8 +3771,26 @@ Public Class Form1
 
     ''Format 2:random retrieval
   End Sub
+  Sub ProcessPumlInput(ByRef WordIndex As Integer)
+    ' find the file of 'READ' statement which should next next word
+    'cWord is global
+    'IndentLevel is global
+
+    ' Format 1:Sequential Read
+    WithinReadStatement = True
+    Dim StartIndex = WordIndex
+    Dim EndIndex As Integer = StartIndex + 1
+    Dim TogetherWords As String = StringTogetherWords(StartIndex, EndIndex)
+    Dim ReadStatement As String = AddNewLineAboutEvery30Characters(TogetherWords)
+    pumlFile.WriteLine(Indent() & ":" & ReadStatement.Trim & "/")
+    WordIndex = EndIndex
+    IndentLevel += 1
+  End Sub
   Sub ProcessPumlReadCondition(ByRef WordIndex As Integer)
     If WithinReadStatement = False Then
+      Exit Sub
+    End If
+    If WordIndex + 3 > cWord.Count - 1 Then
       Exit Sub
     End If
     If WithinReadConditionStatement = True Then
@@ -2860,6 +3799,7 @@ Public Class Form1
     End If
     Dim ReadCondition As String = ""
     Dim ReadConditionCount As Integer = 0
+
     For x As Integer = WordIndex To WordIndex + 3
       Select Case cWord(x)
         Case "AT", "END", "NOT"
@@ -2882,39 +3822,129 @@ Public Class Form1
     WithinReadConditionStatement = False
     WithinReadStatement = False
   End Sub
+  Sub ProcessPumlSEARCH(ByRef WordIndex As Integer)
+    ' for now just one big block for the search statement
+    ' find end of statement or the END-SEARCH phrase
+    Dim WordsTogether As String = ""
+    Dim EndIndex As Integer = 0
+    Dim Statement As String = ""
+    For EndIndex = WordIndex + 1 To cWord.Count - 1
+      If cWord(EndIndex) = "END-SEARCH" Then
+        WordsTogether = StringTogetherWords(WordIndex, EndIndex)
+        Statement = AddNewLineAboutEvery30Characters(WordsTogether)
+        pumlFile.WriteLine(Indent() & ":" & Statement.Trim & ";")
+        WordIndex = EndIndex
+        Exit Sub
+      End If
+    Next
+    ' keyword END-SEARCH not found set to end of statement
+    EndIndex = cWord.Count - 1
+    WordsTogether = StringTogetherWords(WordIndex, EndIndex)
+    Statement = AddNewLineAboutEvery30Characters(WordsTogether)
+    pumlFile.WriteLine(Indent() & ":" & Statement.Trim & ";")
+    WordIndex = EndIndex
+  End Sub
   Sub ProcessPumlPERFORM(ByRef WordIndex As Integer)
-    ' find the end of 'PERFORM' statement
-    ' Out-of-line Perform is when procedure-name-1 IS specified.
-    ' In-line Perform is when procedure-name-1 IS NOT specified.
-    ' When in-line there must be delimited with the END-PERFORM clause
+    ' Need to find the end of 'PERFORM' statement
+    ' From the manual------
+    ' The PERFORM statement is: 
+    ' - An out-of-line PERFORM statement When procedure-name-1 is specified. 
+    ' - An in-line PERFORM statement When procedure-name-1 is omitted.
+    '
+    ' An in-line PERFORM must be delimited by the END-PERFORM phrase. 
+    '
+    ' The in-line and out-of-line formats cannot be combined. For example, if procedure-name-1 is specified, imperative statements and the END-PERFORM 'phrase must not be specified. 
+    '
+    ' The PERFORM statement formats are: 
+    ' - Basic PERFORM 
+    ' - TIMES phrase PERFORM 
+    ' - UNTIL phrase PERFORM 
+    ' - VARYING phrase PERFORM
+    '
+    Dim EndIndex As Integer = 0
+    Dim Statement As String = ""
+
+    ' BASIC Perform
+    ' If the next phrase/word is a procedure-name there is no end-perform
+    '  even if there is a TIMES or VARYING phrase
+    If ListOfParagraphs.IndexOf(cWord(WordIndex + 1)) > -1 Then
+      Call GetStatement(WordIndex, EndIndex, Statement)
+      pumlFile.WriteLine(Indent() & ":" & Statement.Trim & "|")
+      WordIndex = EndIndex
+      Exit Sub
+    End If
+
+    ' looking for Conditional (UNTIL) phrase
+    For EndIndex = WordIndex + 1 To cWord.Count - 1
+      If cWord(EndIndex) = "UNTIL" Then
+        Call GetStatement(WordIndex, EndIndex, Statement)
+        pumlFile.WriteLine(Indent() & "while (" & Statement.Trim & ") is (true)")
+        IndentLevel += 1
+        WordIndex = EndIndex
+        WithinPerformWithEndPerformStatement = True
+        Exit Sub
+      End If
+    Next
+
+    ' looking for TIMES phrase
+    For EndIndex = WordIndex + 1 To cWord.Count - 1
+      If cWord(EndIndex) = "TIMES" Then
+        Call GetStatement(WordIndex, EndIndex, Statement)
+        pumlFile.WriteLine(Indent() & "while (" & Statement.Trim & ") is (true)")
+        IndentLevel += 1
+        WordIndex = EndIndex
+        WithinPerformWithEndPerformStatement = True
+        Exit Sub
+      End If
+    Next
+
+    ' all other combinations of the PERFORM should have an END-PERFORM
+    '  this is just a start of a series of commands, not really a PERFORM with a loop
+    For EndIndex = WordIndex + 1 To cWord.Count - 1
+      If cWord(EndIndex) = "END-PERFORM" Then
+        Call GetStatement(WordIndex, EndIndex, Statement)
+        pumlFile.WriteLine(Indent() & ":DO;")
+        IndentLevel += 1
+        WordIndex = EndIndex
+        Exit Sub
+      End If
+    Next
+
+    Call GetStatement(WordIndex, EndIndex, Statement)
+    pumlFile.WriteLine(Indent() & ":" & Statement.Trim & "|")
+    WordIndex = EndIndex
+
+  End Sub
+  Sub ProcessPumlDO(ByRef WordIndex As Integer)
+    ' find the end of 'DO' statement
     '
     Dim EndIndex As Integer = 0
     Dim Statement As String = ""
     Dim EndPerformFound As Boolean = False
-    ' looking for END-PERFORM, if PERFORM is found then there is no END-PERFORM
-    For EndIndex = WordIndex + 1 To cWord.Count - 1
-      If cWord(EndIndex) = "PERFORM" Then
-        EndPerformFound = False
-        Exit For
-      End If
-      If cWord(EndIndex) = "END-PERFORM" Then
-        EndPerformFound = True
-        Exit For
-      End If
-    Next
-    EndIndex -= 1
+
+    EndIndex = cWord.Count - 1
     Call GetStatement(WordIndex, EndIndex, Statement)
-    If EndPerformFound = False Then
-      pumlFile.WriteLine(Indent() & ":" & Statement.Trim & "|")
-    Else
-      pumlFile.WriteLine(Indent() & "while (" & Statement.Trim & ") is (true)")
-      IndentLevel += 1
-    End If
+    pumlFile.WriteLine(Indent() & "while (" & Statement.Trim & ") is (true)")
+    IndentLevel += 1
+    WordIndex = EndIndex
+  End Sub
+
+  Sub ProcessPumlStart(ByRef WordIndex As Integer)
+    ' The end of 'PERFORM' statement is the next word
+    Dim EndIndex As Integer = WordIndex + 1
+    Dim Statement As String = ""
+    Call GetStatement(WordIndex, EndIndex, Statement)
+    pumlFile.WriteLine(Indent() & ":" & Statement.Trim & "|")
     WordIndex = EndIndex
   End Sub
   Sub ProcessPumlENDPERFORM(ByRef wordIndex As Integer)
     IndentLevel -= 1
-    pumlFile.WriteLine(Indent() & "endwhile (Complete)")
+    If WithinPerformWithEndPerformStatement Then
+      pumlFile.WriteLine(Indent() & "endwhile (Complete)")
+      WithinPerformWithEndPerformStatement = False
+    Else
+      pumlFile.WriteLine(Indent() & ":END DO;")
+    End If
   End Sub
   Sub ProcessPumlEXEC(ByRef WordIndex As Integer)
     Dim EndIndex As Integer = 0
@@ -3022,17 +4052,29 @@ Public Class Form1
 
         level = fdWords(0)
 
+        Dim fdword1 As String = ""
+        Dim fdword2 As String = ""
+        Dim fdword3 As String = ""
         RecordingMode = "V"
         index = fdWords.IndexOf("RECORDING")
         If index > -1 Then
-          Select Case True
-            Case fdWords(index + 1) = "MODE" And fdWords(index + 2) = "IS"
-              RecordingMode = fdWords(index + 3)
-            Case fdWords(index + 1) = "MODE" Or fdWords(index + 1) = "IS"
-              RecordingMode = fdWords(index + 2)
-            Case Else
-              RecordingMode = fdWords(index + 1)
-          End Select
+          ' sloppy code, I know...
+          If index + 1 <= fdWords.Count - 1 Then
+            fdword1 = fdWords(index + 1)
+          End If
+          If index + 2 <= fdWords.Count - 1 Then
+            fdword2 = fdWords(index + 2)
+          End If
+          If index + 3 <= fdWords.Count - 1 Then
+            fdword3 = fdWords(index + 3)
+          End If
+          If fdword1 = "MODE" And fdword2 = "IS" Then
+            RecordingMode = fdword3
+          End If
+          If fdword1 = "MODE" Or fdword1 = "IS" Then
+            RecordingMode = fdword2
+          End If
+          RecordingMode = fdword1
         End If
 
         RecordSizeMinimum = 0
@@ -3101,7 +4143,7 @@ Public Class Form1
                          pgmName & Delimiter &
                          LTrim(Str(pgmSeq)) & Delimiter &
                          file_name_1 & Delimiter &
-                         Level & Delimiter &
+                         level & Delimiter &
                          RTrim(OpenMode) & Delimiter &
                          RecordingMode & Delimiter &
                          LTrim(Str(RecordSizeMinimum)) & Delimiter &
@@ -3358,7 +4400,7 @@ Public Class Form1
         Continue For
       End If
       Call GetSourceWords(SrcStmt(FDIndex), FDWords)
-      If FDWords.Count >= 1 Then
+      If FDWords.Count >= 2 Then
         If FDWords(0) = "01" And FDWords(1) = WSRecordName Then
           Exit For
         End If
@@ -3371,6 +4413,10 @@ Public Class Form1
   Function FindWriteRecordName(ByRef fnIndex As Integer, ByRef srcWords As List(Of String)) As String
     'check this write verb for a 'FROM' otherwise use the record name from the FD
     ' COBOL syntax: WRITE FDrecordname [FROM recordname] 
+    If fnIndex + 1 >= srcWords.Count - 1 Then
+      FindWriteRecordName = srcWords(fnIndex + 1)
+      Exit Function
+    End If
     If srcWords(fnIndex + 2) = "FROM" Then
       FindWriteRecordName = srcWords(fnIndex + 3)
     Else
@@ -3418,6 +4464,9 @@ Public Class Form1
       If CopyWords(0) = "*INCLUDE++" Then
         FindCopyOrInclude = CopyWords(1)
         Exit Function
+      End If
+      If CopyWords(0) = "*%COPYBOOK" Then
+        FindCopyOrInclude = CopyWords(2)
       End If
     End If
     If IsNumeric(CopyWords(0)) Then
@@ -3482,9 +4531,93 @@ Public Class Form1
     IndexToNextVerb = cWord.Count - 1
   End Function
 
+  Sub ProcessComment(ByRef Index As Integer, ByRef statement As String, ByRef Division As String, ByRef CobolFile As String)
+    Dim comment As String = ""
+    Select Case SourceType
+      Case "COBOL"
+        comment = statement.
+                  PadRight(80).
+                  Replace(Delimiter, ":").
+                  Replace("*", " ").
+                  Substring(7, 65).
+                  Trim
+      Case "Easytrieve"
+        comment = statement.
+                  PadRight(80).
+                  Replace(Delimiter, ":").
+                  Replace("*", " ").
+                  Substring(1, 72).
+                  Trim
+      Case Else
+
+    End Select
+    comment = StrConv(comment, vbProperCase)
+
+    If comment.Length > 0 Then
+      ListOfComments.Add(FileNameOnly & Delimiter &
+                        CobolFile & Delimiter &
+                        SourceType & Delimiter &
+                        Division & Delimiter &
+                        LTrim(Str(Index + 1)) & Delimiter &
+                        Chr(34) & comment & Chr(34))
+    End If
+  End Sub
+  Sub InitializeProgramVariables()
+    lblCopybookMessage.Text = ""
+
+    ' re Initialize all beginning Variables and tables.
+    ' JCL
+    FileNameOnly = ""
+    tempFileName = ""
+    tempCobFileName = ""
+    tempEZTFileName = ""
+    jControl = ""
+    jLabel = ""
+    jParameters = ""
+    procName = ""
+    jobName = ""
+    jobClass = ""
+    msgClass = ""
+    prevPgmName = ""
+    prevStepName = ""
+    prevDDName = ""
+    pgmName = ""
+    DDName = ""
+    stepName = ""
+    InstreamProc = ""
+    ddConcatSeq = 0
+    ddSequence = 0
+    jobSequence = 0
+    procSequence = 0
+    execSequence = 0
+    jclStmt.Clear()
+    ListOfExecs.Clear()
+    ' COBOL fields
+    SourceType = ""
+    SrcStmt.Clear()
+    cWord.Clear()
+    ListOfFiles.Clear()
+    ListOfRecordNames.Clear()
+    ListOfRecords.Clear()
+    ListOfFields.Clear()
+    ListOfReadIntoRecords.Clear()
+    ListOfWriteFromRecords.Clear()
+    ListOfComments.Clear()
+    IFLevelIndex.Clear()
+    ProgramAuthor = ""
+    ProgramWritten = ""
+    IndentLevel = -1
+    BRLevel = -1
+    FirstWhenStatement = False
+    WithinReadStatement = False
+    WithinReadConditionStatement = False
+    WithinIF = False
+    pgmSeq = 0
+
+  End Sub
   Private Sub Form1_Load(sender As Object, e As EventArgs) Handles MyBase.Load
     Me.Text = "ADDILite " & ProgramVersion
-    lblCopybookMessage.Text = ""
+
     ' This area is the COBOL Verb array with counts. 
     ' **BE SURE TO KEEP VerbNames AND VerbCount ARRAYS IN SYNC!!!**
     ' Flow commands
