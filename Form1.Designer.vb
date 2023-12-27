@@ -26,7 +26,6 @@ Partial Class Form1
         Me.txtJCLJOBFolderName = New System.Windows.Forms.TextBox()
         Me.btnSourceFolder = New System.Windows.Forms.Button()
         Me.txtSourceFolderName = New System.Windows.Forms.TextBox()
-        Me.txtJCLProclibFoldername = New System.Windows.Forms.TextBox()
         Me.OpenFileDialog1 = New System.Windows.Forms.OpenFileDialog()
         Me.FolderBrowserDialog1 = New System.Windows.Forms.FolderBrowserDialog()
         Me.btnOutputFolder = New System.Windows.Forms.Button()
@@ -35,7 +34,6 @@ Partial Class Form1
         Me.Label1 = New System.Windows.Forms.Label()
         Me.txtDelimiter = New System.Windows.Forms.TextBox()
         Me.btnClose = New System.Windows.Forms.Button()
-        Me.btnJCLProclibFolder = New System.Windows.Forms.Button()
         Me.lblCopybookMessage = New System.Windows.Forms.Label()
         Me.ProgressBar1 = New System.Windows.Forms.ProgressBar()
         Me.cbLogStmt = New System.Windows.Forms.CheckBox()
@@ -44,46 +42,43 @@ Partial Class Form1
         Me.lblProcessingSource = New System.Windows.Forms.Label()
         Me.lblProcessingWorksheet = New System.Windows.Forms.Label()
         Me.cbScanModeOnly = New System.Windows.Forms.CheckBox()
+        Me.btnDataGatheringForm = New System.Windows.Forms.Button()
+        Me.txtDataGatheringForm = New System.Windows.Forms.TextBox()
+        Me.btnProcLibFolder = New System.Windows.Forms.Button()
+        Me.txtProcLibFolderName = New System.Windows.Forms.TextBox()
         Me.SuspendLayout()
         '
         'btnJCLJOBFilename
         '
-        Me.btnJCLJOBFilename.Location = New System.Drawing.Point(13, 13)
+        Me.btnJCLJOBFilename.Location = New System.Drawing.Point(13, 66)
         Me.btnJCLJOBFilename.Name = "btnJCLJOBFilename"
         Me.btnJCLJOBFilename.Size = New System.Drawing.Size(247, 40)
-        Me.btnJCLJOBFilename.TabIndex = 0
+        Me.btnJCLJOBFilename.TabIndex = 2
         Me.btnJCLJOBFilename.Text = "JCL JOB Folder:"
         Me.btnJCLJOBFilename.UseVisualStyleBackColor = True
         '
         'txtJCLJOBFolderName
         '
-        Me.txtJCLJOBFolderName.Location = New System.Drawing.Point(267, 20)
+        Me.txtJCLJOBFolderName.Location = New System.Drawing.Point(267, 73)
         Me.txtJCLJOBFolderName.Name = "txtJCLJOBFolderName"
-        Me.txtJCLJOBFolderName.Size = New System.Drawing.Size(824, 26)
-        Me.txtJCLJOBFolderName.TabIndex = 1
+        Me.txtJCLJOBFolderName.Size = New System.Drawing.Size(959, 26)
+        Me.txtJCLJOBFolderName.TabIndex = 3
         '
         'btnSourceFolder
         '
-        Me.btnSourceFolder.Location = New System.Drawing.Point(12, 157)
+        Me.btnSourceFolder.Location = New System.Drawing.Point(12, 187)
         Me.btnSourceFolder.Name = "btnSourceFolder"
         Me.btnSourceFolder.Size = New System.Drawing.Size(248, 40)
-        Me.btnSourceFolder.TabIndex = 6
+        Me.btnSourceFolder.TabIndex = 4
         Me.btnSourceFolder.Text = "Source Folder:"
         Me.btnSourceFolder.UseVisualStyleBackColor = True
         '
         'txtSourceFolderName
         '
-        Me.txtSourceFolderName.Location = New System.Drawing.Point(266, 164)
+        Me.txtSourceFolderName.Location = New System.Drawing.Point(266, 194)
         Me.txtSourceFolderName.Name = "txtSourceFolderName"
-        Me.txtSourceFolderName.Size = New System.Drawing.Size(823, 26)
-        Me.txtSourceFolderName.TabIndex = 7
-        '
-        'txtJCLProclibFoldername
-        '
-        Me.txtJCLProclibFoldername.Location = New System.Drawing.Point(267, 118)
-        Me.txtJCLProclibFoldername.Name = "txtJCLProclibFoldername"
-        Me.txtJCLProclibFoldername.Size = New System.Drawing.Size(824, 26)
-        Me.txtJCLProclibFoldername.TabIndex = 5
+        Me.txtSourceFolderName.Size = New System.Drawing.Size(960, 26)
+        Me.txtSourceFolderName.TabIndex = 5
         '
         'OpenFileDialog1
         '
@@ -91,33 +86,33 @@ Partial Class Form1
         '
         'btnOutputFolder
         '
-        Me.btnOutputFolder.Location = New System.Drawing.Point(10, 207)
+        Me.btnOutputFolder.Location = New System.Drawing.Point(10, 242)
         Me.btnOutputFolder.Name = "btnOutputFolder"
         Me.btnOutputFolder.Size = New System.Drawing.Size(248, 40)
-        Me.btnOutputFolder.TabIndex = 10
+        Me.btnOutputFolder.TabIndex = 6
         Me.btnOutputFolder.Text = "Output Folder:"
         Me.btnOutputFolder.UseVisualStyleBackColor = True
         '
         'txtOutputFoldername
         '
-        Me.txtOutputFoldername.Location = New System.Drawing.Point(266, 214)
+        Me.txtOutputFoldername.Location = New System.Drawing.Point(266, 249)
         Me.txtOutputFoldername.Name = "txtOutputFoldername"
-        Me.txtOutputFoldername.Size = New System.Drawing.Size(823, 26)
-        Me.txtOutputFoldername.TabIndex = 11
+        Me.txtOutputFoldername.Size = New System.Drawing.Size(960, 26)
+        Me.txtOutputFoldername.TabIndex = 7
         '
         'btnADDILite
         '
-        Me.btnADDILite.Location = New System.Drawing.Point(10, 253)
+        Me.btnADDILite.Location = New System.Drawing.Point(10, 288)
         Me.btnADDILite.Name = "btnADDILite"
         Me.btnADDILite.Size = New System.Drawing.Size(96, 53)
-        Me.btnADDILite.TabIndex = 13
+        Me.btnADDILite.TabIndex = 8
         Me.btnADDILite.Text = "ADDILite"
         Me.btnADDILite.UseVisualStyleBackColor = True
         '
         'Label1
         '
         Me.Label1.AutoSize = True
-        Me.Label1.Location = New System.Drawing.Point(456, 271)
+        Me.Label1.Location = New System.Drawing.Point(456, 306)
         Me.Label1.Name = "Label1"
         Me.Label1.Size = New System.Drawing.Size(75, 20)
         Me.Label1.TabIndex = 11
@@ -125,7 +120,7 @@ Partial Class Form1
         '
         'txtDelimiter
         '
-        Me.txtDelimiter.Location = New System.Drawing.Point(537, 268)
+        Me.txtDelimiter.Location = New System.Drawing.Point(537, 303)
         Me.txtDelimiter.Name = "txtDelimiter"
         Me.txtDelimiter.Size = New System.Drawing.Size(31, 26)
         Me.txtDelimiter.TabIndex = 12
@@ -134,26 +129,17 @@ Partial Class Form1
         '
         'btnClose
         '
-        Me.btnClose.Location = New System.Drawing.Point(1013, 406)
+        Me.btnClose.Location = New System.Drawing.Point(1013, 441)
         Me.btnClose.Name = "btnClose"
-        Me.btnClose.Size = New System.Drawing.Size(86, 37)
-        Me.btnClose.TabIndex = 14
+        Me.btnClose.Size = New System.Drawing.Size(151, 37)
+        Me.btnClose.TabIndex = 13
         Me.btnClose.Text = "Close"
         Me.btnClose.UseVisualStyleBackColor = True
-        '
-        'btnJCLProclibFolder
-        '
-        Me.btnJCLProclibFolder.Location = New System.Drawing.Point(12, 111)
-        Me.btnJCLProclibFolder.Name = "btnJCLProclibFolder"
-        Me.btnJCLProclibFolder.Size = New System.Drawing.Size(248, 40)
-        Me.btnJCLProclibFolder.TabIndex = 4
-        Me.btnJCLProclibFolder.Text = "JCL Proclib Folder:"
-        Me.btnJCLProclibFolder.UseVisualStyleBackColor = True
         '
         'lblCopybookMessage
         '
         Me.lblCopybookMessage.AutoSize = True
-        Me.lblCopybookMessage.Location = New System.Drawing.Point(28, 309)
+        Me.lblCopybookMessage.Location = New System.Drawing.Point(28, 344)
         Me.lblCopybookMessage.Name = "lblCopybookMessage"
         Me.lblCopybookMessage.Size = New System.Drawing.Size(641, 20)
         Me.lblCopybookMessage.TabIndex = 15
@@ -162,25 +148,25 @@ Partial Class Form1
         '
         'ProgressBar1
         '
-        Me.ProgressBar1.Location = New System.Drawing.Point(12, 454)
+        Me.ProgressBar1.Location = New System.Drawing.Point(12, 489)
         Me.ProgressBar1.Name = "ProgressBar1"
-        Me.ProgressBar1.Size = New System.Drawing.Size(1087, 23)
+        Me.ProgressBar1.Size = New System.Drawing.Size(1152, 23)
         Me.ProgressBar1.TabIndex = 16
         '
         'cbLogStmt
         '
         Me.cbLogStmt.AutoSize = True
-        Me.cbLogStmt.Location = New System.Drawing.Point(283, 269)
+        Me.cbLogStmt.Location = New System.Drawing.Point(283, 304)
         Me.cbLogStmt.Name = "cbLogStmt"
         Me.cbLogStmt.Size = New System.Drawing.Size(141, 24)
-        Me.cbLogStmt.TabIndex = 17
+        Me.cbLogStmt.TabIndex = 10
         Me.cbLogStmt.Text = "Log Stmt Array"
         Me.cbLogStmt.UseVisualStyleBackColor = True
         '
         'lblJobFileCount
         '
         Me.lblJobFileCount.AutoSize = True
-        Me.lblJobFileCount.Location = New System.Drawing.Point(263, 58)
+        Me.lblJobFileCount.Location = New System.Drawing.Point(263, 105)
         Me.lblJobFileCount.Name = "lblJobFileCount"
         Me.lblJobFileCount.Size = New System.Drawing.Size(161, 20)
         Me.lblJobFileCount.TabIndex = 18
@@ -189,7 +175,7 @@ Partial Class Form1
         'lblProcessingJob
         '
         Me.lblProcessingJob.AutoSize = True
-        Me.lblProcessingJob.Location = New System.Drawing.Point(38, 343)
+        Me.lblProcessingJob.Location = New System.Drawing.Point(38, 378)
         Me.lblProcessingJob.Name = "lblProcessingJob"
         Me.lblProcessingJob.Size = New System.Drawing.Size(121, 20)
         Me.lblProcessingJob.TabIndex = 19
@@ -198,7 +184,7 @@ Partial Class Form1
         'lblProcessingSource
         '
         Me.lblProcessingSource.AutoSize = True
-        Me.lblProcessingSource.Location = New System.Drawing.Point(56, 373)
+        Me.lblProcessingSource.Location = New System.Drawing.Point(56, 408)
         Me.lblProcessingSource.Name = "lblProcessingSource"
         Me.lblProcessingSource.Size = New System.Drawing.Size(146, 20)
         Me.lblProcessingSource.TabIndex = 20
@@ -207,7 +193,7 @@ Partial Class Form1
         'lblProcessingWorksheet
         '
         Me.lblProcessingWorksheet.AutoSize = True
-        Me.lblProcessingWorksheet.Location = New System.Drawing.Point(75, 406)
+        Me.lblProcessingWorksheet.Location = New System.Drawing.Point(75, 441)
         Me.lblProcessingWorksheet.Name = "lblProcessingWorksheet"
         Me.lblProcessingWorksheet.Size = New System.Drawing.Size(176, 20)
         Me.lblProcessingWorksheet.TabIndex = 21
@@ -216,18 +202,56 @@ Partial Class Form1
         'cbScanModeOnly
         '
         Me.cbScanModeOnly.AutoSize = True
-        Me.cbScanModeOnly.Location = New System.Drawing.Point(112, 269)
+        Me.cbScanModeOnly.Location = New System.Drawing.Point(112, 304)
         Me.cbScanModeOnly.Name = "cbScanModeOnly"
         Me.cbScanModeOnly.Size = New System.Drawing.Size(151, 24)
-        Me.cbScanModeOnly.TabIndex = 22
+        Me.cbScanModeOnly.TabIndex = 9
         Me.cbScanModeOnly.Text = "Scan Mode Only"
         Me.cbScanModeOnly.UseVisualStyleBackColor = True
+        '
+        'btnDataGatheringForm
+        '
+        Me.btnDataGatheringForm.Location = New System.Drawing.Point(13, 13)
+        Me.btnDataGatheringForm.Name = "btnDataGatheringForm"
+        Me.btnDataGatheringForm.Size = New System.Drawing.Size(247, 42)
+        Me.btnDataGatheringForm.TabIndex = 0
+        Me.btnDataGatheringForm.Text = "Data Gathering Form"
+        Me.btnDataGatheringForm.UseVisualStyleBackColor = True
+        '
+        'txtDataGatheringForm
+        '
+        Me.txtDataGatheringForm.Location = New System.Drawing.Point(267, 21)
+        Me.txtDataGatheringForm.Name = "txtDataGatheringForm"
+        Me.txtDataGatheringForm.Size = New System.Drawing.Size(959, 26)
+        Me.txtDataGatheringForm.TabIndex = 1
+        '
+        'btnProcLibFolder
+        '
+        Me.btnProcLibFolder.Location = New System.Drawing.Point(13, 131)
+        Me.btnProcLibFolder.Name = "btnProcLibFolder"
+        Me.btnProcLibFolder.Size = New System.Drawing.Size(247, 39)
+        Me.btnProcLibFolder.TabIndex = 22
+        Me.btnProcLibFolder.Text = "PROC Lib Folder"
+        Me.btnProcLibFolder.UseVisualStyleBackColor = True
+        Me.btnProcLibFolder.Visible = False
+        '
+        'txtProcLibFolderName
+        '
+        Me.txtProcLibFolderName.Location = New System.Drawing.Point(266, 139)
+        Me.txtProcLibFolderName.Name = "txtProcLibFolderName"
+        Me.txtProcLibFolderName.Size = New System.Drawing.Size(960, 26)
+        Me.txtProcLibFolderName.TabIndex = 23
+        Me.txtProcLibFolderName.Visible = False
         '
         'Form1
         '
         Me.AutoScaleDimensions = New System.Drawing.SizeF(9.0!, 20.0!)
         Me.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font
-        Me.ClientSize = New System.Drawing.Size(1122, 489)
+        Me.ClientSize = New System.Drawing.Size(1238, 524)
+        Me.Controls.Add(Me.txtProcLibFolderName)
+        Me.Controls.Add(Me.btnProcLibFolder)
+        Me.Controls.Add(Me.txtDataGatheringForm)
+        Me.Controls.Add(Me.btnDataGatheringForm)
         Me.Controls.Add(Me.cbScanModeOnly)
         Me.Controls.Add(Me.lblProcessingWorksheet)
         Me.Controls.Add(Me.lblProcessingSource)
@@ -242,8 +266,6 @@ Partial Class Form1
         Me.Controls.Add(Me.btnADDILite)
         Me.Controls.Add(Me.txtOutputFoldername)
         Me.Controls.Add(Me.btnOutputFolder)
-        Me.Controls.Add(Me.txtJCLProclibFoldername)
-        Me.Controls.Add(Me.btnJCLProclibFolder)
         Me.Controls.Add(Me.txtSourceFolderName)
         Me.Controls.Add(Me.btnSourceFolder)
         Me.Controls.Add(Me.txtJCLJOBFolderName)
@@ -259,7 +281,6 @@ Partial Class Form1
     Friend WithEvents txtJCLJOBFolderName As TextBox
     Friend WithEvents btnSourceFolder As Button
     Friend WithEvents txtSourceFolderName As TextBox
-    Friend WithEvents txtJCLProclibFoldername As TextBox
     Friend WithEvents OpenFileDialog1 As OpenFileDialog
     Friend WithEvents FolderBrowserDialog1 As FolderBrowserDialog
     Friend WithEvents btnOutputFolder As Button
@@ -268,7 +289,6 @@ Partial Class Form1
     Friend WithEvents Label1 As Label
     Friend WithEvents txtDelimiter As TextBox
     Friend WithEvents btnClose As Button
-    Friend WithEvents btnJCLProclibFolder As Button
     Friend WithEvents lblCopybookMessage As Label
     Friend WithEvents ProgressBar1 As ProgressBar
     Friend WithEvents cbLogStmt As CheckBox
@@ -277,4 +297,8 @@ Partial Class Form1
     Friend WithEvents lblProcessingSource As Label
     Friend WithEvents lblProcessingWorksheet As Label
     Friend WithEvents cbScanModeOnly As CheckBox
+    Friend WithEvents btnDataGatheringForm As Button
+    Friend WithEvents txtDataGatheringForm As TextBox
+    Friend WithEvents btnProcLibFolder As Button
+    Friend WithEvents txtProcLibFolderName As TextBox
 End Class

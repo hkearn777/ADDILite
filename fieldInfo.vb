@@ -10,6 +10,8 @@
   Private _occursMinimumTimes As Integer
   Private _occursMaximumTimes As Integer
   Private _dependingOn As String
+  Private _parent As Integer
+  Private _redefField As Integer
 
   Public Property Level As String
     Get
@@ -109,6 +111,24 @@
       _dependingOn = value
     End Set
   End Property
+  Public Property Parent As Integer
+    Get
+      Return _parent
+    End Get
+    Set(value As Integer)
+      _parent = value
+    End Set
+  End Property
+
+  Public Property RedefField As Integer
+    Get
+      Return _redefField
+    End Get
+    Set(value As Integer)
+      _redefField = value
+    End Set
+  End Property
+
   Public Sub New()
 
   End Sub
@@ -122,7 +142,9 @@
                    ByVal _length As Integer,
                    ByVal _occursMinimumTimes As Integer,
                    ByVal _occursMaximumTimes As Integer,
-                   ByVal _DependingOn As String)
+                   ByVal _DependingOn As String,
+                   ByVal _parent As Integer,
+                   ByVal _redefField As Integer)
     Level = _level
     FieldName = _fieldName
     Redefines = _redefines
@@ -134,6 +156,8 @@
     OccursMinimumTimes = _occursMinimumTimes
     OccursMaximumTimes = _occursMaximumTimes
     DependingOn = _DependingOn
+    Parent = _parent
+    RedefField = _redefField
   End Sub
 
 End Class
