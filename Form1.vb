@@ -29,9 +29,11 @@ Public Class Form1
   ' - PlantUml for creating flowchart
   '
   '***Be sure to change ProgramVersion when making changes!!!
-  Dim ProgramVersion As String = "v1.6"
+  Dim ProgramVersion As String = "v1.7"
   'Change-History.
-  ' 2023/12/05 v1.6 hk Handle IMS programs in the PROGRAMS tab.
+  ' 2023/12/19 v1.7 hk For IMS programs, create a PSPNames list file. This is for later DBDName extract.
+  '                    - Create IMS Tab, read DBDNames.txt and TELON files
+  ' 2023/12/05 v1.6 hk Handle IMS programs in the PROGRAMS tab by adding ExecName Column.
   ' 2023/11/13 v1.5 hk While looking for comments ensure a valid COBOL division statement.
   '                   - Support all paragraphs in Identification division as Comments (except program-id)
   '                   - change 'unknown jcl control' message to put details in 3rd column
@@ -106,6 +108,7 @@ Public Class Form1
   Dim FieldsRow As Integer = 0
   Dim CommentsRow As Integer = 0
   Dim EXECSQLRow As Integer = 0
+  Dim IMSRow As Integer = 0
 
   Dim jclStmt As New List(Of String)
   Dim ListOfExecs As New List(Of String)        'array holding the executable programs
@@ -113,6 +116,7 @@ Public Class Form1
   Dim swIPFile As StreamWriter = Nothing        'Instream proc file, temporary
   Dim swDDFile As StreamWriter = Nothing
   Dim swPumlFile As StreamWriter = Nothing
+
   Dim LogFile As StreamWriter = Nothing
   Dim LogStmtFile As StreamWriter = Nothing
   Dim swBRFile As StreamWriter = Nothing
@@ -131,12 +135,14 @@ Public Class Form1
   Dim FieldsWorksheet As Microsoft.Office.Interop.Excel.Worksheet
   Dim CommentsWorksheet As Microsoft.Office.Interop.Excel.Worksheet
   Dim EXECSQLWorksheet As Microsoft.Office.Interop.Excel.Worksheet
+  Dim IMSWorksheet As Microsoft.Office.Interop.Excel.Worksheet
   Dim rngSummaryName As Microsoft.Office.Interop.Excel.Range
   Dim rngRecordName As Microsoft.Office.Interop.Excel.Range
   Dim rngRecordsName As Microsoft.Office.Interop.Excel.Range
   Dim rngFieldsName As Microsoft.Office.Interop.Excel.Range
   Dim rngComments As Microsoft.Office.Interop.Excel.Range
   Dim rngEXECSQL As Microsoft.Office.Interop.Excel.Range
+  Dim rngIMS As Microsoft.Office.Interop.Excel.Range
   Dim DefaultFormat = Microsoft.Office.Interop.Excel.XlFileFormat.xlWorkbookDefault
 
   ' COBOL fields
@@ -155,6 +161,9 @@ Public Class Form1
   Dim ListOfParagraphs As New List(Of String)         'array to hold COBOL paragraph names
   Dim ListOfCallPgms As New List(Of String)           'array to hold Call programs (sub routines)
   Dim ListOfEXECSQL As New List(Of String)            'array to hold EXEC SQL statments (cobol & easytrieve)
+  Dim ListOfIMSPgms As New List(Of String)            'array to hold IMS Programs (PSPNames=Program Name)
+  Dim ListOfDBDNames As New List(Of String)           'array to hold the DBDName values 
+
   Dim IFLevelIndex As New List(Of Integer)            'where in cWord the 'IF' is located
   Dim VerbNames As New List(Of String)
   Dim VerbCount As New List(Of Integer)
@@ -170,6 +179,7 @@ Public Class Form1
   Dim WithinIF As Boolean = False
   Dim pgmSeq As Integer = 0
   Dim pumlFile As StreamWriter = Nothing          'File holding the Plantuml commands
+  Dim PSPFile As StreamWriter = Nothing           'File holding the PSP Names in PSPName until format
 
 
   Public Structure ProgramInfo
@@ -270,6 +280,17 @@ Public Class Form1
     If bfd_SourceFolder.ShowDialog() = DialogResult.OK Then
       txtSourceFolderName.Text = bfd_SourceFolder.SelectedPath
     End If
+  End Sub
+  Private Sub btnTelonFolder_Click(sender As Object, e As EventArgs) Handles btnTelonFolder.Click
+    ' browse for and select folder name
+    Dim bfd_TelonFolder As New FolderBrowserDialog With {
+      .Description = "Enter Telon Source folder name",
+      .SelectedPath = txtJCLJOBFolderName.Text
+    }
+    If bfd_TelonFolder.ShowDialog() = DialogResult.OK Then
+      txtTelonFoldername.Text = bfd_TelonFolder.SelectedPath
+    End If
+
   End Sub
 
   Private Sub btnOutputFolder_Click(sender As Object, e As EventArgs) Handles btnOutputFolder.Click
@@ -422,6 +443,9 @@ Public Class Form1
     ProcessCallPgms(CallPgmsFileName)
 
     CreateEXECSQLWorksheet()
+    CreateIMSWorksheet()
+    CreateIMSPSPNamesFile()
+
 
 
     ' Save Application Model Spreadsheet
@@ -570,162 +594,6 @@ Public Class Form1
     ' load the job file to an array
     Dim JobLines As String() = File.ReadAllLines(JobFile)
     Dim JCLLines As List(Of String) = Nothing
-
-    '' Include any called in PROC (exec proc=<proc> or exec <proc>) 
-    ''   load from the Proclib folder
-    'For Each JobLine In JobLines
-    '  If txtProcLibFolderName.TextLength = 0 Then
-    '    JCLLines.Add(JobLine)
-    '    Continue For
-    '  End If
-    '  execIndex = JobLine.IndexOf(" EXEC ")
-    '  If execIndex = -1 Then
-    '    JCLLines.Add(JobLine)
-    '    Continue For
-    '  End If
-    '  If JobLine.IndexOf(" PGM=") > -1 Then
-    '    JCLLines.Add(JobLine)
-    '    Continue For
-    '  End If
-    '  ' must reference a PROC 
-    '  procName = GetParm(JobLine, "PROC=").Trim
-    '  If procName.Length = 0 Then
-    '    execIndex += 6
-    '    Dim parmValues As String() = JobLine.Substring(execIndex).Split(",")
-    '    procName = parmValues(0).Trim
-    '  End If
-    '  ' with a procname, now look in the proclib folder
-    '  If File.Exists(txtProcLibFolderName.Text & procName) Then
-
-    '  End If
-    'Next
-
-    '
-    '' Write any Instream PROC(s) to a Proclib and drop it and drop empty lines
-    '' Not handling Procs within Procs
-    ''
-    'Dim NumberOfInstreamProcsFound As Integer = 0
-    'Dim swTemp As StreamWriter = Nothing
-
-    'Dim ipName As String = ""
-    ''
-    '' Create a Proc file from the Instream proc, if any
-    '' And drop the instream proc lines 
-    '' And remove any columns 73-80 values
-    ''
-    'swTemp = New StreamWriter(tempFileName, False)
-    'For index As Integer = 0 To JCLLines.Count - 1
-    '  Dim jline As String = JCLLines(index) & Space(72)
-    '  jline = jline.Substring(0, 72).Trim
-    '  If jline.Substring(0, 2) = "/*" Then
-    '    swTemp.WriteLine(jline)
-    '    Continue For
-    '  End If
-    '  If jline.Substring(0, 3) = "//*" Then
-    '    swTemp.WriteLine(jline)
-    '    Continue For
-    '  End If
-    '  Dim procLocation As Integer = jline.IndexOf(" PROC ")
-    '  If procLocation = -1 Then
-    '    swTemp.WriteLine(jline)
-    '    Continue For
-    '  End If
-    '  ipName = Trim(jline.Substring(2, procLocation - 3 + 1))
-    '  Dim ipFileName = txtJCLProclibFoldername.Text & "\" & ipName & ".jcl"
-    '  LogFile.WriteLine(Date.Now & ",Instream Proc Created," & ipFileName)
-    '  swIPFile = New StreamWriter(ipFileName, False)
-    '  Dim PendFound As Boolean = False
-    '  For ipIndex As Integer = index To JCLLines.Count - 1
-    '    Dim pline As String = JCLLines(ipIndex) & Space(72)
-    '    pline = pline.Substring(0, 72).Trim
-    '    swIPFile.WriteLine(pline)
-    '    If pline.IndexOf(" PEND ") > -1 Then
-    '      index = ipIndex
-    '      PendFound = True
-    '      Exit For
-    '    End If
-    '    If pline.EndsWith(" PEND") Then
-    '      index = ipIndex
-    '      PendFound = True
-    '      Exit For
-    '    End If
-    '  Next
-    '  If Not PendFound Then
-    '    swIPFile.WriteLine("// PEND")
-    '    index = JCLLines.Count - 1
-    '  End If
-    '  swIPFile.Close()
-    'Next
-    'swTemp.Close()
-
-    '' Now include all PROCs from the ProcLib and place after the EXEC PROC statement
-    ''
-    'Dim jclWords As New List(Of String)
-    'JCLLines = File.ReadAllLines(tempFileName)
-    'swTemp = New StreamWriter(tempFileName, False)
-    'For index As Integer = 0 To JCLLines.Count - 1
-    '  If JCLLines(index).Substring(0, 2) = "/*" Then
-    '    swTemp.WriteLine(JCLLines(index))
-    '    Continue For
-    '  End If
-    '  If JCLLines(index).Substring(0, 3) = "//*" Then
-    '    swTemp.WriteLine(JCLLines(index))
-    '    Continue For
-    '  End If
-    '  Call GetJCLWords(JCLLines(index), jclWords)
-    '  If jclWords.Count >= 2 Then
-    '    jControl = jclWords(1)
-    '  End If
-    '  If jControl <> "EXEC" Then
-    '    swTemp.WriteLine(JCLLines(index))
-    '    Continue For
-    '  End If
-    '  procName = GetParm(JCLLines(index), "PROC=")
-    '  If procName.Length = 0 Then
-    '    procName = GetParm(JCLLines(index), "PROC")
-    '  End If
-    '  If procName.Length = 0 Then
-    '    If jclWords.Count >= 3 Then
-    '      If Not jclWords(2).StartsWith("PGM=") Then
-    '        procName = jclWords(2)
-    '      End If
-    '    End If
-    '  End If
-    '  ' write all lines for this EXEC statement
-    '  For contIndex As Integer = index To JCLLines.Count - 1
-    '    swTemp.WriteLine(JCLLines(contIndex))
-    '    If JCLLines(contIndex).Substring(0, 3) = "//*" Then
-    '      Continue For
-    '    End If
-    '    If Microsoft.VisualBasic.
-    '        Right(Trim(JCLLines(contIndex).PadRight(80).Substring(0, 70)), 1) <> "," Then
-    '      index = contIndex
-    '      Exit For
-    '    End If
-    '  Next
-
-    '  If procName.Length = 0 Then
-    '    Continue For
-    '  End If
-    '  ' if it is an "EXEC PROC=" copy the PROC file into here
-    '  ' if it is an "EXEC <name>" this is also a PROC File to be copied
-    '  Dim ProcFileName As String = txtJCLProclibFoldername.Text & "\" & procName & ".jcl"
-    '  LogFile.WriteLine(Date.Now & ",Processing PROC source," & ProcFileName)
-    '  Dim procLines As String() = File.ReadAllLines(ProcFileName)
-    '  For procIndex = 0 To procLines.Count - 1
-    '    Dim jline As String = "++" & Mid(procLines(procIndex), 3) & Space(72)
-    '    jline = jline.Substring(0, 72).Trim
-    '    swTemp.WriteLine(jline)
-    '  Next
-    'Next
-    'swTemp.Close()
-    ''
-    '' Load JCL lines to a JCL statements array. 
-    '' Basically dealing with continuations and removing comments
-    ''
-    'JCLLines = File.ReadAllLines(tempFileName)
-
-
 
     ' Load JCL Lines to a JCL Statement Array
     '   Remove continuations by combining to 1 line
@@ -1699,7 +1567,7 @@ Public Class Form1
 
       ' Analyze Source Statement array (SrcStmt) to get list of EXEC SQL statments
       'ListOfEXECSQL.Clear()
-      Call GetListOfEXECSQL()
+      Call GetListOfEXECSQLorIMS()
 
       If pgm.ProcedureDivision = -1 Then
         LogFile.WriteLine(Date.Now & ",Source is not complete," & exec)
@@ -2253,7 +2121,7 @@ Public Class Form1
     Next pgm
 
   End Sub
-  Sub GetListOfEXECSQL()
+  Sub GetListOfEXECSQLorIMS()
     Dim StartIndex As Integer = -1
     Dim EndIndex As Integer = -1
     Dim execCnt As Integer = 0
@@ -2270,6 +2138,14 @@ Public Class Form1
       Select Case SourceType
         Case "COBOL"
           For stmtIndex As Integer = pgm.DataDivision + 1 To pgm.EndProgram
+
+            If SrcStmt(stmtIndex).IndexOf("'CBLTDLI'") > -1 Then
+              If ListOfIMSPgms.IndexOf(pgm.ProgramId) = -1 Then
+                ListOfIMSPgms.Add(pgm.ProgramId)
+                Continue For
+              End If
+            End If
+
             If SrcStmt(stmtIndex).IndexOf("EXEC SQL") = -1 Then
               Continue For
             End If
@@ -2522,6 +2398,14 @@ Public Class Form1
 
         Case "Easytrieve"
           For stmtIndex As Integer = pgm.DataDivision + 1 To pgm.EndProgram
+
+            If SrcStmt(stmtIndex).IndexOf("'CBLTDLI'") > -1 Then
+              If ListOfIMSPgms.IndexOf(pgm.ProgramId) = -1 Then
+                ListOfIMSPgms.Add(pgm.ProgramId)
+                Continue For
+              End If
+            End If
+
             Call GetSourceWords(SrcStmt(stmtIndex), cWord)
             x = 0
 
@@ -3394,6 +3278,20 @@ Public Class Form1
       'CommentsWorksheet.FreezePanes(2, 1)
     End If
 
+    If IMSRow > 0 Then
+      Dim row As Integer = LTrim(Str(IMSRow))
+      ' Format the Sheet - first row bold the columns
+      rngIMS = IMSWorksheet.Range("A1:C1")
+      rngIMS.Font.Bold = True
+      ' data area autofit all columns
+      rngIMS = IMSWorksheet.Range("A1:C" & row)
+      workbook.Worksheets("IMS").Range("A1").AutoFilter
+      rngIMS.Columns.AutoFit()
+      rngIMS.VerticalAlignment = Excel.XlVAlign.xlVAlignTop
+      ' ignore error flag that numbers being loaded into a text field
+      objExcel.ErrorCheckingOptions.NumberAsText = False
+    End If
+
 
     SummaryWorksheet.Select(1)
     SummaryWorksheet.Activate()
@@ -3492,6 +3390,116 @@ Public Class Form1
       End If
     Next
     lblProcessingWorksheet.Text = "Processing Worksheet: " & FileNameOnly & " : ExecSql Complete"
+  End Sub
+  Sub CreateIMSWorksheet()
+    ' Create the IMS worksheet tab.
+    ' This worksheet will hold PSP/Program and DBD Name(s)
+
+    ' There are two possible inputs to this routine.
+    ' From a) text file from PSBMap programs or b) from a Telon text files.
+    ' a) this text file (DBDNames.txt) is initiated by an initial pass of this model to create
+    '    a list of PSP names (pspnames.txt). this is uploaded to the mainframe and then we 
+    '    run a JCL job PSPJ which will create this DBDNames.txt file.
+    ' b) these text files are the individual telon members. These are downloaded to the \TELON folder.
+    '    We only look for the literal 'DBDNAME='. Note this does NOT mean all these DBDNames are actually
+    '    used. These are what matched a TELON naming pattern (ie, P2BPBU*).
+    '
+
+    If IMSRow = 0 Then
+      IMSWorksheet = workbook.Sheets.Add(After:=workbook.Worksheets(workbook.Worksheets.Count))
+      IMSWorksheet.Name = "IMS"
+      ' Write the Column Headers row
+      IMSWorksheet.Range("A1").Value = "DBD Name"
+      IMSWorksheet.Range("B1").Value = "PSP Name"
+      IMSWorksheet.Range("C1").Value = "Type"
+      IMSRow = 1
+    End If
+
+    Call AddToListOfDBDNames()
+    Call AddtoListOfDBDNamesTelons()
+
+    lblProcessingWorksheet.Text = "Processing DBDNames: " & ListOfDBDNames.Count
+
+    For IMSIndx As Integer = 0 To ListOfDBDNames.Count - 1
+      Dim IMSColumns As String() = ListOfDBDNames(IMSIndx).Split(Delimiter)
+      IMSRow += 1
+      Dim row As String = LTrim(Str(IMSRow))
+      IMSWorksheet.Range("A" & row).Value = IMSColumns(0)       'DBD Name
+      IMSWorksheet.Range("B" & row).Value = IMSColumns(1)       'PSP Name
+      IMSWorksheet.Range("C" & row).Value = IMSColumns(2)       'Source
+    Next
+
+    lblProcessingWorksheet.Text = "Processing IMS worksheet for DBDNames Complete"
+
+  End Sub
+  Sub AddToListOfDBDNames()
+    ' Process the DBDNames.txt file, if exists, and put into ListOf array
+    Dim DBDFileName = txtSourceFolderName.Text & "\DBDnames.txt"
+    If Not File.Exists(DBDFileName) Then
+      Exit Sub
+    End If
+    Dim DBDLines As String() = File.ReadAllLines(DBDFileName)
+    ' load IMS DBDnames to spreadsheet.
+    For IMSIndx As Integer = 0 To DBDLines.Count - 1
+      Dim IMSColumns As String() = DBDLines(IMSIndx).Split(Delimiter)
+      Dim pspName As String = IMSColumns(0)       'PSP Name
+      Dim dbdName As String = IMSColumns(2)       'DBD Name
+      If ListOfDBDNames.IndexOf(dbdName & Delimiter & pspName & Delimiter & "SOURCE") = -1 Then
+        ListOfDBDNames.Add(dbdName & Delimiter & pspName & Delimiter & "SOURCE")
+      End If
+    Next
+  End Sub
+  Sub AddtoListOfDBDNamesTelons()
+    ' Process the TELON files, if any exists and store in ListOf array
+    For Each foundFile As String In My.Computer.FileSystem.GetFiles(txtTelonFoldername.Text)
+      Dim memberLines As String() = File.ReadAllLines(foundFile)
+      For index As Integer = 0 To memberLines.Count - 1
+        If Len(memberLines(index)) = 0 Then
+          Continue For
+        End If
+        If memberLines(index).Substring(0, 1) = "*" Then
+          Continue For
+        End If
+        Dim dbdIndex As Integer = memberLines(index).IndexOf("DBDNAME=")
+        If dbdIndex > -1 Then
+          Dim dbdParms As String() = memberLines(index).Split(",")
+          Dim dbdNames As String() = dbdParms(0).Split("=")
+          If dbdNames.Count > 0 Then
+            Dim dbdName As String = dbdNames(1)
+            Dim pspName As String = Path.GetFileNameWithoutExtension(foundFile)
+            If ListOfDBDNames.IndexOf(dbdName & Delimiter & pspName & Delimiter & "TELON") = -1 Then
+              ListOfDBDNames.Add(dbdName & Delimiter & pspName & Delimiter & "TELON")
+            End If
+          End If
+        End If
+      Next index
+    Next
+
+  End Sub
+
+  Sub CreateIMSPSPNamesFile()
+    ' Create the PSP Names text file.
+    ' Intent is to upload this file to the Mainframe and run the PSPMAP IMS utility and REXX program
+    '   which will return back a DBDNames file with PSP and DBD values which will load to 
+    '   an IMS tab on the NEXT rerun of this model.
+
+    ' Open the output file PSPNames.txt 
+    Dim PSPFileName = txtOutputFoldername.Text & "\PSPNames.txt"
+
+    ' Open output. Not worrying (try/catch) about subsequent writes
+    Try
+      PSPFile = My.Computer.FileSystem.OpenTextFileWriter(PSPFileName, False)
+    Catch ex As Exception
+      MessageBox.Show(ex.Message, "Error opening: " & PSPFileName)
+      Exit Sub
+    End Try
+
+    ' Write every PSP entry, if any
+    For Each PSP In ListOfIMSPgms
+      PSPFile.WriteLine(Space(2) & PSP & Space(70))
+    Next
+
+    PSPFile.Close()
   End Sub
   Sub CreatePumlCOBOL(ByRef exec As String)
     ' create the flowchart (puml) file for COBOL
@@ -5874,6 +5882,5 @@ Public Class Form1
     VerbCount.Add(0)    'UNSTRING
 
   End Sub
-
 
 End Class
