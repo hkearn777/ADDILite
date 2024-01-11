@@ -66,7 +66,7 @@ Partial Class Form1
         '
         'btnSourceFolder
         '
-        Me.btnSourceFolder.Location = New System.Drawing.Point(12, 136)
+        Me.btnSourceFolder.Location = New System.Drawing.Point(13, 116)
         Me.btnSourceFolder.Name = "btnSourceFolder"
         Me.btnSourceFolder.Size = New System.Drawing.Size(248, 40)
         Me.btnSourceFolder.TabIndex = 4
@@ -75,7 +75,7 @@ Partial Class Form1
         '
         'txtSourceFolderName
         '
-        Me.txtSourceFolderName.Location = New System.Drawing.Point(266, 143)
+        Me.txtSourceFolderName.Location = New System.Drawing.Point(267, 123)
         Me.txtSourceFolderName.Name = "txtSourceFolderName"
         Me.txtSourceFolderName.Size = New System.Drawing.Size(994, 26)
         Me.txtSourceFolderName.TabIndex = 5
@@ -86,7 +86,7 @@ Partial Class Form1
         '
         'btnOutputFolder
         '
-        Me.btnOutputFolder.Location = New System.Drawing.Point(10, 238)
+        Me.btnOutputFolder.Location = New System.Drawing.Point(11, 218)
         Me.btnOutputFolder.Name = "btnOutputFolder"
         Me.btnOutputFolder.Size = New System.Drawing.Size(248, 40)
         Me.btnOutputFolder.TabIndex = 6
@@ -95,7 +95,7 @@ Partial Class Form1
         '
         'txtOutputFoldername
         '
-        Me.txtOutputFoldername.Location = New System.Drawing.Point(266, 245)
+        Me.txtOutputFoldername.Location = New System.Drawing.Point(267, 225)
         Me.txtOutputFoldername.Name = "txtOutputFoldername"
         Me.txtOutputFoldername.Size = New System.Drawing.Size(994, 26)
         Me.txtOutputFoldername.TabIndex = 7
@@ -151,7 +151,7 @@ Partial Class Form1
         '
         Me.ProgressBar1.Location = New System.Drawing.Point(12, 536)
         Me.ProgressBar1.Name = "ProgressBar1"
-        Me.ProgressBar1.Size = New System.Drawing.Size(1152, 23)
+        Me.ProgressBar1.Size = New System.Drawing.Size(1248, 30)
         Me.ProgressBar1.TabIndex = 16
         '
         'cbLogStmt
@@ -167,7 +167,7 @@ Partial Class Form1
         'lblJobFileCount
         '
         Me.lblJobFileCount.AutoSize = True
-        Me.lblJobFileCount.Location = New System.Drawing.Point(263, 105)
+        Me.lblJobFileCount.Location = New System.Drawing.Point(12, 289)
         Me.lblJobFileCount.Name = "lblJobFileCount"
         Me.lblJobFileCount.Size = New System.Drawing.Size(161, 20)
         Me.lblJobFileCount.TabIndex = 18
@@ -228,16 +228,16 @@ Partial Class Form1
         '
         'btnTelonFolder
         '
-        Me.btnTelonFolder.Location = New System.Drawing.Point(13, 188)
+        Me.btnTelonFolder.Location = New System.Drawing.Point(14, 168)
         Me.btnTelonFolder.Name = "btnTelonFolder"
         Me.btnTelonFolder.Size = New System.Drawing.Size(248, 40)
         Me.btnTelonFolder.TabIndex = 24
-        Me.btnTelonFolder.Text = "Telon Source Folder"
+        Me.btnTelonFolder.Text = "Telon Members Folder"
         Me.btnTelonFolder.UseVisualStyleBackColor = True
         '
         'txtTelonFoldername
         '
-        Me.txtTelonFoldername.Location = New System.Drawing.Point(268, 195)
+        Me.txtTelonFoldername.Location = New System.Drawing.Point(269, 175)
         Me.txtTelonFoldername.Name = "txtTelonFoldername"
         Me.txtTelonFoldername.Size = New System.Drawing.Size(994, 26)
         Me.txtTelonFoldername.TabIndex = 25
@@ -246,7 +246,7 @@ Partial Class Form1
         '
         Me.AutoScaleDimensions = New System.Drawing.SizeF(9.0!, 20.0!)
         Me.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font
-        Me.ClientSize = New System.Drawing.Size(1297, 578)
+        Me.ClientSize = New System.Drawing.Size(1279, 578)
         Me.Controls.Add(Me.txtTelonFoldername)
         Me.Controls.Add(Me.btnTelonFolder)
         Me.Controls.Add(Me.txtDataGatheringForm)

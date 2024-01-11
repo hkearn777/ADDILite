@@ -29,8 +29,14 @@ Public Class Form1
   ' - PlantUml for creating flowchart
   '
   '***Be sure to change ProgramVersion when making changes!!!
-  Dim ProgramVersion As String = "v1.7"
+  Dim ProgramVersion As String = "v1.8"
   'Change-History.
+  ' 2023/12/28 v1.8 hk add Utility: DFSBBO00
+  '                    - Support PROCLIB
+  '                    - Add utility: IKJEFT1B
+  '                    - Change caps for comments
+  '                    - Add CALLS tab
+  '                    - Clean up log entry for source file not found
   ' 2023/12/19 v1.7 hk For IMS programs, create a PSPNames list file. This is for later DBDName extract.
   '                    - Create IMS Tab, read DBDNames.txt and TELON files
   ' 2023/12/05 v1.6 hk Handle IMS programs in the PROGRAMS tab by adding ExecName Column.
@@ -76,7 +82,7 @@ Public Class Form1
   ' JCL
   Dim DirectoryName As String = ""
   Dim FileNameOnly As String = ""
-  Dim tempFileName As String = ""
+  Dim tempNoContdJCLFileName As String = ""
   Dim tempCobFileName As String = ""
   Dim tempEZTFileName As String = ""
   Dim Delimiter As String = ""
@@ -95,6 +101,8 @@ Public Class Form1
   Dim DDName As String = ""
   Dim stepName As String = ""
   Dim InstreamProc As String = ""
+  Dim CallPgmsFileName = ""
+
 
   Dim ddConcatSeq As Integer = 0
   Dim ddSequence As Integer = 0
@@ -109,6 +117,7 @@ Public Class Form1
   Dim CommentsRow As Integer = 0
   Dim EXECSQLRow As Integer = 0
   Dim IMSRow As Integer = 0
+  Dim CallsRow As Integer = 0
 
   Dim jclStmt As New List(Of String)
   Dim ListOfExecs As New List(Of String)        'array holding the executable programs
@@ -136,6 +145,7 @@ Public Class Form1
   Dim CommentsWorksheet As Microsoft.Office.Interop.Excel.Worksheet
   Dim EXECSQLWorksheet As Microsoft.Office.Interop.Excel.Worksheet
   Dim IMSWorksheet As Microsoft.Office.Interop.Excel.Worksheet
+  Dim CallsWorksheet As Microsoft.Office.Interop.Excel.Worksheet
   Dim rngSummaryName As Microsoft.Office.Interop.Excel.Range
   Dim rngRecordName As Microsoft.Office.Interop.Excel.Range
   Dim rngRecordsName As Microsoft.Office.Interop.Excel.Range
@@ -143,6 +153,7 @@ Public Class Form1
   Dim rngComments As Microsoft.Office.Interop.Excel.Range
   Dim rngEXECSQL As Microsoft.Office.Interop.Excel.Range
   Dim rngIMS As Microsoft.Office.Interop.Excel.Range
+  Dim rngCalls As Microsoft.Office.Interop.Excel.Range
   Dim DefaultFormat = Microsoft.Office.Interop.Excel.XlFileFormat.xlWorkbookDefault
 
   ' COBOL fields
@@ -189,18 +200,21 @@ Public Class Form1
     Public DataDivision As Integer
     Public ProcedureDivision As Integer
     Public EndProgram As Integer
+    Public SourceId As String
     Public Sub New(ByVal _ProgramId As String,
                    ByVal _IdentificationDivision As Integer,
                    ByVal _EnvironmentDivision As Integer,
                    ByVal _DataDivsision As Integer,
                    ByVal _ProcedureDivision As Integer,
-                   ByVal _EndProgram As Integer)
+                   ByVal _EndProgram As Integer,
+                   ByVal _SourceId As String)
       ProgramId = _ProgramId
       IdentificationDivision = _IdentificationDivision
       EnvironmentDivision = _EnvironmentDivision
       DataDivision = _DataDivsision
       ProcedureDivision = _ProcedureDivision
       EndProgram = _EndProgram
+      SourceId = _SourceId
     End Sub
   End Structure
   Dim listOfPrograms As New List(Of ProgramInfo)
@@ -253,23 +267,8 @@ Public Class Form1
       Exit Sub
     End If
 
-    NumberOfJobsToProcess = My.Computer.FileSystem.GetFiles(txtJCLJOBFolderName.Text).Count
-    lblJobFileCount.Text = "JCL Job files found:" & Str(NumberOfJobsToProcess)
-    For Each foundFile As String In My.Computer.FileSystem.GetFiles(txtJCLJOBFolderName.Text)
-      ListOfJobs.Add(foundFile)
-    Next
   End Sub
 
-  'Private Sub btnProcLibFolder_Click(sender As Object, e As EventArgs) Handles btnProcLibFolder.Click
-  '  ' browse for and select folder name
-  '  Dim bfd_ProcLibFolder As New FolderBrowserDialog With {
-  '    .Description = "Enter ProcLib folder name",
-  '    .SelectedPath = txtJCLJOBFolderName.Text
-  '  }
-  '  If bfd_ProcLibFolder.ShowDialog() = DialogResult.OK Then
-  '    txtProcLibFolderName.Text = bfd_ProcLibFolder.SelectedPath
-  '  End If
-  'End Sub
 
   Private Sub btnSourceFolder_Click(sender As Object, e As EventArgs) Handles btnSourceFolder.Click
     ' browse for and select folder name
@@ -302,7 +301,7 @@ Public Class Form1
     If bfd_OutputFolder.ShowDialog() = DialogResult.OK Then
       txtOutputFoldername.Text = bfd_OutputFolder.SelectedPath
       DirectoryName = txtOutputFoldername.Text
-      tempFileName = DirectoryName & "\" & FileNameOnly & "_expandedJCL.txt"
+      tempNoContdJCLFileName = DirectoryName & "\" & FileNameOnly & "_NoContdJCL.txt"
       tempCobFileName = DirectoryName & "\" & FileNameOnly & "_expandedCOB.txt"
       tempEZTFileName = DirectoryName & "\" & FileNameOnly & "_expandedEZT.txt"
     End If
@@ -321,21 +320,12 @@ Public Class Form1
     Delimiter = txtDelimiter.Text
     lblCopybookMessage.Text = ""
 
-    ' ready the progress bar
-    ProgressBar1.Minimum = 0
-    ProgressBar1.Maximum = NumberOfJobsToProcess + 2
-    ProgressBar1.Step = 1
-    ProgressBar1.Value = 0
-    ProgressBar1.Visible = True
-
-    Me.Cursor = Cursors.WaitCursor
 
     Dim logFileName As String = txtOutputFoldername.Text & "\ADDILite_log.txt"
     LogFile = My.Computer.FileSystem.OpenTextFileWriter(logFileName, False)
     LogFile.WriteLine(Date.Now & ",Program Starts," & Me.Text)
     LogFile.WriteLine(Date.Now & ",Data Gathering Form," & txtDataGatheringForm.Text)
     LogFile.WriteLine(Date.Now & ",JOB Folder," & txtJCLJOBFolderName.Text)
-    '**LogFile.WriteLine(Date.Now & ",JCL Proclib Folder," & txtJCLProclibFoldername.Text)
     LogFile.WriteLine(Date.Now & ",Source Folder," & txtSourceFolderName.Text)
     LogFile.WriteLine(Date.Now & ",Output Folder," & txtOutputFoldername.Text)
     LogFile.WriteLine(Date.Now & ",Delimiter," & txtDelimiter.Text)
@@ -347,6 +337,40 @@ Public Class Form1
       Me.Cursor = Cursors.Default
       Exit Sub
     End If
+
+    ' remove previous CallPgms.jcl Job
+    CallPgmsFileName = txtJCLJOBFolderName.Text & "\CallPgms.jcl"
+    ' Prepare for CallPgms file which holds all the Called Programs within the sources
+    '  this file is processed as the last "JOB"
+    ' Remove previous CallPgms.jcl file
+    If File.Exists(CallPgmsFileName) Then
+      Try
+        File.Delete(CallPgmsFileName)
+      Catch ex As Exception
+        lblCopybookMessage.Text = "Error deleting CallPgms.jcl file:" & ex.Message
+        Exit Sub
+      End Try
+    End If
+
+    ' Get the number of JOBS that will be processed
+    NumberOfJobsToProcess = My.Computer.FileSystem.GetFiles(txtJCLJOBFolderName.Text).Count
+    lblJobFileCount.Text = "JCL Job files found:" & Str(NumberOfJobsToProcess)
+
+    ' ready the progress bar
+    ProgressBar1.Minimum = 0
+    ProgressBar1.Maximum = NumberOfJobsToProcess + 2
+    ProgressBar1.Step = 1
+    ProgressBar1.Value = 0
+    ProgressBar1.Visible = True
+
+    Me.Cursor = Cursors.WaitCursor
+
+    ' load the jobs to array list
+    LogFile.WriteLine(Date.Now & ",JCL Job files found," & LTrim(Str(NumberOfJobsToProcess)))
+    For Each foundFile As String In My.Computer.FileSystem.GetFiles(txtJCLJOBFolderName.Text)
+      ListOfJobs.Add(foundFile)
+    Next
+
 
     objExcel.Visible = False
 
@@ -367,20 +391,6 @@ Public Class Form1
     dgfWorkbook.Close()
 
 
-    ' Prepare for CallPgms file which holds all the Called Programs within the sources
-    '  this file is processed as the last "JOB"
-    ' Remove previous CallPgms.jcl file
-    Dim CallPgmsFileName = txtJCLJOBFolderName.Text & "\CallPgms.jcl"
-    If File.Exists(CallPgmsFileName) Then
-      LogFile.WriteLine(Date.Now & ",Previous CallPgms.jcl file deleted," & CallPgmsFileName)
-      Try
-        File.Delete(CallPgmsFileName)
-      Catch ex As Exception
-        LogFile.WriteLine(Date.Now & ",Error deleting CallPgms.jcl file," & ex.Message)
-        lblCopybookMessage.Text = "Error deleting CallPgms.jcl file:" & ex.Message
-        Exit Sub
-      End Try
-    End If
 
     'build a cross-reference table of DB2 Tablenames with source members
     For Each foundFile As String In My.Computer.FileSystem.GetFiles(txtSourceFolderName.Text)
@@ -444,6 +454,7 @@ Public Class Form1
 
     CreateEXECSQLWorksheet()
     CreateIMSWorksheet()
+    CreateCallsWorksheet()
     CreateIMSPSPNamesFile()
 
 
@@ -519,8 +530,6 @@ Public Class Form1
         LogFile.WriteLine(Date.Now & ",OutFolder has invalid characters,")
       Case Not IsValidFileNameOrPath(txtSourceFolderName.Text)
         LogFile.WriteLine(Date.Now & ",Source folder name has invalid characters,")
-        '      Case Not IsValidFileNameOrPath(txtJCLProclibFoldername.Text)
-        '        LogFile.WriteLine(Date.Now & ",Proclib folder name has invalid characters,")
       Case Else
         FileNamesAreValid = True
     End Select
@@ -543,10 +552,6 @@ Public Class Form1
   Sub ProcessJOBFile(JobFile As String)
 
     'Load the Jobfile to the jclStmt List
-    If Not File.Exists(JobFile) Then
-      LogFile.WriteLine(Date.Now & ",Job file Not found!?," & JobFile)
-      Exit Sub
-    End If
     Dim jclRecordsCount As Integer = LoadJCLStatementsToArray(JobFile)
     If jclRecordsCount = 0 Then
       MessageBox.Show("No JCL records read from file:" & JobFile)
@@ -571,40 +576,72 @@ Public Class Form1
     ' Clear out the JCL Statement array
     jclStmt.Clear()
 
-    ' Remove the temporary work file
-    Try
-      If My.Computer.FileSystem.FileExists(tempFileName) Then
-        My.Computer.FileSystem.DeleteFile(tempFileName)
-      End If
-    Catch ex As Exception
-      MessageBox.Show("Removal of Temp file error:" & ex.Message)
-      LoadJCLStatementsToArray = -1
+    ' Load the JOB File into the array
+    Dim JCL As New List(Of String)
+    JCL = ReformatJCLAndLoadToArray(JobFile)
+
+    ' PROCLIB member inclusion.
+    ' Read all lines in the JOB array:
+    ' if line has a PROC command (eg. //STEP PROC <name>) this is an instream PROC we'll ignore
+    '   it and store its name as an INSTREAM PROC.
+    ' if line has a EXEC command (eg. //COPY01   EXEC  DHSIMAGV,AUTOP1='PA903PA'), without a 'PGM=' parameter 
+    '   this is an execute of a PROC and this is where to include/find the proc in PROCLIB folder.
+    ' somehow need to remove the EXEC proc (and its continuation lines).
+    ' Only going one level deep. eg, we are not supporting procs within procs with procs...
+    '
+    Dim jclWithProc As New List(Of String)
+    Dim ListOfInstreamProcs As New List(Of String)
+    Dim Command As Integer = 1
+    Dim Label As Integer = 0
+    Dim Parameters As Integer = 2
+    For Each JCLLine In JCL
+      Dim JCLStatement As String() = JCLLine.Split(Delimiter)
+      jclWithProc.Add(JCLLine)
+      Select Case JCLStatement(Command)
+        Case "PROC"
+          ListOfInstreamProcs.Add(JCLStatement(Label).Substring(2))
+        Case "EXEC"
+          If JCLStatement(Parameters).Substring(0, 4) = "PGM=" Then
+            Exit Select
+          End If
+          'this must be an exec <procname>, so need to load this proc here
+          Dim ParmValues As String() = JCLStatement(Parameters).Split(",")
+          Dim ProcName As String = txtSourceFolderName.Text & "\" & ParmValues(0)
+          Dim PROC As New List(Of String)
+          PROC = ReformatJCLAndLoadToArray(ProcName)
+          If PROC.Count = 0 Then
+            LogFile.WriteLine(Now.Date & ",Missing PROC member," & ParmValues(0))
+          End If
+          For Each ProcLine In PROC
+            jclWithProc.Add("++" & ProcLine.Substring(2))
+          Next
+      End Select
+    Next
+
+    jclStmt.AddRange(jclWithProc)
+    LoadJCLStatementsToArray = jclStmt.Count
+
+  End Function
+  Function ReformatJCLAndLoadToArray(ByRef Jobfile As String) As List(Of String)
+    ' Load a JCL file to an Array which has
+    ' -Remove continuations
+    ' -drop Comments
+    ' -keep lines only with '//' 
+    ' -parsed out as Label, Command, Parameters with Delimiter
+    Dim JCL As New List(Of String)
+    If Not File.Exists(Jobfile) Then
+      ReformatJCLAndLoadToArray = JCL
       Exit Function
-    End Try
+    End If
 
-    Dim text1 As String
-    Dim jStatement As String = ""
-    Dim statement As String = ""
-    Dim execIndex As Integer = 0
-    Dim commaIndex As Integer = 0
+    Dim text1 As String = ""
     Dim continuation As Boolean = False
-    LoadJCLStatementsToArray = 0
-    Dim debugCount As Integer = -1
+    Dim jStatement As String = ""
+    Dim jclWords As New List(Of String)
 
-    ' load the job file to an array
-    Dim JobLines As String() = File.ReadAllLines(JobFile)
-    Dim JCLLines As List(Of String) = Nothing
-
-    ' Load JCL Lines to a JCL Statement Array
-    '   Remove continuations by combining to 1 line
-    '   and remove comments
-    '   and get rid of the slashes
-    '   all that should be stored is the Label, Control, and Parameters
-
-    For index As Integer = 0 To JobLines.Count - 1
-      LoadJCLStatementsToArray += 1
-      debugCount += 1
-      text1 = JobLines(index).Replace(vbTab, Space(1))
+    Dim JCLLines As String() = File.ReadAllLines(Jobfile)
+    For Each JCLLine In JCLLines
+      text1 = JCLLine.Replace(vbTab, Space(1))
       ' drop comments
       If Mid(text1, 1, 3) = "//*" Or Mid(text1, 1, 3) = "++*" Then
         Continue For
@@ -621,14 +658,20 @@ Public Class Form1
       If Mid(text1, 1, 9) = "/*JOBPARM" Then
         Continue For
       End If
+      ' Keep columns 1-72, remove columns 73-80
+      text1 = Microsoft.VisualBasic.Left(Mid(text1, 1) + Space(80), 72)
       ' remove '+' in column 72 (which used to mean continuation?)
       If Len(text1) >= 72 Then
         If Mid(text1, 72, 1) = "+" Then
           Mid(text1, 72, 1) = " "
         End If
       End If
-      ' format only the good stuff out of the line (no slashes, no comments)
-      text1 = Trim(Microsoft.VisualBasic.Left(Mid(text1, 3) + Space(70), 70))
+      ' remove leading slashes if this line is a continuation
+      If continuation = True Then
+        text1 = Trim(Mid(text1, 3))
+      Else
+        text1 = Trim(Mid(text1, 1))
+      End If
       ' determine if there will be a continuation
       text1 &= Space(1)
       continuation = JCLContinued(text1)
@@ -637,13 +680,20 @@ Public Class Form1
       ' if NOT continuing building of the JCL statement then add it to the List
       If continuation = False Then
         If jStatement.Trim.Length > 0 Then
-          jclStmt.Add(jStatement)
+          GetJCLWords(jStatement, jclWords)
+          Select Case jclWords.Count
+            Case 1
+              JCL.Add(jclWords(0) & Delimiter & Delimiter)
+            Case 2
+              JCL.Add(jclWords(0) & Delimiter & jclWords(1) & Delimiter)
+            Case 3
+              JCL.Add(jclWords(0) & Delimiter & jclWords(1) & Delimiter & jclWords(2))
+          End Select
         End If
         jStatement = ""
       End If
     Next
-
-
+    ReformatJCLAndLoadToArray = JCL
   End Function
   Function JCLContinued(ByRef text As String) As Boolean
     ' determine if there will be a continuation by looking for a comma + space on the line not within quotes
@@ -884,140 +934,17 @@ Public Class Form1
     'Enforcement of JCL syntax is not done here except that there must be a space between
     ' Label, Control and Parmeters. There may not be a label, so adjustments are made
     Dim jLabelPrev As String = jLabel
-    jControl = ""
-    jParameters = ""
 
-    Dim jclWords As New List(Of String)
-    Call GetSourceWords(statement, jclWords)
-    Select Case jclWords.Count
-      Case 0
+    Dim jclWords As String() = statement.Split(Delimiter)
+    jLabel = jclWords(0)
+    jControl = jclWords(1)
+    jParameters = jclWords(2)
 
-      Case 1
-        jLabel = ""
-        jControl = jclWords(0)
-        jParameters = ""
+    jLabel = jLabel.Remove(0, 2) 'remove the  leading // or ++ symbols
+    If Len(jLabel) = 0 Then
+      jLabel = jLabelPrev
+    End If
 
-      Case 2
-        If jclWords(1) = "PROC" Then
-          jLabel = jclWords(0)
-          jControl = jclWords(1)
-          jParameters = ""
-          Exit Select
-        End If
-        If jclWords(0) = "DD" Then
-          jLabel = jLabelPrev
-        Else
-          jLabel = ""
-        End If
-        jControl = jclWords(0)
-        jParameters = jclWords(1)
-
-      Case >= 3
-        jLabel = jclWords(0)
-        jControl = jclWords(1)
-        jParameters = jclWords(2)
-
-      Case Else
-        MessageBox.Show("GetLabelControlParameters unknown jclWords count:" & statement)
-
-    End Select
-
-    'For sPos As Integer = 1 To Len(statement)
-    '  Select Case True
-    '    Case Mid(statement, sPos, Len(JOBCARD)) = JOBCARD
-    '      jLabel = RTrim(Mid(statement, 1, sPos - 1))
-    '      jControl = Mid(statement, sPos + 1, 3)
-    '      jParameters = Trim(Mid(statement, sPos + 5))
-    '      Exit For
-
-    '    Case Mid(statement, sPos, Len(PROCCARD)) = PROCCARD
-    '      jLabel = RTrim(Mid(statement, 1, sPos - 1))
-    '      jControl = Mid(statement, sPos + 1, 4)
-    '      jParameters = Trim(Mid(statement, sPos + 6))
-    '      Exit For
-    '    Case Mid(statement, sPos, 5) = " PROC"
-    '      jLabel = RTrim(Mid(statement, 1, sPos - 1))
-    '      jControl = "PROC"
-    '      jParameters = Trim(Mid(statement, sPos + 5))
-    '      Exit For
-
-    '    Case statement = "PEND"
-    '      jLabel = ""
-    '      jControl = "PEND"
-    '      jParameters = ""
-    '      Exit For
-    '    Case Mid(statement, sPos, Len(PENDCARD)) = PENDCARD
-    '      jLabel = RTrim(Mid(statement, 1, sPos - 1))
-    '      jControl = Mid(statement, sPos + 1, 4)
-    '      jParameters = Trim(Mid(statement, sPos + 6))
-    '      Exit For
-    '    Case statement.EndsWith("PEND ")
-    '      jLabel = ""
-    '      jControl = "PEND"
-    '      jParameters = Trim(Mid(statement, 6))
-    '      Exit For
-    '    Case statement.EndsWith(" PEND")
-    '      jLabel = ""
-    '      jControl = "PEND"
-    '      jParameters = ""
-    '      Exit For
-
-    '    Case Mid(statement, sPos, Len(EXECCARD)) = EXECCARD
-    '      jLabel = RTrim(Mid(statement, 1, sPos - 1))
-    '      jControl = Mid(statement, sPos + 1, 4)
-    '      jParameters = Trim(Mid(statement, sPos + 6))
-    '      Exit For
-
-    '    Case Mid(statement, sPos, Len(EXECCARDNOLABEL)) = EXECCARDNOLABEL
-    '      jLabel = ""
-    '      jControl = Mid(statement, 1, 4)
-    '      jParameters = Trim(Mid(statement, 6))
-    '      Exit For
-
-    '    Case Mid(statement, sPos, Len(DDCARD)) = DDCARD
-    '      jLabel = RTrim(Mid(statement, 1, sPos - 1))
-    '      jControl = Mid(statement, sPos + 1, 2)
-    '      jParameters = Trim(Mid(statement, sPos + 4))
-    '      Exit For
-
-    '    Case Mid(statement, sPos, Len(SETCARD)) = SETCARD
-    '      jLabel = RTrim(Mid(statement, 1, sPos - 1))
-    '      jControl = Mid(statement, sPos + 1, 3)
-    '      jParameters = Trim(Mid(statement, sPos + 5))
-    '      Exit For
-    '    Case Mid(statement, 1, Len(DDCARDNOLABEL)) = DDCARDNOLABEL    'concat DD
-    '      jLabel = jLabelPrev
-    '      jControl = Mid(statement, 1, 2)
-    '      jParameters = Trim(Mid(statement, 4))
-    '      Exit For
-    '    Case Mid(statement, 1, Len(SETCARDNOLABEL)) = SETCARDNOLABEL
-    '      jLabel = ""
-    '      jControl = Mid(statement, 1, 3)
-    '      jParameters = Trim(Mid(statement, 5))
-    '      Exit For
-    '    Case Mid(statement, sPos, Len(OUTPUTCARD)) = OUTPUTCARD
-    '      jLabel = RTrim(Mid(statement, 1, sPos - 1))
-    '      jControl = Mid(statement, sPos + 1, 6)
-    '      jParameters = Trim(Mid(statement, sPos + 8))
-    '      Exit For
-    '    Case Mid(statement, sPos, Len(IFCARD)) = IFCARD
-    '      jLabel = ""
-    '      jControl = Mid(statement, sPos, 2)
-    '      jParameters = Trim(Mid(statement, sPos + 3))
-    '      Exit For
-    '    Case Mid(statement, sPos, 1) = "("
-    '      jLabel = ""
-    '      jControl = "IF"
-    '      jParameters = Trim(Mid(statement, 1))
-    '      Exit For
-    '    Case Mid(statement, sPos, Len(ENDIFCARD)) = ENDIFCARD
-    '      jLabel = ""
-    '      jControl = Trim(Mid(statement, sPos, 5))
-    '      jParameters = ""
-    '      Exit For
-
-    '  End Select
-    'Next
   End Sub
   Sub ProcessJOB()
     'jobSequence += 1
@@ -1500,7 +1427,8 @@ Public Class Form1
         Select Case pgmName
           Case "IEFBR14", "SORT", "IEBGENER", "IEBCOPY", "IDCAMS", "DSNUTILB",
                "SRCHPRNT", "CMSAUTO1", "PKZIP", "IKJEFT01", "A4204030", "OFORMAT", "ODATE", "DFSRRC00", "FTP",
-               "ICETOOL", "FILEMGR", "IRXJCL", "INITFILE", "EZTPA00", "IERRCO00", "ABEND"
+               "ICETOOL", "FILEMGR", "IRXJCL", "INITFILE", "EZTPA00", "IERRCO00", "ABEND", "DFSBBO00",
+               "IKJEFT1B"
           Case Else
             If ListOfExecs.IndexOf(pgmName & Delimiter & SourceType) = -1 Then
               ListOfExecs.Add(pgmName & Delimiter & SourceType)
@@ -1559,7 +1487,7 @@ Public Class Form1
 
       ' Analyze Source Statement array (SrcStmt) to get list of programs
       listOfPrograms.Clear()
-      listOfPrograms = GetListOfPrograms()      'list of programs within the exec source
+      listOfPrograms = GetListOfPrograms(exec)      'list of programs within the executable source
 
       ' Analyze Source Statement array (SrcStmt) to get list of paragraph names
       'ListOfParagraphs.Clear()
@@ -1984,7 +1912,7 @@ Public Class Form1
     Next
 
   End Function
-  Function GetListOfPrograms() As List(Of ProgramInfo)
+  Function GetListOfPrograms(ByRef exec As String) As List(Of ProgramInfo)
     ' Scan through the source looking for the programs.
     ' Each program could have multiple sub programs inline (especially COBOL).
     ' Also a program could call a sub program, which we will store out to a
@@ -1996,6 +1924,7 @@ Public Class Form1
     pgm.ProcedureDivision = -1
     pgm.EndProgram = -1
     pgm.ProgramId = ""
+    pgm.SourceId = exec
 
     Dim srcWords As New List(Of String)
 
@@ -2068,33 +1997,64 @@ Public Class Form1
   Sub AddToListOfCallPgms(ByRef statement As String, ByRef srcWords As List(Of String))
     Dim CalledFileName As String = ""
     Dim CalledSourceType As String = ""
+    Dim CalledType As String = ""
+    Dim CalledEntry As String = ""
     CalledMember = ""
+
     Call GetSourceWords(statement, srcWords)
     For x As Integer = 0 To srcWords.Count - 1
       If srcWords(x) = "CALL" Then
+        CalledEntry = ""
         CalledMember = srcWords(x + 1)
         If Mid(CalledMember, 1, 1) <> "'" Then         'skip dynamic called routines
-          LogFile.WriteLine(Date.Now & ",Called Member is not Static called so skipped," & CalledMember)
+          CalledEntry = CalledMember & Delimiter &
+            "unknown" & Delimiter &
+            pgm.ProgramId & Delimiter &
+            "Dynamic" & Delimiter &
+            pgm.SourceId
+          If ListOfCallPgms.IndexOf(CalledEntry) = -1 Then
+            ListOfCallPgms.Add(CalledEntry)
+          End If
           Continue For
         End If
         CalledMember = CalledMember.Replace("'", "").Trim
+        CalledType = "Static"
         ' if a utility, ie ABEND do not add to list
         Select Case CalledMember
           Case "DSNHADDR", "DSNHADD2", "DSNHLI", "ADRABND", "ABEND", "DSNTIAR", "CBLTDLI",
                "DHSFINAL", "ADMAAB0", "ADMAABT", "BINCONV", "CNTYNAME", "ICOMMA2",
                "OCDATE", "OCDATE9", "OCNTRYDT", "ODATE", "OFORMAT", "OMOCNTRY",
                "R8460720", "PA8403AB", "PA1581BA"
-            LogFile.WriteLine(Date.Now & ",Called Member is Utility so skipped," & CalledMember)
-            Exit Sub
+            CalledEntry = CalledMember & Delimiter &
+              "Utility" & Delimiter &
+              pgm.ProgramId & Delimiter &
+              CalledType & Delimiter &
+              pgm.SourceId
+            If ListOfCallPgms.IndexOf(CalledEntry) = -1 Then
+              ListOfCallPgms.Add(CalledEntry)
+            End If
+            Continue For
         End Select
         CalledFileName = txtSourceFolderName.Text & "\" & CalledMember
         If File.Exists(CalledFileName) Then
-          CalledSourceType = GetSourceType(CalledFileName)
-          If ListOfCallPgms.IndexOf(CalledMember & Delimiter & CalledSourceType & Delimiter & pgm.ProgramId) = -1 Then
-            ListOfCallPgms.Add(CalledMember & Delimiter & CalledSourceType & Delimiter & pgm.ProgramId)
-            LogFile.WriteLine(Date.Now & ",Called Member added to ListOfCallPgms," & CalledMember)
+          CalledSourceType = GetSourceType(CalledMember)
+          CalledEntry = CalledMember & Delimiter &
+            CalledSourceType & Delimiter &
+            pgm.ProgramId & Delimiter &
+            CalledType & Delimiter &
+            pgm.SourceId
+          If ListOfCallPgms.IndexOf(CalledEntry) = -1 Then
+            ListOfCallPgms.Add(CalledEntry)
           End If
         Else
+          CalledEntry = CalledMember & Delimiter &
+            "Not Found" & Delimiter &
+            pgm.ProgramId & Delimiter &
+            CalledType & Delimiter &
+            pgm.SourceId
+          If ListOfCallPgms.IndexOf(CalledEntry) = -1 Then
+            ListOfCallPgms.Add(CalledEntry)
+          End If
           LogFile.WriteLine(Date.Now & ",Called Member Source Not Found," & CalledMember)
         End If
       End If
@@ -2631,7 +2591,7 @@ Public Class Form1
     End If
     Select Case FileName
       Case "IEFBR14", "IDCAMS", "SORT", "ICETOOL", "IEBGENER", "PKZIP", "IKJEFT01", "DFSRRC00",
-           "FTP", "FILEMGR"
+           "FTP", "FILEMGR", "DFSBBO00", "IKJEFT1B"
         GetSourceType = "UTILITY"
         Exit Function
       Case "SRCHPRNT", "CMSAUTO1", "DSNUTILB", "OFORMAT", "ODATE", "A4204030", "IRXJCL", "INITFILE", "EZTPA00",
@@ -2793,7 +2753,7 @@ Public Class Form1
 
     Dim FileName As String = txtSourceFolderName.Text & "\" & exec
     If Not File.Exists(FileName) Then
-      LogFile.WriteLine(Date.Now & ",Source File Not Found," & exec)
+      LogFile.WriteLine(Date.Now & ",Source File Not Found?," & exec)
       LoadEasytrieveStatementsToArray = -1
       Exit Function
     Else
@@ -3292,6 +3252,19 @@ Public Class Form1
       objExcel.ErrorCheckingOptions.NumberAsText = False
     End If
 
+    If CallsRow > 0 Then
+      Dim row As Integer = LTrim(Str(CallsRow))
+      ' Format the Sheet - first row bold the columns
+      rngCalls = CallsWorksheet.Range("A1:E1")
+      rngCalls.Font.Bold = True
+      ' data area autofit all columns
+      rngCalls = CallsWorksheet.Range("A1:E" & row)
+      workbook.Worksheets("CALLS").Range("A1").AutoFilter
+      rngCalls.Columns.AutoFit()
+      rngCalls.VerticalAlignment = Excel.XlVAlign.xlVAlignTop
+      ' ignore error flag that numbers being loaded into a text field
+      objExcel.ErrorCheckingOptions.NumberAsText = False
+    End If
 
     SummaryWorksheet.Select(1)
     SummaryWorksheet.Activate()
@@ -3430,6 +3403,42 @@ Public Class Form1
     Next
 
     lblProcessingWorksheet.Text = "Processing IMS worksheet for DBDNames Complete"
+
+  End Sub
+  Sub CreateCallsWorksheet()
+    ' Create the CALLs worksheet tab.
+    ' This worksheet will hold program CALLS of both Static and Dynamic calls.
+    ' The input to this routine is the ListOfCallPgms array
+    '
+
+    If CallsRow = 0 Then
+      CallsWorksheet = workbook.Sheets.Add(After:=workbook.Worksheets(workbook.Worksheets.Count))
+      CallsWorksheet.Name = "CALLS"
+      ' Write the Column Headers row
+      CallsWorksheet.Range("A1").Value = "Source-id"
+      CallsWorksheet.Range("B1").Value = "Program-id"
+      CallsWorksheet.Range("C1").Value = "Source Type"
+      CallsWorksheet.Range("D1").Value = "Module"
+      CallsWorksheet.Range("E1").Value = "Call Type"
+
+      CallsRow = 1
+    End If
+
+
+    lblProcessingWorksheet.Text = "Processing Call routines: " & ListOfCallPgms.Count
+
+    For CallsIndex As Integer = 0 To ListOfCallPgms.Count - 1
+      Dim CallsColumns As String() = ListOfCallPgms(CallsIndex).Split(Delimiter)
+      CallsRow += 1
+      Dim row As String = LTrim(Str(CallsRow))
+      CallsWorksheet.Range("A" & row).Value = CallsColumns(4)       'source-id
+      CallsWorksheet.Range("B" & row).Value = CallsColumns(2)       'program-id
+      CallsWorksheet.Range("C" & row).Value = CallsColumns(1)       'Source Type
+      CallsWorksheet.Range("D" & row).Value = CallsColumns(0)       'Module
+      CallsWorksheet.Range("E" & row).Value = CallsColumns(3)       'Call type
+    Next
+
+    lblProcessingWorksheet.Text = "Processing CALLS worksheet Complete"
 
   End Sub
   Sub AddToListOfDBDNames()
@@ -5658,7 +5667,13 @@ Public Class Form1
       Case Else
 
     End Select
-    comment = StrConv(comment, vbProperCase)
+
+    ' convert comment to a "sentence case" like text.
+    If Len(comment) > 1 Then
+      comment = Char.ToUpper(comment.First) & comment.Substring(1).ToLower
+    Else
+      comment = comment.ToUpper
+    End If
 
     If comment.Length > 0 Then
       ListOfComments.Add(FileNameOnly & Delimiter &
@@ -5677,7 +5692,7 @@ Public Class Form1
     ' re Initialize all beginning Variables and tables.
     ' JCL
     FileNameOnly = ""
-    tempFileName = ""
+    tempNoContdJCLFileName = ""
     tempCobFileName = ""
     tempEZTFileName = ""
     jControl = ""
@@ -5726,7 +5741,6 @@ Public Class Form1
   End Sub
   Private Sub Form1_Load(sender As Object, e As EventArgs) Handles MyBase.Load
     Me.Text = "ADDILite " & ProgramVersion
-
 
 
     ' This area is the COBOL Verb array with counts. 
