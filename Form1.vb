@@ -29,8 +29,9 @@ Public Class Form1
   ' - PlantUml for creating flowchart
   '
   '***Be sure to change ProgramVersion when making changes!!!
-  Dim ProgramVersion As String = "v1.8"
+  Dim ProgramVersion As String = "v1.10"
   'Change-History.
+  ' 2023/01/25 v1.10 hk Page Break on PUML file for COBOL
   ' 2023/12/28 v1.8 hk add Utility: DFSBBO00
   '                    - Support PROCLIB
   '                    - Add utility: IKJEFT1B
@@ -191,6 +192,9 @@ Public Class Form1
   Dim pgmSeq As Integer = 0
   Dim pumlFile As StreamWriter = Nothing          'File holding the Plantuml commands
   Dim PSPFile As StreamWriter = Nothing           'File holding the PSP Names in PSPName until format
+  Dim pumlMaxLineCnt As Integer = 1000
+  Dim pumlLineCnt As Integer = 0
+  Dim pumlPageCnt As Integer = 0
 
 
   Public Structure ProgramInfo
@@ -1165,7 +1169,7 @@ Public Class Form1
         Continue Do
       End If
       execSequence = Val(csvRecord(6))
-      Dim DDName As String = csvRecord(7)
+      Dim DDName As String = csvRecord(7).Replace("$", "S")
       Dim DDSeq As String = csvRecord(8)
       ddConcatSeq = Val(csvRecord(9))
       Dim dsn As String = csvRecord(10)
@@ -3527,25 +3531,10 @@ Public Class Form1
     'WithinPerformWithEndPerformStatement = False
     Dim WithinQuotes As Boolean = False
     Dim IfCnt As Integer = 0
+    pumlLineCnt = pumlMaxLineCnt + 1
+    pumlPageCnt = 0
 
-
-    ' Open the output file Puml 
-    Dim PumlFileName = txtOutputFoldername.Text & "\" & exec & ".puml"
-
-    ' Open and write at least one time. Not worrying (try/catch) about subsequent writes
-    Try
-      pumlFile = My.Computer.FileSystem.OpenTextFileWriter(PumlFileName, False)
-    Catch ex As Exception
-      MessageBox.Show(ex.Message, "Error opening PumlFile COBOL")
-      Exit Sub
-    End Try
-
-    ' Write the top of file
-    pumlFile.WriteLine("@startuml " & exec)
-    pumlFile.WriteLine("header ADDILite(c), by IBM")
-    pumlFile.WriteLine("title Flowchart of COBOL Program: " & exec &
-                       "\nProgram Author: " & ProgramAuthor &
-                       "\nDate written: " & ProgramWritten)
+    PumlPageBreak(exec)
 
     For Each pgm In listOfPrograms
       pgmName = pgm.ProgramId
@@ -3556,7 +3545,7 @@ Public Class Form1
           If SrcStmt(index).Substring(0, 1) = "*" Then
             Continue For
           End If
-          Call ProcessPumlParagraph(ParagraphStarted, SrcStmt(index))
+          Call ProcessPumlParagraph(ParagraphStarted, SrcStmt(index), exec)
           Continue For
         End If
         WithinQuotes = False
@@ -3588,6 +3577,7 @@ Public Class Form1
             Case "END-IF"
               IfCnt -= 1
               IndentLevel -= 1
+              pumlLineCnt += 1
               pumlFile.WriteLine(Indent() & "endif")
               If IfCnt = 0 Then
                 WithinIF = False
@@ -3626,6 +3616,7 @@ Public Class Form1
                 End If
                 If cWord(wordIndex + 1) <> "END-IF" Then
                   IndentLevel -= 1
+                  pumlLineCnt += 1
                   pumlFile.WriteLine(Indent() & "endif")
                   IfCnt -= 1
                   If IfCnt = 0 Then
@@ -3643,17 +3634,20 @@ Public Class Form1
               Dim EndIndex As Integer = 0
               Dim MiscStatement As String = ""
               Call GetStatement(wordIndex, EndIndex, MiscStatement)
+              pumlLineCnt += 1
               pumlFile.WriteLine(Indent() & ":" & MiscStatement.Trim & ";")
               wordIndex = EndIndex
           End Select
         Next wordIndex
         If WithinReadStatement And WithinReadConditionStatement Then
           IndentLevel -= 1
+          pumlLineCnt += 1
           pumlFile.WriteLine(Indent() & "endif")
         End If
         If WithinIF Or IfCnt > 0 Then
           For x As Integer = 1 To IfCnt
             IndentLevel -= 1
+            pumlLineCnt += 1
             pumlFile.WriteLine(Indent() & "endif")
           Next
           IfCnt = 0
@@ -3668,14 +3662,46 @@ Public Class Form1
       Next index
 
       If ParagraphStarted = True Then
+        pumlLineCnt += 1
         pumlFile.WriteLine("end")
         ParagraphStarted = False
       End If
 
     Next
+    pumlLineCnt += 1
     pumlFile.WriteLine("@enduml")
 
     pumlFile.Close()
+  End Sub
+
+  Sub PumlPageBreak(ByRef exec As String)
+    pumlPageCnt += 1
+    ' Open the output file Puml 
+    Dim pumlFileName As String = txtOutputFoldername.Text & "\" & exec & ".puml"
+    If pumlPageCnt > 1 Then
+      pumlFileName = txtOutputFoldername.Text & "\" & exec & "_" & LTrim(Str(pumlPageCnt)) & ".puml"
+    End If
+
+    ' Open and write at least one time. Not worrying (try/catch) about subsequent writes
+    Try
+      pumlFile = My.Computer.FileSystem.OpenTextFileWriter(pumlFileName, False)
+    Catch ex As Exception
+      MessageBox.Show(ex.Message, "Error opening PumlFile COBOL")
+      Exit Sub
+    End Try
+
+    ' Write the top of file
+    pumlFile.WriteLine("@startuml " & exec)
+    pumlFile.WriteLine("header ADDILite(c), by IBM")
+    pumlFile.Write("title Flowchart of COBOL Program: " & exec &
+                       "\nProgram Author: " & ProgramAuthor &
+                       "\nDate written: " & ProgramWritten)
+    If pumlPageCnt > 1 Then
+      pumlFile.WriteLine("\nPart: " & pumlPageCnt)
+    Else
+      pumlFile.WriteLine("")
+    End If
+    pumlLineCnt = 3
   End Sub
   Sub AnalyzeLevelsCobol(ByRef cWord As List(Of String), ByRef lWord As List(Of String))
     ' Assign a logic level number to each word. Always start at 0 until there is an IF
@@ -3734,6 +3760,7 @@ Public Class Form1
     End Try
 
     ' Write the top of file
+    pumlLineCnt = 3
     pumlFile.WriteLine("@startuml " & exec)
     pumlFile.WriteLine("header ADDILite(c), by IBM")
     pumlFile.WriteLine("title Flowchart of Easytrieve Program: " & exec)
@@ -3777,6 +3804,7 @@ Public Class Form1
               Call ProcessPumlELSE(wordIndex, ifcnt)
             Case "END-IF"
               IndentLevel -= 1
+              pumlLineCnt += 1
               pumlFile.WriteLine(Indent() & "endif")
             Case "CASE"
               Call ProcessPumlEVALUATE(wordIndex)
@@ -3807,6 +3835,7 @@ Public Class Form1
             Case "EXEC"
               ProcessPumlEXEC(wordIndex)
             Case "STOP", "END-PROC"
+              pumlLineCnt += 2
               pumlFile.WriteLine("end")
               pumlFile.WriteLine("")
               ParagraphStarted = False
@@ -3820,6 +3849,7 @@ Public Class Form1
             Case "TITLE"
               If cWord.Count >= 5 Then
                 If cWord(1) = "1" Or cWord(1) = "2" Then
+                  pumlLineCnt += 1
                   pumlFile.WriteLine(Indent() & ":" & cWord(4).Replace("'", "").Replace("*", "").Trim & ";")
                 End If
               End If
@@ -3837,6 +3867,7 @@ Public Class Form1
                 Dim EndIndex As Integer = 0
                 Dim MiscStatement As String = ""
                 Call GetStatement(wordIndex, EndIndex, MiscStatement)
+                pumlLineCnt += 1
                 pumlFile.WriteLine(Indent() & ":" & MiscStatement.Trim & ";")
                 wordIndex = EndIndex
               End If
@@ -3845,11 +3876,13 @@ Public Class Form1
       Next index
 
       If ParagraphStarted = True Then
+        pumlLineCnt += 1
         pumlFile.WriteLine("end")
         ParagraphStarted = False
       End If
 
     Next
+    pumlLineCnt += 1
     pumlFile.WriteLine("@enduml")
 
     pumlFile.Close()
@@ -4583,13 +4616,24 @@ Public Class Form1
       FindCopybookName = "NONE"
     End If
   End Function
-  Sub ProcessPumlParagraph(ByRef ParagraphStarted As Boolean, ByRef statement As String)
+  Sub ProcessPumlParagraph(ByRef ParagraphStarted As Boolean, ByRef statement As String, ByRef exec As String)
     If ParagraphStarted = True Then
+      pumlLineCnt += 2
       pumlFile.WriteLine("end")
       pumlFile.WriteLine("")
     End If
+
+    If pumlLineCnt > pumlMaxLineCnt Then
+      pumlLineCnt += 1
+      pumlFile.WriteLine("floating note left: Continued in Part " & pumlPageCnt + 1)
+      pumlFile.WriteLine("@enduml")
+      pumlFile.Close()
+      PumlPageBreak(exec)
+    End If
+
     pumlFile.WriteLine("start")
     pumlFile.WriteLine(":**" & Trim(statement.Replace(".", "")) & "**;")
+    pumlLineCnt += 2
     ParagraphStarted = True
   End Sub
   Sub ProcessPumlParagraphEasytrieve(ByRef ParagraphStarted As Boolean, ByRef statement As String)
@@ -4597,6 +4641,7 @@ Public Class Form1
     '  pumlFile.WriteLine("end")
     '  pumlFile.WriteLine("")
     'End If
+    pumlLineCnt += 2
     pumlFile.WriteLine("start")
     pumlFile.WriteLine(":**" & statement.Trim & "**;")
     ParagraphStarted = True
@@ -4609,6 +4654,7 @@ Public Class Form1
     Dim TogetherWords As String = StringTogetherWords(WordIndex, (cWord.Count - 1))
     Dim SortStatement As String = AddNewLineAboutEveryNthCharacters(TogetherWords, ESCAPENEWLINE, 30)
 
+    pumlLineCnt += 2
     pumlFile.WriteLine("start")
     pumlFile.WriteLine(":" & SortStatement.Trim & ";")
     WordIndex = cWord.Count - 1
@@ -4619,6 +4665,7 @@ Public Class Form1
     Dim EndIndex As Integer = 0
     Dim Statement As String = ""
     Call GetStatement(WordIndex, EndIndex, Statement)
+    pumlLineCnt += 1
     pumlFile.WriteLine(Indent() & "if (" & Statement.Trim & ") then (yes)")
     IndentLevel += 1
     WordIndex = EndIndex
@@ -4639,6 +4686,7 @@ Public Class Form1
     Dim EndIndex As Integer = cWord.Count - 1
     Dim Statement As String = ""
     Call GetStatement(WordIndex, EndIndex, Statement)
+    pumlLineCnt += 1
     pumlFile.WriteLine(Indent() & "if (" & Statement.Trim & ") then (yes)")
     IndentLevel += 1
     WordIndex = EndIndex
@@ -4654,6 +4702,7 @@ Public Class Form1
     For x = WordIndex - 1 To 0 Step -1
       If cWord(x) = "ELSE" Then
         'malformed? so add an END-IF
+        pumlLineCnt += 2
         pumlFile.WriteLine("floating note left: Malformed")
         IndentLevel -= 1
         pumlFile.WriteLine(Indent() & "endif")
@@ -4669,6 +4718,7 @@ Public Class Form1
     Next
     '
     IndentLevel -= 1
+    pumlLineCnt += 1
     pumlFile.WriteLine(Indent() & "else (no)")
     IndentLevel += 1
 
@@ -4687,6 +4737,7 @@ Public Class Form1
     Next
     EndIndex -= 1
     Call GetStatement(wordIndex, EndIndex, Statement)
+    pumlLineCnt += 1
     pumlFile.WriteLine(Indent() & ":" & Statement.Trim & ";")
     IndentLevel += 1
     FirstWhenStatement = True
@@ -4708,10 +4759,12 @@ Public Class Form1
     Call GetStatement(wordindex, EndIndex, Statement)
     If FirstWhenStatement = True Then
       FirstWhenStatement = False
+      pumlLineCnt += 1
       pumlFile.WriteLine(Indent() & "if (" & Statement.Trim & ") then (yes)")
       IndentLevel += 1
     Else
       IndentLevel -= 1
+      pumlLineCnt += 1
       pumlFile.WriteLine(Indent() & "elseif (" & Statement.Trim & ") then (yes)")
       IndentLevel += 1
     End If
@@ -4722,6 +4775,7 @@ Public Class Form1
     'TODO: Need to handle embedded end-evaluate
     FirstWhenStatement = False
     IndentLevel -= 1
+    pumlLineCnt += 1
     pumlFile.WriteLine(Indent() & "endif")
   End Sub
   Sub ProcessPumlCOMPUTE(ByRef WordIndex As Integer)
@@ -4729,6 +4783,7 @@ Public Class Form1
     Dim EndIndex As Integer = 0
     Dim Statement As String = ""
     Call GetStatement(WordIndex, EndIndex, Statement)
+    pumlLineCnt += 1
     pumlFile.WriteLine(Indent() & ":" & Statement.Trim & ";")
     WordIndex = EndIndex
   End Sub
@@ -4737,6 +4792,7 @@ Public Class Form1
     Dim EndIndex As Integer = 0
     Dim Statement As String = ""
     Call GetStatement(WordIndex, EndIndex, Statement)
+    pumlLineCnt += 2
     pumlFile.WriteLine(Indent() & "#pink:" & Statement.Trim & ";")
     pumlFile.WriteLine(Indent() & "detach")
     WordIndex = EndIndex
@@ -4746,6 +4802,7 @@ Public Class Form1
     Dim EndIndex As Integer = WordIndex + 1
     Dim Statement As String = ""
     Call GetStatement(WordIndex, EndIndex, Statement)
+    pumlLineCnt += 1
     pumlFile.WriteLine(Indent() & ":" & Statement.Trim & "/")
     WordIndex = EndIndex
   End Sub
@@ -4768,6 +4825,7 @@ Public Class Form1
       EndIndex = cWord.Count - 1
       TogetherWords = StringTogetherWords(WordIndex, EndIndex)
       ReadStatement = AddNewLineAboutEveryNthCharacters(TogetherWords, ESCAPENEWLINE, 30)
+      pumlLineCnt += 1
       pumlFile.WriteLine(Indent() & ":" & ReadStatement.Trim & "/")
       WordIndex = EndIndex
       Exit Sub
@@ -4793,6 +4851,7 @@ Public Class Form1
     If StartIndex < EndIndex Then
       TogetherWords = StringTogetherWords(StartIndex, EndIndex)
       ReadStatement = AddNewLineAboutEveryNthCharacters(TogetherWords, ESCAPENEWLINE, 30)
+      pumlLineCnt += 1
       pumlFile.WriteLine(Indent() & ":" & ReadStatement.Trim & "/")
       WordIndex = EndIndex
       IndentLevel += 1
@@ -4815,6 +4874,7 @@ Public Class Form1
     Dim EndIndex As Integer = StartIndex + 1
     Dim TogetherWords As String = StringTogetherWords(StartIndex, EndIndex)
     Dim ReadStatement As String = AddNewLineAboutEveryNthCharacters(TogetherWords, ESCAPENEWLINE, 30)
+    pumlLineCnt += 1
     pumlFile.WriteLine(Indent() & ":" & ReadStatement.Trim & "/")
     WordIndex = EndIndex
     IndentLevel += 1
@@ -4828,6 +4888,7 @@ Public Class Form1
     End If
     If WithinReadConditionStatement = True Then
       IndentLevel -= 1
+      pumlLineCnt += 1
       pumlFile.WriteLine(Indent() & "endif")
     End If
     Dim ReadCondition As String = ""
@@ -4841,6 +4902,7 @@ Public Class Form1
       End Select
     Next
     WithinReadConditionStatement = True
+    pumlLineCnt += 1
     pumlFile.WriteLine(Indent() & "if (" & ReadCondition.Trim & "?) then (yes)")
     IndentLevel += 1
     WordIndex += ReadConditionCount - 1
@@ -4848,6 +4910,7 @@ Public Class Form1
   Sub ProcessPumlENDREAD(ByRef WordIndex As Integer)
     If WithinReadConditionStatement = True Then
       IndentLevel -= 1
+      pumlLineCnt += 1
       pumlFile.WriteLine(Indent() & "endif")
       IndentLevel -= 1
     End If
@@ -4865,6 +4928,7 @@ Public Class Form1
       If cWord(EndIndex) = "END-SEARCH" Then
         WordsTogether = StringTogetherWords(WordIndex, EndIndex)
         Statement = AddNewLineAboutEveryNthCharacters(WordsTogether, ESCAPENEWLINE, 30)
+        pumlLineCnt += 1
         pumlFile.WriteLine(Indent() & ":" & Statement.Trim & ";")
         WordIndex = EndIndex
         Exit Sub
@@ -4874,6 +4938,7 @@ Public Class Form1
     EndIndex = cWord.Count - 1
     WordsTogether = StringTogetherWords(WordIndex, EndIndex)
     Statement = AddNewLineAboutEveryNthCharacters(WordsTogether, ESCAPENEWLINE, 30)
+    pumlLineCnt += 1
     pumlFile.WriteLine(Indent() & ":" & Statement.Trim & ";")
     WordIndex = EndIndex
   End Sub
@@ -4902,6 +4967,7 @@ Public Class Form1
     '  even if there is a TIMES or VARYING phrase
     If ListOfParagraphs.IndexOf(cWord(WordIndex + 1)) > -1 Then
       Call GetStatement(WordIndex, EndIndex, Statement)
+      pumlLineCnt += 1
       pumlFile.WriteLine(Indent() & ":" & Statement.Trim & "|")
       WordIndex = EndIndex
       Exit Sub
@@ -4911,6 +4977,7 @@ Public Class Form1
     For EndIndex = WordIndex + 1 To cWord.Count - 1
       If cWord(EndIndex) = "UNTIL" Then
         Call GetStatement(WordIndex, EndIndex, Statement)
+        pumlLineCnt += 1
         pumlFile.WriteLine(Indent() & "while (" & Statement.Trim & ") is (true)")
         IndentLevel += 1
         WordIndex = EndIndex
@@ -4924,6 +4991,7 @@ Public Class Form1
     For EndIndex = WordIndex + 1 To cWord.Count - 1
       If cWord(EndIndex) = "TIMES" Then
         Call GetStatement(WordIndex, EndIndex, Statement)
+        pumlLineCnt += 1
         pumlFile.WriteLine(Indent() & "while (" & Statement.Trim & ") is (true)")
         IndentLevel += 1
         WordIndex = EndIndex
@@ -4938,6 +5006,7 @@ Public Class Form1
     For EndIndex = WordIndex + 1 To cWord.Count - 1
       If cWord(EndIndex) = "END-PERFORM" Then
         Call GetStatement(WordIndex, EndIndex, Statement)
+        pumlLineCnt += 1
         pumlFile.WriteLine(Indent() & ":DO;")
         IndentLevel += 1
         WordIndex = EndIndex
@@ -4946,6 +5015,7 @@ Public Class Form1
     Next
 
     Call GetStatement(WordIndex, EndIndex, Statement)
+    pumlLineCnt += 1
     pumlFile.WriteLine(Indent() & ":" & Statement.Trim & "|")
     WordIndex = EndIndex
 
@@ -4959,6 +5029,7 @@ Public Class Form1
 
     EndIndex = cWord.Count - 1
     Call GetStatement(WordIndex, EndIndex, Statement)
+    pumlLineCnt += 1
     pumlFile.WriteLine(Indent() & "while (" & Statement.Trim & ") is (true)")
     IndentLevel += 1
     WordIndex = EndIndex
@@ -4969,27 +5040,32 @@ Public Class Form1
     Dim EndIndex As Integer = WordIndex + 1
     Dim Statement As String = ""
     Call GetStatement(WordIndex, EndIndex, Statement)
+    pumlLineCnt += 1
     pumlFile.WriteLine(Indent() & ":" & Statement.Trim & "|")
     WordIndex = EndIndex
   End Sub
   Sub ProcessPumlENDPERFORM()
     IndentLevel -= 1
     If WithinPerformCnt > 0 Then
+      pumlLineCnt += 1
       pumlFile.WriteLine(Indent() & "endwhile (Complete)")
       'WithinPerformWithEndPerformStatement = False
       WithinPerformCnt -= 1
     Else
+      pumlLineCnt += 1
       pumlFile.WriteLine(Indent() & ":END DO;")
     End If
   End Sub
   Sub ProcessPumlENDDO(ByRef wordindex As Integer)
     IndentLevel -= 1
+    pumlLineCnt += 1
     pumlFile.WriteLine(Indent() & "endwhile (Complete)")
   End Sub
   Sub ProcessPumlEXEC(ByRef WordIndex As Integer)
     Dim EndIndex As Integer = 0
     Dim EXECStatement As String = ""
     Call GetStatement(WordIndex, EndIndex, EXECStatement)
+    pumlLineCnt += 1
     pumlFile.WriteLine(Indent() & ":" & EXECStatement.Trim & "}")
     WordIndex = EndIndex
   End Sub
@@ -5036,6 +5112,7 @@ Public Class Form1
     End If
     Dim WordsTogether As String = StringTogetherWords(WordIndex, EndIndex)
     Dim Statement As String = AddNewLineAboutEveryNthCharacters(WordsTogether, ESCAPENEWLINE, 30)
+    pumlLineCnt += 1
     pumlFile.WriteLine(Indent() & ":" & Statement.Trim & ";")
     WordIndex = EndIndex
 
