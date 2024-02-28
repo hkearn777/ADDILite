@@ -29,8 +29,13 @@ Public Class Form1
   ' - PlantUml for creating flowchart
   '
   '***Be sure to change ProgramVersion when making changes!!!
-  Dim ProgramVersion As String = "v1.10"
+  Dim ProgramVersion As String = "v1.11"
   'Change-History.
+  ' 2024/02/09 v1.11 hk v1.11 Create CICS Tab
+  '                    - Create MAPS tab
+  '                    - Corrected various errors in Puml flowcharts
+  '                    - Corrected File name validations
+  '                    - Support PC COBOL syntax
   ' 2023/01/25 v1.10 hk Page Break on PUML file for COBOL
   ' 2023/12/28 v1.8 hk add Utility: DFSBBO00
   '                    - Support PROCLIB
@@ -70,6 +75,10 @@ Public Class Form1
   Const QUOTE As Char = Chr(34)       'double-quote
   Const ESCAPENEWLINE As String = "\n"
 
+  ' Initial directory TODO make this an environment setting.
+  Dim InitDirectory As String = ""
+  Dim folderPath As String = ""
+  Dim Utilities As String()
 
   ' Arrays to hold the DB2 Declare to Member names
   ' these two array will share the same index
@@ -117,7 +126,9 @@ Public Class Form1
   Dim FieldsRow As Integer = 0
   Dim CommentsRow As Integer = 0
   Dim EXECSQLRow As Integer = 0
+  Dim EXECCICSRow As Integer = 0
   Dim IMSRow As Integer = 0
+  Dim IMSMapRow As Integer = 0
   Dim CallsRow As Integer = 0
 
   Dim jclStmt As New List(Of String)
@@ -145,7 +156,9 @@ Public Class Form1
   Dim FieldsWorksheet As Microsoft.Office.Interop.Excel.Worksheet
   Dim CommentsWorksheet As Microsoft.Office.Interop.Excel.Worksheet
   Dim EXECSQLWorksheet As Microsoft.Office.Interop.Excel.Worksheet
+  Dim EXECCICSWorksheet As Microsoft.Office.Interop.Excel.Worksheet
   Dim IMSWorksheet As Microsoft.Office.Interop.Excel.Worksheet
+  Dim IMSMapWorksheet As Microsoft.Office.Interop.Excel.Worksheet
   Dim CallsWorksheet As Microsoft.Office.Interop.Excel.Worksheet
   Dim rngSummaryName As Microsoft.Office.Interop.Excel.Range
   Dim rngRecordName As Microsoft.Office.Interop.Excel.Range
@@ -153,16 +166,20 @@ Public Class Form1
   Dim rngFieldsName As Microsoft.Office.Interop.Excel.Range
   Dim rngComments As Microsoft.Office.Interop.Excel.Range
   Dim rngEXECSQL As Microsoft.Office.Interop.Excel.Range
+  Dim rngEXECCICS As Microsoft.Office.Interop.Excel.Range
   Dim rngIMS As Microsoft.Office.Interop.Excel.Range
   Dim rngCalls As Microsoft.Office.Interop.Excel.Range
+  Dim rngIMSMap As Microsoft.Office.Interop.Excel.Range
+
   Dim DefaultFormat = Microsoft.Office.Interop.Excel.XlFileFormat.xlWorkbookDefault
 
   ' COBOL fields
   Dim SourceType As String = ""
-  Dim CalledMember As String = ""
+  'Dim CalledMember As String = ""
   Dim SrcStmt As New List(Of String)
   Dim cWord As New List(Of String)
   Dim lWord As New List(Of String)                    'Word Level value for IF syncs with cWord
+  Dim ListofSourceFiles As New List(Of String)        'array to hold all the source files instead of using file.exist()
   Dim ListOfFiles As New List(Of String)              'array to hold File & DB2 Table names
   Dim ListOfRecordNames As New List(Of String)          'array to hold read/written records
   Dim ListOfRecords As New List(Of String)              'array to hold read/written records
@@ -175,6 +192,8 @@ Public Class Form1
   Dim ListOfEXECSQL As New List(Of String)            'array to hold EXEC SQL statments (cobol & easytrieve)
   Dim ListOfIMSPgms As New List(Of String)            'array to hold IMS Programs (PSPNames=Program Name)
   Dim ListOfDBDNames As New List(Of String)           'array to hold the DBDName values 
+  Dim ListOfCICSMapNames As New List(Of String)       'array to hold the CICS Map names (cobol)
+  Dim listofIMSMapNames As New List(Of String)        'array to hold the IMS Map names 
 
   Dim IFLevelIndex As New List(Of Integer)            'where in cWord the 'IF' is located
   Dim VerbNames As New List(Of String)
@@ -244,21 +263,30 @@ Public Class Form1
   Private Sub btnDataGatheringForm_Click(sender As Object, e As EventArgs) Handles btnDataGatheringForm.Click
     ' Open file dialog
     Dim ofd_DataGatheringForm As New OpenFileDialog With {
-      .InitialDirectory = "C:\Users\906074897\Documents\All Projects\State of Illinois\Sandbox",
+      .InitialDirectory = InitDirectory,
       .Filter = "Spreadsheet|*.xlsx",
       .Title = "Open the Data Gathering Form"
     }
     If ofd_DataGatheringForm.ShowDialog() = DialogResult.OK Then
       txtDataGatheringForm.Text = ofd_DataGatheringForm.FileName
+      ' grab the dgf's directory
+      Dim myFileInfo As System.IO.FileInfo
+      myFileInfo = My.Computer.FileSystem.GetFileInfo(txtDataGatheringForm.Text)
+      folderPath = myFileInfo.DirectoryName
+      txtJCLJOBFolderName.Text = folderPath & "\JOBS"
+      txtSourceFolderName.Text = folderPath & "\SOURCES"
+      txtTelonFoldername.Text = folderPath & "\TELON"
+      txtIMSMapsFolderName.Text = folderPath & "\IMSMAPS"
+      txtOutputFoldername.Text = folderPath & "\OUTPUT"
     Else
       Exit Sub
     End If
   End Sub
   Private Sub btnJCLJOBFilename_Click(sender As Object, e As EventArgs) Handles btnJCLJOBFilename.Click
     ' grab the dgf's directory
-    Dim myFileInfo As System.IO.FileInfo
-    myFileInfo = My.Computer.FileSystem.GetFileInfo(txtDataGatheringForm.Text)
-    Dim folderPath As String = myFileInfo.DirectoryName
+    'Dim myFileInfo As System.IO.FileInfo
+    'myFileInfo = My.Computer.FileSystem.GetFileInfo(txtDataGatheringForm.Text)
+    'Dim folderPath As String = myFileInfo.DirectoryName
 
     ' browse for and select folder name
     Dim bfd_JobLibFolder As New FolderBrowserDialog With {
@@ -296,6 +324,17 @@ Public Class Form1
 
   End Sub
 
+  Private Sub btnMapsFolder_Click(sender As Object, e As EventArgs) Handles btnIMSMapsFolder.Click
+    ' browse for and select folder name
+    Dim bfd_MapsFolder As New FolderBrowserDialog With {
+      .Description = "Enter IMS MAPS folder name",
+      .SelectedPath = txtJCLJOBFolderName.Text
+    }
+    If bfd_MapsFolder.ShowDialog() = DialogResult.OK Then
+      txtIMSMapsFolderName.Text = bfd_MapsFolder.SelectedPath
+    End If
+
+  End Sub
   Private Sub btnOutputFolder_Click(sender As Object, e As EventArgs) Handles btnOutputFolder.Click
     ' browse for and select folder name
     Dim bfd_OutputFolder As New FolderBrowserDialog With {
@@ -324,6 +363,10 @@ Public Class Form1
     Delimiter = txtDelimiter.Text
     lblCopybookMessage.Text = ""
 
+    If Not Directory.Exists(txtOutputFoldername.Text) Then
+      MessageBox.Show("OUTPUT folder name does not exist to write log file!" & vbLf & txtOutputFoldername.Text)
+      Exit Sub
+    End If
 
     Dim logFileName As String = txtOutputFoldername.Text & "\ADDILite_log.txt"
     LogFile = My.Computer.FileSystem.OpenTextFileWriter(logFileName, False)
@@ -331,14 +374,17 @@ Public Class Form1
     LogFile.WriteLine(Date.Now & ",Data Gathering Form," & txtDataGatheringForm.Text)
     LogFile.WriteLine(Date.Now & ",JOB Folder," & txtJCLJOBFolderName.Text)
     LogFile.WriteLine(Date.Now & ",Source Folder," & txtSourceFolderName.Text)
+    LogFile.WriteLine(Date.Now & ",TELON Folder," & txtTelonFoldername.Text)
+    LogFile.WriteLine(Date.Now & ",IMSMAP Folder," & txtIMSMapsFolderName.Text)
     LogFile.WriteLine(Date.Now & ",Output Folder," & txtOutputFoldername.Text)
     LogFile.WriteLine(Date.Now & ",Delimiter," & txtDelimiter.Text)
     LogFile.WriteLine(Date.Now & ",ScanModeOnly," & cbScanModeOnly.Checked)
 
     'validations
     If Not FileNamesAreValid() Then
-      LogFile.WriteLine(Date.Now & ",File Names are not Valid,")
-      Me.Cursor = Cursors.Default
+      LogFile.WriteLine(Date.Now & ",Program Abnormally Ends,")
+      LogFile.Close()
+      MessageBox.Show("Folder/File Names are not valid, see log.")
       Exit Sub
     End If
 
@@ -359,6 +405,16 @@ Public Class Form1
     ' Get the number of JOBS that will be processed
     NumberOfJobsToProcess = My.Computer.FileSystem.GetFiles(txtJCLJOBFolderName.Text).Count
     lblJobFileCount.Text = "JCL Job files found:" & Str(NumberOfJobsToProcess)
+
+    ' Build a list of source files so we don't have to use file exist function, just the list search.
+    Dim di As New IO.DirectoryInfo(txtSourceFolderName.Text)
+    Dim aryFi As IO.FileInfo() = di.GetFiles("*.*")
+    Dim fi As IO.FileInfo
+    For Each fi In aryFi
+      ListofSourceFiles.Add(fi.Name.ToUpper)
+    Next
+    lblSourceFilesFound.Text = "Source Files Found:" & Str(ListofSourceFiles.Count)
+
 
     ' ready the progress bar
     ProgressBar1.Minimum = 0
@@ -416,6 +472,53 @@ Public Class Form1
       Next index
     Next
 
+    ' Load the IMS Maps (screens) files to array
+    If txtIMSMapsFolderName.Text.Length > 0 Then
+      For Each foundFile As String In My.Computer.FileSystem.GetFiles(txtIMSMapsFolderName.Text)
+        Dim memberLines As String() = File.ReadAllLines(foundFile)
+        Dim srcWords As New List(Of String)
+        Dim MapName As String = ""
+        Dim literalsFound As String = ""
+        Dim literalsFoundCnt As Integer = 0
+        For index = 0 To memberLines.Count - 1
+          If memberLines(index).IndexOf(" FMT ") > -1 Then
+            Call GetSourceWords(memberLines(index), srcWords)
+            MapName = srcWords(0)
+            Continue For
+          End If
+          If memberLines(index).IndexOf(" DFLD ") > -1 Then
+            Call GetSourceWords(memberLines(index), srcWords)
+            Dim startIndex As Integer = -1
+            If srcWords(0) = "DFLD" Then
+              startIndex = 1
+            End If
+            If srcWords(1) = "DFLD" Then
+              startIndex = 2
+            End If
+            If startIndex > -1 Then
+              If srcWords(startIndex).StartsWith("'") Then
+                literalsFoundCnt += 1
+                If literalsFoundCnt <= 4 Then
+                  Dim quoteWords As String() = srcWords(startIndex).Split("'")
+                  literalsFound &= quoteWords(1) & vbNewLine
+                End If
+              End If
+            End If
+            Continue For
+          End If
+          If memberLines(index).IndexOf(" FMTEND ") > -1 Then
+            If literalsFound.Length > 2 Then
+              literalsFound = literalsFound.Substring(0, literalsFound.Length - 2)    'remove last vbNewLine
+            End If
+            listofIMSMapNames.Add(Path.GetFileName(foundFile) & Delimiter &
+                                  MapName & Delimiter &
+                                  literalsFound)
+            Exit For
+          End If
+        Next index
+      Next
+    End If
+
     ProgressBar1.PerformStep()
     ProgressBar1.Show()
 
@@ -457,10 +560,11 @@ Public Class Form1
     ProcessCallPgms(CallPgmsFileName)
 
     CreateEXECSQLWorksheet()
+    CreateEXECCICSWorksheet()
     CreateIMSWorksheet()
     CreateCallsWorksheet()
     CreateIMSPSPNamesFile()
-
+    CreateIMSMAPSWorksheet()
 
 
     ' Save Application Model Spreadsheet
@@ -483,6 +587,7 @@ Public Class Form1
     LogFile.Close()
     Me.Cursor = Cursors.Default
     lblCopybookMessage.Text = "Process Complete"
+    System.Media.SystemSounds.Beep.Play()
     MessageBox.Show("Process Complete")
   End Sub
 
@@ -521,19 +626,48 @@ Public Class Form1
   Function FileNamesAreValid() As Boolean
     FileNamesAreValid = False
     Select Case True
+      Case txtDataGatheringForm.TextLength = 0
+        LogFile.WriteLine(Date.Now & ",ERROR! Data Gathering Form name required,")
+      Case Not IsValidFileNameOrPath(txtDataGatheringForm.Text)
+        LogFile.WriteLine(Date.Now & ",ERROR! Data Gathering Form name has invalid characters,")
       Case Not File.Exists(txtDataGatheringForm.Text)
-        LogFile.WriteLine(Date.Now & ",Data Gathering File spreadsheet not found," & txtDataGatheringForm.Text)
+        LogFile.WriteLine(Date.Now & ",ERROR! Data Gathering Form not found," & txtDataGatheringForm.Text)
+
       Case txtJCLJOBFolderName.TextLength = 0
-        LogFile.WriteLine(Date.Now & ",JCL JOB Folder name required,")
+        LogFile.WriteLine(Date.Now & ",ERROR! JCL JOBS Folder name required,")
       Case Not IsValidFileNameOrPath(txtJCLJOBFolderName.Text)
-        LogFile.WriteLine(Date.Now & ",JCL JOB Folder name has invalid characters,")
+        LogFile.WriteLine(Date.Now & ",ERROR! JCL JOBS Folder name has invalid characters,")
+      Case Not Directory.Exists(txtJCLJOBFolderName.Text)
+        LogFile.WriteLine(Date.Now & ",ERROR! JCL JOBS folder does not exists,")
+
+      Case txtSourceFolderName.TextLength = 0
+        LogFile.WriteLine(Date.Now & ",ERROR! Sources folder name required,")
+      Case Not IsValidFileNameOrPath(txtSourceFolderName.Text)
+        LogFile.WriteLine(Date.Now & ",ERROR! Sources folder name has invalid characters,")
+      Case Not Directory.Exists(txtSourceFolderName.Text)
+        LogFile.WriteLine(Date.Now & ",ERROR! Sources folder does not exists,")
+
+      Case txtTelonFoldername.TextLength = 0
+        LogFile.WriteLine(Date.Now & ",ERROR! TELON folder name required,")
+      Case Not IsValidFileNameOrPath(txtTelonFoldername.Text)
+        LogFile.WriteLine(Date.Now & ",ERROR! TELON folder name has invalid characters,")
+      Case Not Directory.Exists(txtTelonFoldername.Text)
+        LogFile.WriteLine(Date.Now & ",ERROR! TELON folder name does not exists,")
+
+      Case txtIMSMapsFolderName.TextLength = 0
+        LogFile.WriteLine(Date.Now & ",ERROR! IMSMAP folder name required,")
+      Case Not IsValidFileNameOrPath(txtIMSMapsFolderName.Text)
+        LogFile.WriteLine(Date.Now & ",ERROR! IMSMAP folder name has invalid characters,")
+      Case Not Directory.Exists(txtIMSMapsFolderName.Text)
+        LogFile.WriteLine(Date.Now & ",ERROR! IMSMAP folder does not exists,")
 
       Case txtOutputFoldername.TextLength = 0
-        LogFile.WriteLine(Date.Now & ",OutFolder name required,")
+        LogFile.WriteLine(Date.Now & ",ERROR! OUTPUTS folder name required,")
       Case Not IsValidFileNameOrPath(txtOutputFoldername.Text)
-        LogFile.WriteLine(Date.Now & ",OutFolder has invalid characters,")
-      Case Not IsValidFileNameOrPath(txtSourceFolderName.Text)
-        LogFile.WriteLine(Date.Now & ",Source folder name has invalid characters,")
+        LogFile.WriteLine(Date.Now & ",ERROR! OUTPUTS folder has invalid characters,")
+      Case Not Directory.Exists(txtOutputFoldername.Text)
+        LogFile.WriteLine(Date.Now & ",ERROR! OUTPUTS folder does not exists,")
+
       Case Else
         FileNamesAreValid = True
     End Select
@@ -591,7 +725,7 @@ Public Class Form1
     ' if line has a EXEC command (eg. //COPY01   EXEC  DHSIMAGV,AUTOP1='PA903PA'), without a 'PGM=' parameter 
     '   this is an execute of a PROC and this is where to include/find the proc in PROCLIB folder.
     ' somehow need to remove the EXEC proc (and its continuation lines).
-    ' Only going one level deep. eg, we are not supporting procs within procs with procs...
+    ' Only going one level deep. eg, we are not supporting procs within procs within procs...
     '
     Dim jclWithProc As New List(Of String)
     Dim ListOfInstreamProcs As New List(Of String)
@@ -678,7 +812,7 @@ Public Class Form1
       End If
       ' determine if there will be a continuation
       text1 &= Space(1)
-      continuation = JCLContinued(text1)
+      continuation = JCLContinued(text1, continuation)
       ' Build the JCL statement
       jStatement &= text1
       ' if NOT continuing building of the JCL statement then add it to the List
@@ -699,7 +833,7 @@ Public Class Form1
     Next
     ReformatJCLAndLoadToArray = JCL
   End Function
-  Function JCLContinued(ByRef text As String) As Boolean
+  Function JCLContinued(ByRef text As String, ByVal withinContinuation As Boolean) As Boolean
     ' determine if there will be a continuation by looking for a comma + space on the line not within quotes
     Dim withinquote As Boolean = False
     JCLContinued = False
@@ -713,6 +847,11 @@ Public Class Form1
       End If
       If withinquote Then
         Continue For
+      End If
+      If Mid(text, x, 2) = Space(2) And withinContinuation = True Then
+        text = Mid(text, 1, x)                        'remove anything to the right of non continuation space+space
+        JCLContinued = False
+        Exit Function
       End If
       If Mid(text, x, 2) = ", " Then
         text = Mid(text, 1, x)                        'remove anything to the right of continuation comma+space
@@ -983,7 +1122,7 @@ Public Class Form1
     execName = ""
     pgmName = ""
 
-    pgmName = Trim(GetParmPGM(jParameters))
+    pgmName = Trim(GetParmPGM(jParameters)).ToUpper
 
     ' Is this a PROC statement
     If pgmName.Length = 0 Then
@@ -1427,17 +1566,21 @@ Public Class Form1
       worksheet.Range("T" & row).Value = reportDescription
       worksheet.Range("U" & row).Value = SourceType
       ' load up a list of executable programs to analyze
-      If ddSequence = 1 And ddConcatSeq = 0 Then
-        Select Case pgmName
-          Case "IEFBR14", "SORT", "IEBGENER", "IEBCOPY", "IDCAMS", "DSNUTILB",
-               "SRCHPRNT", "CMSAUTO1", "PKZIP", "IKJEFT01", "A4204030", "OFORMAT", "ODATE", "DFSRRC00", "FTP",
-               "ICETOOL", "FILEMGR", "IRXJCL", "INITFILE", "EZTPA00", "IERRCO00", "ABEND", "DFSBBO00",
-               "IKJEFT1B"
-          Case Else
-            If ListOfExecs.IndexOf(pgmName & Delimiter & SourceType) = -1 Then
-              ListOfExecs.Add(pgmName & Delimiter & SourceType)
-            End If
-        End Select
+      If ddSequence = 1 And ddConcatSeq = 0 And (SourceType = "COBOL" Or SourceType = "Easytrieve") Then
+        If ListOfExecs.IndexOf(pgmName & Delimiter & SourceType) = -1 Then
+          ListOfExecs.Add(pgmName & Delimiter & SourceType)
+        End If
+        'Select Case pgmName
+        '  Case "IEFBR14", "SORT", "IEBGENER", "IEBCOPY", "IDCAMS", "DSNUTILB", "CBLTDLI",
+        '       "SRCHPRNT", "CMSAUTO1", "PKZIP", "PKUNZIP", "IKJEFT01", "A4204030", "OFORMAT", "ODATE", "DFSRRC00",
+        '       "FTP", "ICETOOL", "FILEMGR", "IRXJCL", "INITFILE", "EZTPA00", "IERRCO00", "ABEND", "DFSBBO00",
+        '       "IKJEFT1B", "SPOLSPIN", "ASAABEND", "ADMAABT", "ADRABND", "OSIUB000",
+        '       "OCJULIAN", "ICJULIAN", "DMBATCH", "OCURDATE", "OCURTIME", "OMOCNTRY"
+        '  Case Else
+        '    If ListOfExecs.IndexOf(pgmName & Delimiter & SourceType) = -1 Then
+        '      ListOfExecs.Add(pgmName & Delimiter & SourceType)
+        '    End If
+        'End Select
       End If
       If cnt Mod 100 = 0 Then
         lblProcessingWorksheet.Text = "Processing Worksheet: " & FileNameOnly & " : Programs = " & cnt
@@ -1500,6 +1643,8 @@ Public Class Form1
       ' Analyze Source Statement array (SrcStmt) to get list of EXEC SQL statments
       'ListOfEXECSQL.Clear()
       Call GetListOfEXECSQLorIMS()
+
+      Call GetListOfCICSMapNames()
 
       If pgm.ProcedureDivision = -1 Then
         LogFile.WriteLine(Date.Now & ",Source is not complete," & exec)
@@ -1587,9 +1732,9 @@ Public Class Form1
     Dim Division As String = ""
 
     ' Verify COBOL FILE exists
-
-    Dim CobolFileName = txtSourceFolderName.Text & "\" & CobolFile
-    If Not File.Exists(CobolFileName) Then
+    Dim FoundCobolFileName As String = SourceExists(CobolFile)
+    '
+    If FoundCobolFileName.Length = 0 Then
       LogFile.WriteLine(Date.Now & ",Source not found," & CobolFile)
       LoadCobolStatementsToArray = -1
       Exit Function
@@ -1597,7 +1742,30 @@ Public Class Form1
     LogFile.WriteLine(Date.Now & ",Processing Source," & CobolFile)
 
     ' Load the COBOL file into the working Array
-    Dim CobolLines As String() = File.ReadAllLines(CobolFileName)
+    Dim CobolLines As String() = File.ReadAllLines(txtSourceFolderName.Text & "\" & FoundCobolFileName)
+
+    ' If missing first 6 bytes (an asterisk in col 1), add the six bytes to the front of every line.
+    Dim Missing6 As Boolean = False
+    For index As Integer = 0 To CobolLines.Count - 1
+      Select Case CobolLines(index).Length
+        Case >= 15
+          If (CobolLines(index).Substring(0, 15) = " IDENTIFICATION") Then
+            Missing6 = True
+            Exit For
+          End If
+        Case >= 4
+          If (CobolLines(index).Substring(0, 4) = " ID ") Then
+            Missing6 = True
+            Exit For
+          End If
+      End Select
+    Next
+    If Missing6 = True Then
+      LogFile.WriteLine(Date.Now & ",ADD MISSING 6 COBOL CHARACTERS," & FoundCobolFileName)
+      For index As Integer = 0 To CobolLines.Count - 1
+        CobolLines(index) = Space(6) & CobolLines(index)
+      Next
+    End If
 
     ' Look for Program Written and Program Author
     ProgramAuthor = ""
@@ -1623,6 +1791,10 @@ Public Class Form1
     ' Save the COMMENTS found in the program to the ListOfComments array
     Division = "PRE IDENT"
     For index As Integer = 0 To CobolLines.Count - 1
+      ' drop blank/empty lines
+      If CobolLines(index).Trim.Length = 0 Then
+        Continue For
+      End If
       ' determine which Division we are in
       Dim tempDiv As Integer = CobolLines(index).PadRight(80).IndexOf(" DIVISION")
       If tempDiv > -1 Then
@@ -1637,20 +1809,21 @@ Public Class Form1
       ' write this cobol line if a Comment AND we have Division value
       If CobolLines(index).Length >= 7 Then
         If CobolLines(index).Substring(6, 1) = "*" And Division.Length > 0 Then
-          Call ProcessComment(index, CobolLines(index), Division, CobolFile)
+          Call ProcessComment(index, CobolLines(index), Division, FoundCobolFileName)
           Continue For
         End If
         If CobolLines(index).Substring(6, 1) = "/" And Division.Length > 0 Then
           Mid(CobolLines(index), 7, 1) = "*"
-          Call ProcessComment(index, CobolLines(index), Division, CobolFile)
+          Call ProcessComment(index, CobolLines(index), Division, FoundCobolFileName)
           Continue For
         End If
       End If
       ' if Division is Identification (or ID) and it is not 'program-id' then the cobol line 
       '   is treated as comments and so will we.
       If Division.ToUpper.Trim = "IDENTIFICATION" Or Division.ToUpper.Trim = "ID" Then
-        If Mid(CobolLines(index), 8, 11) <> "PROGRAM-ID." Then
-          Call ProcessComment(index, CobolLines(index), Division, CobolFile)
+        Dim temppgmid As String = CobolLines(index).Substring(7).Trim
+        If Mid(temppgmid, 1, 11) <> "PROGRAM-ID." Then
+          Call ProcessComment(index, CobolLines(index), Division, FoundCobolFileName)
           Continue For
         End If
       End If
@@ -1668,6 +1841,8 @@ Public Class Form1
       ' Process through the Cobol Lines
       For index As Integer = 0 To CobolLines.Count - 1
         debugCnt += 1
+        ' Fix bad bytes and/or remove tab bytes
+        CobolLines(index) = CobolLines(index).Replace(vbTab, " ").Replace(ChrW(26), " ")
         ' make a whole blank/empty line a comment line
         If Len(Trim(CobolLines(index))) = 0 Then
           swTemp.WriteLine(Space(6) & "*")
@@ -1729,13 +1904,17 @@ Public Class Form1
         End If
 
         IncludeDirective = AreaAandB.ToUpper
-        Dim IDirective As String() = IncludeDirective.Trim.Split(New Char() {" "c})
-
+        'Dim IDirective As String() = IncludeDirective.Trim.Split(New Char() {" "c})
+        Dim IDirective As New List(Of String)
+        Call GetSourceWords(IncludeDirective, IDirective)
         ' Checking for copy/include statement to process
         Dim CopyType As String = ""
         Select Case True
           Case IDirective(0) = "COPY"
-            CopybookName = Trim(IDirective(1).Replace(".", " "))
+            CopybookName = Trim(IDirective(1).Replace(QUOTE, "").Replace(".", " "))
+            If CopybookName.Substring(0, 1) = "\" Then
+              CopybookName.Remove(0, 1)
+            End If
             CopyType = IDirective(0)
           Case IDirective(0) = "++INCLUDE"
             CopybookName = Trim(IDirective(1).Replace(".", " "))
@@ -1791,18 +1970,18 @@ Public Class Form1
             Continue For
         End Select
 
-        If Len(CopybookName) > 8 Then
-          CopybookName = Mid(CopybookName, 1, 8)
-        End If
+        'If Len(CopybookName) > 8 Then
+        '  CopybookName = Mid(CopybookName, 1, 8)
+        'End If
 
         ' Expand copybooks/includes into the source
         NumberOfCopysFound += 1
-        Dim CopybookFileName As String = txtSourceFolderName.Text &
-                                         "\" & CopybookName
-        swTemp.WriteLine(Space(6) & "*" & CopyType & " " & CopybookName & " Begin Include")
+        'Dim CopybookFileName As String = txtSourceFolderName.Text &
+        '                                 "\" & CopybookName
+        swTemp.WriteLine(Space(6) & "*" & CopyType & " " & CopybookName & " Begin Copy/Include")
         LogFile.WriteLine(Date.Now & ",Including COBOL copybook," & CopybookName)
-        Call IncludeCopyMember(CopybookFileName, swTemp)
-        swTemp.WriteLine(Space(6) & "*" & CopyType & " " & CopybookName & " End Include")
+        Call IncludeCopyMember(CopybookName, swTemp)
+        swTemp.WriteLine(Space(6) & "*" & CopyType & " " & CopybookName & " End Copy/Include")
       Next
       swTemp.Close()
 
@@ -1856,7 +2035,7 @@ Public Class Form1
     For Each text1 As String In CobolLines
       hlkcounter += 1
       LoadCobolStatementsToArray += 1
-      text1 = text1.Replace(vbTab, Space(1))                'replace TAB(S) with single space!
+      text1 = text1.Replace(vbTab, Space(4))                'replace TAB(S) with single space!
       text1 = text1.Replace(vbNullChar, Space(1))           'replace nulls with space
       text1 = text1.Replace("�", Space(1))
       If Trim(text1).Length = 0 Then                        'drop empty lines
@@ -1956,7 +2135,8 @@ Public Class Form1
             Case SrcStmt(stmtIndex).IndexOf("PROCEDURE DIVISION") > -1
               pgm.ProcedureDivision = stmtIndex
             Case SrcStmt(stmtIndex).IndexOf("PROGRAM-ID.") > -1
-              pgm.ProgramId = SrcStmt(stmtIndex).Substring(11).Replace(".", "").Trim
+              Dim tmppgmid As String = SrcStmt(stmtIndex).Trim
+              pgm.ProgramId = tmppgmid.Substring(11).Replace(".", "").Trim
           End Select
           If pgm.ProcedureDivision > -1 Then
             If SrcStmt(stmtIndex).IndexOf(" CALL ") > -1 Then
@@ -2000,10 +2180,9 @@ Public Class Form1
   End Function
   Sub AddToListOfCallPgms(ByRef statement As String, ByRef srcWords As List(Of String))
     Dim CalledFileName As String = ""
-    Dim CalledSourceType As String = ""
     Dim CalledType As String = ""
     Dim CalledEntry As String = ""
-    CalledMember = ""
+    Dim CalledMember As String = ""
 
     Call GetSourceWords(statement, srcWords)
     For x As Integer = 0 To srcWords.Count - 1
@@ -2012,7 +2191,7 @@ Public Class Form1
         CalledMember = srcWords(x + 1)
         If Mid(CalledMember, 1, 1) <> "'" Then         'skip dynamic called routines
           CalledEntry = CalledMember & Delimiter &
-            "unknown" & Delimiter &
+            "n/a" & Delimiter &
             pgm.ProgramId & Delimiter &
             "Dynamic" & Delimiter &
             pgm.SourceId
@@ -2021,50 +2200,48 @@ Public Class Form1
           End If
           Continue For
         End If
-        CalledMember = CalledMember.Replace("'", "").Trim
+
+        'Static Call
+        CalledMember = CalledMember.Replace("'", "").ToUpper.Trim
         CalledType = "Static"
         ' if a utility, ie ABEND do not add to list
-        Select Case CalledMember
-          Case "DSNHADDR", "DSNHADD2", "DSNHLI", "ADRABND", "ABEND", "DSNTIAR", "CBLTDLI",
-               "DHSFINAL", "ADMAAB0", "ADMAABT", "BINCONV", "CNTYNAME", "ICOMMA2",
-               "OCDATE", "OCDATE9", "OCNTRYDT", "ODATE", "OFORMAT", "OMOCNTRY",
-               "R8460720", "PA8403AB", "PA1581BA"
-            CalledEntry = CalledMember & Delimiter &
-              "Utility" & Delimiter &
+        If Array.IndexOf(Utilities, CalledMember) > -1 Then
+          CalledEntry = CalledMember & Delimiter &
+                "Utility" & Delimiter &
+                pgm.ProgramId & Delimiter &
+                CalledType & Delimiter &
+                pgm.SourceId
+          If ListOfCallPgms.IndexOf(CalledEntry) = -1 Then
+            ListOfCallPgms.Add(CalledEntry)
+          End If
+          Continue For
+        End If
+
+        ' Get source type of Called Routine, first remove any extension and uppercase it
+        Dim PartsOfCalledMember As String() = CalledMember.Split(".")
+        CalledMember = PartsOfCalledMember(0).ToUpper
+        Dim CalledSourceType As String = GetSourceType(CalledMember)
+
+        CalledEntry = CalledMember & Delimiter &
+              CalledSourceType & Delimiter &
               pgm.ProgramId & Delimiter &
               CalledType & Delimiter &
               pgm.SourceId
-            If ListOfCallPgms.IndexOf(CalledEntry) = -1 Then
-              ListOfCallPgms.Add(CalledEntry)
-            End If
-            Continue For
-        End Select
-        CalledFileName = txtSourceFolderName.Text & "\" & CalledMember
-        If File.Exists(CalledFileName) Then
-          CalledSourceType = GetSourceType(CalledMember)
-          CalledEntry = CalledMember & Delimiter &
-            CalledSourceType & Delimiter &
-            pgm.ProgramId & Delimiter &
-            CalledType & Delimiter &
-            pgm.SourceId
-          If ListOfCallPgms.IndexOf(CalledEntry) = -1 Then
-            ListOfCallPgms.Add(CalledEntry)
-          End If
-        Else
-          CalledEntry = CalledMember & Delimiter &
-            "Not Found" & Delimiter &
-            pgm.ProgramId & Delimiter &
-            CalledType & Delimiter &
-            pgm.SourceId
-          If ListOfCallPgms.IndexOf(CalledEntry) = -1 Then
-            ListOfCallPgms.Add(CalledEntry)
-          End If
-          LogFile.WriteLine(Date.Now & ",Called Member Source Not Found," & CalledMember)
+
+        If ListOfCallPgms.IndexOf(CalledEntry) = -1 Then
+          ListOfCallPgms.Add(CalledEntry)
         End If
       End If
     Next
   End Sub
   Sub GetListOfParagraphs()
+    ' Scan through the COBOL Procedure division grabbing all Paragraph names which are in AreaA
+    '  and only have 1 word statements (ie no verbs).
+    'Sourcetype is global
+    'SrcStmt is global
+    'listOfPrograms is global
+    'pgm is global
+    'cWord is global, but not used here
     For Each pgm In listOfPrograms
       Select Case SourceType
         Case "COBOL"
@@ -2075,7 +2252,9 @@ Public Class Form1
             If SrcStmt(stmtIndex).Length > 5 Then
               If SrcStmt(stmtIndex).Substring(0, 4) <> Space(4) Then
                 Call GetSourceWords(SrcStmt(stmtIndex), cWord)
-                ListOfParagraphs.Add(cWord(0))
+                If cWord.Count = 1 Then
+                  ListOfParagraphs.Add(cWord(0))
+                End If
               End If
             End If
           Next stmtIndex
@@ -2586,35 +2765,104 @@ Public Class Form1
                       Cursor & Delimiter &
                       Statement)
   End Sub
+  Sub GetListOfCICSMapNames()
+    Dim ExecCICS As String = ""
+    Dim MapName As String = ""
+    Dim execCnt As Integer = 0
+    For Each pgm In listOfPrograms
+      Select Case SourceType
+        Case "COBOL"
+          For stmtIndex As Integer = pgm.DataDivision + 1 To pgm.EndProgram
+
+            If SrcStmt(stmtIndex).IndexOf("EXEC CICS") = -1 Then
+              Continue For
+            End If
+
+            Call GetSourceWords(SrcStmt(stmtIndex), cWord)
+
+            For x = 0 To cWord.Count - 1
+              If cWord(x) = "END-EXEC" Then
+                Continue For
+              End If
+
+              If (x + 2) < cWord.Count - 1 Then
+                If cWord(x) = "EXEC" And cWord(x + 1) = "CICS" And
+                  (cWord(x + 2) = "RECEIVE" Or cWord(x + 2) = "SEND") Then
+                  ExecCICS = cWord(x + 2)
+                  MapName = ""
+                  For y = x + 2 To cWord.Count - 1
+                    If cWord(y) = "END-EXEC" Then
+                      Exit For
+                    End If
+                    If cWord(y).IndexOf("MAP(") > -1 Then
+                      MapName = cWord(y).Replace("MAP('", "").Replace("')", "").Trim
+                      Exit For
+                    End If
+                  Next y
+                  If MapName.Length > 0 Then
+                    Call AddToListOfCICSMapNames(execCnt, pgm, ExecCICS, MapName)
+                  End If
+                  x += 2
+                  Continue For
+                End If
+              End If
+            Next
+          Next
+      End Select
+    Next
+
+
+  End Sub
+  Sub AddToListOfCICSMapNames(ByRef execCnt As Integer, ByRef pgm As ProgramInfo, ByRef ExecCICS As String, ByRef MapName As String)
+    execCnt += 1
+    ListOfCICSMapNames.Add(FileNameOnly & Delimiter &
+                      pgm.SourceId & Delimiter &
+                      pgm.ProgramId & Delimiter &
+                      LTrim(Str(execCnt)) & Delimiter &
+                      ExecCICS & Delimiter &
+                      MapName)
+  End Sub
+  Function SourceExists(ByRef SourceFileName As String) As String
+    'this will return FileName, FileName.cob, or FileName.cbl if exists in the Sources Directory
+    ' Empty return means not found
+    Select Case True
+      Case ListofSourceFiles.IndexOf(SourceFileName) > -1
+        Return SourceFileName
+      Case ListofSourceFiles.IndexOf(SourceFileName & ".COB") > -1
+        Return SourceFileName & ".COB"
+      Case ListofSourceFiles.IndexOf(SourceFileName & ".CBL") > -1
+        Return SourceFileName & ".CBL"
+    End Select
+    Return ""
+  End Function
   Function GetSourceType(ByRef FileName As String) As String
     ' Identify if this file is COBOL or Easytrieve or Utility
+    ' FileName must exist in the source directory.
     GetSourceType = ""
-    If FileName.Length = 0 Then
+    If FileName.Trim.Length = 0 Then
       LogFile.WriteLine(Date.Now & ",Filename for GetSourcetype is empty," & FileNameOnly)
+      GetSourceType = "UTILITY"
       Exit Function
     End If
-    Select Case FileName
-      Case "IEFBR14", "IDCAMS", "SORT", "ICETOOL", "IEBGENER", "PKZIP", "IKJEFT01", "DFSRRC00",
-           "FTP", "FILEMGR", "DFSBBO00", "IKJEFT1B"
-        GetSourceType = "UTILITY"
-        Exit Function
-      Case "SRCHPRNT", "CMSAUTO1", "DSNUTILB", "OFORMAT", "ODATE", "A4204030", "IRXJCL", "INITFILE", "EZTPA00",
-           "IERRCO00", "ABEND"
-        GetSourceType = "UTILITY"
-        Exit Function
-    End Select
-    Dim SourceFileName As String = txtSourceFolderName.Text & "\" & FileName
-    If Not File.Exists(SourceFileName) Then
+    If Array.IndexOf(Utilities, FileName) > -1 Then
+      GetSourceType = "UTILITY"
+      Exit Function
+    End If
+
+    Dim FoundCobolFileName As String = SourceExists(FileName)
+    If FoundCobolFileName.Length = 0 Then
       LogFile.WriteLine(Date.Now & ",Source File Not found," & FileName)
       GetSourceType = "NotFound"
       Exit Function
     End If
-    Dim CobolLines As String() = File.ReadAllLines(SourceFileName)
+    Dim CobolLines As String() = File.ReadAllLines(txtSourceFolderName.Text & "\" & FoundCobolFileName)
+
     For index As Integer = 0 To CobolLines.Count - 1
       If Len(Trim(CobolLines(index))) = 0 Then
         Continue For
       End If
       If (CobolLines(index).ToUpper.IndexOf("IDENTIFICATION DIVISION.") > -1) Or
+        (CobolLines(index).ToUpper.IndexOf("IDENTIFICATION  DIVISION.") > -1) Or
         (CobolLines(index).ToUpper.IndexOf("ID DIVISION.") > -1) Then
         GetSourceType = "COBOL"
         Exit Function
@@ -2652,24 +2900,69 @@ Public Class Form1
   End Function
   Sub IncludeCopyMember(ByVal CopyMember As String,
                         ByRef swTemp As StreamWriter)
-    If File.Exists(CopyMember) = False Then
-      swTemp.Write(Space(6) & "*Member not found:")
-      swTemp.WriteLine(Path.GetFileNameWithoutExtension(CopyMember))
-      lblCopybookMessage.Text = "Copy Member not found:" & CopyMember
-      LogFile.WriteLine(Date.Now & ",Copy Member not found," & Path.GetFileNameWithoutExtension(CopyMember))
+
+    Dim FoundCopyMember As String = SourceExists(CopyMember)
+    If FoundCopyMember.Length = 0 Then
+      swTemp.WriteLine(Space(6) & "*Copy Member not found:" & CopyMember)
+      LogFile.WriteLine(Date.Now & ",Copy Member not found," & CopyMember)
       Exit Sub
     End If
-    'Dim debugName As String = Path.GetFileNameWithoutExtension(CopyMember)
-    Dim debugCnt As Integer = 0
-    Dim IncludeLines As String() = File.ReadAllLines(CopyMember)
+    Dim IncludeLines As String() = File.ReadAllLines(txtSourceFolderName.Text & "\" & FoundCopyMember)
+
+    ' If missing first 6 bytes, add the six bytes to the front of every line.
+    Dim Missing6 As Boolean = False
+    For index As Integer = 0 To IncludeLines.Count - 1
+      Select Case IncludeLines(index).Length
+        Case >= 15
+          If (IncludeLines(index).Substring(0, 15) = " IDENTIFICATION") Then
+            Missing6 = True
+            Exit For
+          End If
+        Case >= 4
+          If (IncludeLines(index).Substring(0, 4) = " ID ") Then
+            Missing6 = True
+            Exit For
+          End If
+      End Select
+    Next
+    Dim FirstByteAsterisk As Boolean = False
+    If IncludeLines(0).Length > 0 Then
+      If IncludeLines(0).Substring(0, 1) = "*" Then
+        FirstByteAsterisk = True
+      End If
+    End If
+    If Missing6 = True Or FirstByteAsterisk = True Then
+      LogFile.WriteLine(Date.Now & ",ADD MISSING 6 COBOL CHARACTERS," & FoundCopyMember)
+      For index As Integer = 0 To IncludeLines.Count - 1
+        IncludeLines(index) = Space(6) & IncludeLines(index)
+      Next
+    End If
+
     ' append copymember to temp file and drop blank lines
     For Each line As String In IncludeLines
-      debugCnt += 1
       If Len(Trim(line)) > 0 Then
         swTemp.WriteLine(line)
       End If
     Next
   End Sub
+  Sub IncludeCopyMemberEasytrieve(ByVal CopyMember As String,
+                        ByRef swTemp As StreamWriter)
+    Dim FoundCopyMember As String = SourceExists(CopyMember)
+    If FoundCopyMember.Length = 0 Then
+      swTemp.WriteLine(Space(6) & "*Copy Member not found:" & CopyMember)
+      LogFile.WriteLine(Date.Now & ",Copy Member not found," & CopyMember)
+      Exit Sub
+    End If
+    Dim IncludeLines As String() = File.ReadAllLines(txtSourceFolderName.Text & "\" & FoundCopyMember)
+
+    ' append copymember to temp file and drop blank lines
+    For Each line As String In IncludeLines
+      If Len(Trim(line)) > 0 Then
+        swTemp.WriteLine(line)
+      End If
+    Next
+  End Sub
+
   Sub ReplaceAll(ByRef cStatement As String, ByRef CobolLines As String(), ByRef cIndex As Integer)
     ' for Compiler directive 'Replace'. Do the substitutions here.
     Dim tLine As String = RTrim(cStatement)
@@ -2756,7 +3049,7 @@ Public Class Form1
     End Try
 
     Dim FileName As String = txtSourceFolderName.Text & "\" & exec
-    If Not File.Exists(FileName) Then
+    If ListofSourceFiles.IndexOf(FileName) = -1 Then
       LogFile.WriteLine(Date.Now & ",Source File Not Found?," & exec)
       LoadEasytrieveStatementsToArray = -1
       Exit Function
@@ -2845,7 +3138,7 @@ Public Class Form1
 
     EztLinesLoaded = File.ReadAllLines(tempEZTFileName)
     swTemp = New StreamWriter(tempEZTFileName, False)
-    Dim CBFileName As String = ""
+    Dim EZTFileName As String = ""
     Dim srcWords As New List(Of String)
     Dim db2TableName As String = ""
     For index As Integer = 0 To EztLinesLoaded.Length - 1
@@ -2860,7 +3153,7 @@ Public Class Form1
             db2TableName = tableParameters(0)
           End If
           'search DB2 Declares table to get member name(include file name)
-          CBFileName = ""
+          EZTFileName = ""
           Dim db2Index As Integer = 0
           Dim db2Found As Boolean = False
           For db2Index = 0 To DB2Declares.Count - 1
@@ -2873,8 +3166,8 @@ Public Class Form1
           If db2Found Then
             swTemp.WriteLine("*%COPYBOOK SQL " & MembersNames(db2Index))
             swTemp.WriteLine("*" & statement & " Begin Include")
-            CBFileName = txtSourceFolderName.Text & "\" & MembersNames(db2Index)
-            Call IncludeCopyMember(CBFileName, swTemp)
+            EZTFileName = MembersNames(db2Index)
+            Call IncludeCopyMemberEasytrieve(EZTFileName, swTemp)
           Else
             swTemp.WriteLine("*Crossref to DB2Declares not found in SOURCES folder")
             LogFile.WriteLine(Date.Now & ",Crossref to DB2Declares not found in SOURCES folder," &
@@ -2888,8 +3181,8 @@ Public Class Form1
         If statement.Substring(0, 1) = "%" Then
           swTemp.WriteLine("*%COPYBOOK FILE " & statement.Substring(1).Trim)
           swTemp.WriteLine("*" & statement & " Begin Include")
-          CBFileName = txtSourceFolderName.Text & "\" & statement.Substring(1)
-          Call IncludeCopyMember(CBFileName, swTemp)
+          EZTFileName = statement.Substring(1)
+          Call IncludeCopyMemberEasytrieve(EZTFileName, swTemp)
           swTemp.WriteLine("*" & statement & " End Include")
           Continue For
         End If
@@ -3237,9 +3530,20 @@ Public Class Form1
       rngEXECSQL.VerticalAlignment = Excel.XlVAlign.xlVAlignTop
       ' ignore error flag that numbers being loaded into a text field
       objExcel.ErrorCheckingOptions.NumberAsText = False
-      'CommentsWorksheet.Select(4)
-      'CommentsWorksheet.Activate()
-      'CommentsWorksheet.FreezePanes(2, 1)
+    End If
+
+    If EXECCICSRow > 0 Then
+      Dim row As Integer = LTrim(Str(EXECCICSRow))
+      ' Format the Sheet - first row bold the columns
+      rngEXECCICS = EXECCICSWorksheet.Range("A1:F1")
+      rngEXECCICS.Font.Bold = True
+      ' data area autofit all columns
+      rngEXECCICS = EXECCICSWorksheet.Range("A1:F" & row)
+      workbook.Worksheets("ExecCICS").Range("A1").AutoFilter
+      rngEXECCICS.Columns.AutoFit()
+      rngEXECCICS.VerticalAlignment = Excel.XlVAlign.xlVAlignTop
+      ' ignore error flag that numbers being loaded into a text field
+      objExcel.ErrorCheckingOptions.NumberAsText = False
     End If
 
     If IMSRow > 0 Then
@@ -3266,6 +3570,20 @@ Public Class Form1
       workbook.Worksheets("CALLS").Range("A1").AutoFilter
       rngCalls.Columns.AutoFit()
       rngCalls.VerticalAlignment = Excel.XlVAlign.xlVAlignTop
+      ' ignore error flag that numbers being loaded into a text field
+      objExcel.ErrorCheckingOptions.NumberAsText = False
+    End If
+
+    If IMSMapRow > 0 Then
+      Dim row As Integer = LTrim(Str(IMSMapRow))
+      ' Format the Sheet - first row bold the columns
+      rngIMSMap = IMSMapWorksheet.Range("A1:C1")
+      rngIMSMap.Font.Bold = True
+      ' data area autofit all columns
+      rngIMSMap = IMSMapWorksheet.Range("A1:C" & row)
+      workbook.Worksheets("IMSMaps").Range("A1").AutoFilter
+      rngIMSMap.Columns.AutoFit()
+      rngIMSMap.VerticalAlignment = Excel.XlVAlign.xlVAlignTop
       ' ignore error flag that numbers being loaded into a text field
       objExcel.ErrorCheckingOptions.NumberAsText = False
     End If
@@ -3368,6 +3686,48 @@ Public Class Form1
     Next
     lblProcessingWorksheet.Text = "Processing Worksheet: " & FileNameOnly & " : ExecSql Complete"
   End Sub
+  Sub CreateEXECCICSWorksheet()
+    '* Create the ExecCICS worksheet from the listofCICSMapNames array
+    lblProcessingWorksheet.Text = "Processing Worksheet: " & FileNameOnly & " : ExecCICS = " & ListOfCICSMapNames.Count
+
+    Dim cnt As Integer = 0
+    Dim row As Integer = 0
+    Dim Statement As String = ""
+    Dim Table As String = ""
+    If EXECCICSRow = 0 Then
+      EXECCICSWorksheet = workbook.Sheets.Add(After:=workbook.Worksheets(workbook.Worksheets.Count))
+      EXECCICSWorksheet.Name = "ExecCICS"
+      ' Write the Column Headers row
+      EXECCICSWorksheet.Range("A1").Value = "Filename"
+      EXECCICSWorksheet.Range("B1").Value = "SourceId"
+      EXECCICSWorksheet.Range("C1").Value = "ProgramId"
+      EXECCICSWorksheet.Range("D1").Value = "ExecSeq"
+      EXECCICSWorksheet.Range("E1").Value = "ExecCICS"
+      EXECCICSWorksheet.Range("F1").Value = "MapName"
+      EXECCICSRow = 1
+    End If
+    ' load EXECCICS to spreadsheet.
+    For Each execCICS In ListOfCICSMapNames
+      cnt += 1
+      Dim ExecCICSColumns As String() = execCICS.Split(Delimiter)
+      EXECCICSRow += 1
+      row = LTrim(Str(EXECCICSRow))
+      EXECCICSWorksheet.Range("A" & row).Value = ExecCICSColumns(0)       'FileName
+      EXECCICSWorksheet.Range("B" & row).Value = ExecCICSColumns(1)       'SourceId
+      EXECCICSWorksheet.Range("C" & row).Value = ExecCICSColumns(2)       'ProgramId
+      EXECCICSWorksheet.Range("D" & row).Value = ExecCICSColumns(3)       'ExecSeq
+      EXECCICSWorksheet.Range("E" & row).Value = ExecCICSColumns(4)       'ExecCICS
+      EXECCICSWorksheet.Range("F" & row).Value = ExecCICSColumns(5)       'MapName
+
+      If cnt Mod 100 = 0 Then
+        lblProcessingWorksheet.Text = "Processing Worksheet: " & FileNameOnly &
+          " : ExecCICS = " & ListOfCICSMapNames.Count &
+          " # " & cnt
+      End If
+    Next
+    lblProcessingWorksheet.Text = "Processing Worksheet: " & FileNameOnly & " : ExecCICS Complete"
+  End Sub
+
   Sub CreateIMSWorksheet()
     ' Create the IMS worksheet tab.
     ' This worksheet will hold PSP/Program and DBD Name(s)
@@ -3443,6 +3803,41 @@ Public Class Form1
     Next
 
     lblProcessingWorksheet.Text = "Processing CALLS worksheet Complete"
+
+  End Sub
+  Sub CreateIMSMAPSWorksheet()
+    '* Create the IMS MAP worksheet from the listofIMSMapNames array
+    lblProcessingWorksheet.Text = "Processing Worksheet: " & FileNameOnly & " : IMSMaps = " & listofIMSMapNames.Count
+
+    Dim cnt As Integer = 0
+    Dim row As Integer = 0
+    Dim Statement As String = ""
+    Dim Table As String = ""
+    If IMSMapRow = 0 Then
+      IMSMapWorksheet = workbook.Sheets.Add(After:=workbook.Worksheets(workbook.Worksheets.Count))
+      IMSMapWorksheet.Name = "IMSMaps"
+      ' Write the Column Headers row
+      IMSMapWorksheet.Range("A1").Value = "MapSource"
+      IMSMapWorksheet.Range("B1").Value = "FMTName"
+      IMSMapWorksheet.Range("C1").Value = "DFLD_Literals"
+      IMSMapRow = 1
+    End If
+    ' load IMSMapNames to spreadsheet.
+    For Each IMSMaps In listofIMSMapNames
+      cnt += 1
+      Dim IMSMapColumns As String() = IMSMaps.Split(Delimiter)
+      IMSMapRow += 1
+      row = LTrim(Str(IMSMapRow))
+      IMSMapWorksheet.Range("A" & row).Value = IMSMapColumns(0)       'MapSource
+      IMSMapWorksheet.Range("B" & row).Value = IMSMapColumns(1)       'FMTName
+      IMSMapWorksheet.Range("C" & row).Value = IMSMapColumns(2)       'DFLD Literals
+      If cnt Mod 100 = 0 Then
+        lblProcessingWorksheet.Text = "Processing Worksheet: " & FileNameOnly &
+          " : IMSMaps = " & listofIMSMapNames.Count &
+          " # " & cnt
+      End If
+    Next
+    lblProcessingWorksheet.Text = "Processing Worksheet: " & FileNameOnly & " : IMSMaps Complete"
 
   End Sub
   Sub AddToListOfDBDNames()
@@ -3540,38 +3935,38 @@ Public Class Form1
       pgmName = pgm.ProgramId
 
       For index As Integer = pgm.ProcedureDivision + 1 To pgm.EndProgram
-        ' Paragraph names
-        If SrcStmt(index).Substring(0, 4) <> Space(4) Then
-          If SrcStmt(index).Substring(0, 1) = "*" Then
-            Continue For
-          End If
-          Call ProcessPumlParagraph(ParagraphStarted, SrcStmt(index), exec)
+        If SrcStmt(index).Substring(0, 1) = "*" Then
           Continue For
         End If
-        WithinQuotes = False
-        WithinPerformCnt = 0
-        'WithinPerformWithEndPerformStatement = False
 
-        ' break the statement in words
+        ' break the statement into words
         Call GetSourceWords(SrcStmt(index).Trim, cWord)
 
-        ' Analyze this statement for Logic Levels
-        'Call AnalyzeLevelsCobol(cWord, lWord)
+        ' Paragraph names; if there is only 1 word and is NOT a Verb it must be paragraph name.
+        If cWord.Count = 1 Then
+          If VerbNames.IndexOf(cWord(0)) = -1 Then
+            Call ProcessPumlParagraph(ParagraphStarted, SrcStmt(index), exec)
+            IfCnt = 0
+            WithinIF = False
+            Continue For
+          End If
+        End If
+
+        WithinQuotes = False
+        WithinPerformCnt = 0
+
 
         ' Process every VERB word in this statement 
         ' Every verb should be a plum object created.
 
         IndentLevel = 1
         IFLevelIndex.Clear()
-        'If index = 504 Then
-        '  MessageBox.Show("pause")
-        'End If
+
         For wordIndex = 0 To cWord.Count - 1
           Select Case cWord(wordIndex)
             Case "IF"
-              IfCnt += 1
-              IFLevelIndex.Add(wordIndex)
-              Call ProcessPumlIF(wordIndex)
+              'IFLevelIndex.Add(wordIndex)
+              Call ProcessPumlIF(wordIndex, IfCnt)
             Case "ELSE"
               Call ProcessPumlELSE(wordIndex, IfCnt)
             Case "END-IF"
@@ -3579,7 +3974,7 @@ Public Class Form1
               IndentLevel -= 1
               pumlLineCnt += 1
               pumlFile.WriteLine(Indent() & "endif")
-              If IfCnt = 0 Then
+              If IfCnt <= 0 Then
                 WithinIF = False
               End If
             Case "EVALUATE"
@@ -3619,7 +4014,7 @@ Public Class Form1
                   pumlLineCnt += 1
                   pumlFile.WriteLine(Indent() & "endif")
                   IfCnt -= 1
-                  If IfCnt = 0 Then
+                  If IfCnt <= 0 Then
                     WithinIF = False
                   End If
                   Continue For
@@ -3639,6 +4034,7 @@ Public Class Form1
               wordIndex = EndIndex
           End Select
         Next wordIndex
+
         If WithinReadStatement And WithinReadConditionStatement Then
           IndentLevel -= 1
           pumlLineCnt += 1
@@ -3650,15 +4046,15 @@ Public Class Form1
             pumlLineCnt += 1
             pumlFile.WriteLine(Indent() & "endif")
           Next
-          IfCnt = 0
-          WithinIF = False
         End If
         WithinReadConditionStatement = False
         WithinReadStatement = False
         WithinIF = False
+        IfCnt = 0
         Do Until WithinPerformCnt = 0
           Call ProcessPumlENDPERFORM()
         Loop
+
       Next index
 
       If ParagraphStarted = True Then
@@ -3668,6 +4064,7 @@ Public Class Form1
       End If
 
     Next
+
     pumlLineCnt += 1
     pumlFile.WriteLine("@enduml")
 
@@ -3702,38 +4099,7 @@ Public Class Form1
       pumlFile.WriteLine("")
     End If
     pumlLineCnt = 3
-  End Sub
-  Sub AnalyzeLevelsCobol(ByRef cWord As List(Of String), ByRef lWord As List(Of String))
-    ' Assign a logic level number to each word. Always start at 0 until there is an IF
-    lWord.Clear()
-    For x As Integer = 0 To cWord.Count - 1
-      lWord.Add(0)
-    Next
-    Dim EndIndex As Integer = 0
-    Dim level As Integer = 0
-    For cIndex As Integer = 0 To cWord.Count - 1
-      If cWord(cIndex) = "IF" Then
-        EndIndex = IndexToNextVerb(cIndex)
-        For x As Integer = cIndex To EndIndex
-          lWord(x) = level
-        Next
-        level += 1
-        cIndex = EndIndex
-        Continue For
-      End If
-      If cWord(cIndex) = "ELSE" Then
-        level -= 1
-        lWord(cIndex) = level
-        level += 1
-        Continue For
-      End If
-      If cWord(cIndex) = "END-IF" Then
-        level -= 1
-        lWord(cIndex) = level
-        Continue For
-      End If
-      lWord(cIndex) = level
-    Next
+    WithinIF = False
   End Sub
   Sub CreatePumlEasytrieve(ByRef exec As String)
     ' create the flowchart (puml) file for Easytrieve
@@ -4659,7 +5025,7 @@ Public Class Form1
     pumlFile.WriteLine(":" & SortStatement.Trim & ";")
     WordIndex = cWord.Count - 1
   End Sub
-  Sub ProcessPumlIF(ByRef WordIndex As Integer)
+  Sub ProcessPumlIF(ByRef WordIndex As Integer, ByRef IfCnt As Integer)
     ' find the 'IF' aka Conditional statement
     ' Indentlevel is global
     Dim EndIndex As Integer = 0
@@ -4670,6 +5036,7 @@ Public Class Form1
     IndentLevel += 1
     WordIndex = EndIndex
     WithinIF = True
+    IfCnt += 1
   End Sub
   Sub ProcessBRIF(ByRef WordIndex As Integer, ByRef IFStatement As String)
     ' find the 'IF' aka Conditional statement
@@ -4707,7 +5074,11 @@ Public Class Form1
         IndentLevel -= 1
         pumlFile.WriteLine(Indent() & "endif")
         ifCnt -= 1
-        Exit For
+        If ifCnt <= 0 Then
+          WithinIF = False
+          ifCnt = 0
+        End If
+        Exit Sub
       End If
       If cWord(x) = "IF" Then
         Exit For
@@ -4820,6 +5191,7 @@ Public Class Form1
     Dim EndIndex As Integer = -1
     Dim NextVerb As Integer = -1
 
+    WithinReadStatement = True
     NextVerb = IndexToNextVerb(WordIndex + 1)
     If NextVerb = -1 Then
       EndIndex = cWord.Count - 1
@@ -5393,6 +5765,9 @@ Public Class Form1
             Case "I-O"
               AddToListOfOpenModes(ListOfOpenModes, "I/O")
               Exit For
+            Case "I-O,"
+              AddToListOfOpenModes(ListOfOpenModes, "I/O")
+              Exit For
             Case "EXTEND"
               AddToListOfOpenModes(ListOfOpenModes, "EXTEND")
               Exit For
@@ -5710,8 +6085,10 @@ Public Class Form1
       If WithinReadStatement = True Then
         Select Case cWord(EndCondIndex)
           Case "AT", "END", "NOT"
-            IndexToNextVerb = EndCondIndex - 1
+            IndexToNextVerb = EndCondIndex
             Exit Function
+          Case "NEXT"
+            Continue For
         End Select
       End If
       VerbIndex = VerbNames.IndexOf(cWord(EndCondIndex))
@@ -5819,6 +6196,14 @@ Public Class Form1
   Private Sub Form1_Load(sender As Object, e As EventArgs) Handles MyBase.Load
     Me.Text = "ADDILite " & ProgramVersion
 
+    InitDirectory = My.Settings.InitDirectory
+    Dim UtilitiesFileName As String = InitDirectory & "\Utilities.txt"
+    If Not File.Exists(UtilitiesFileName) Then
+      MessageBox.Show("Caution! No Utilities.txt file found in folder:" & InitDirectory)
+      Utilities(0) = ""
+    Else
+      Utilities = File.ReadAllLines(UtilitiesFileName)
+    End If
 
     ' This area is the COBOL Verb array with counts. 
     ' **BE SURE TO KEEP VerbNames AND VerbCount ARRAYS IN SYNC!!!**
@@ -5973,5 +6358,6 @@ Public Class Form1
     VerbCount.Add(0)    'UNSTRING
 
   End Sub
+
 
 End Class

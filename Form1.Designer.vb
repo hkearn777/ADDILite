@@ -46,6 +46,9 @@ Partial Class Form1
         Me.txtDataGatheringForm = New System.Windows.Forms.TextBox()
         Me.btnTelonFolder = New System.Windows.Forms.Button()
         Me.txtTelonFoldername = New System.Windows.Forms.TextBox()
+        Me.btnIMSMapsFolder = New System.Windows.Forms.Button()
+        Me.txtIMSMapsFolderName = New System.Windows.Forms.TextBox()
+        Me.lblSourceFilesFound = New System.Windows.Forms.Label()
         Me.SuspendLayout()
         '
         'btnJCLJOBFilename
@@ -66,7 +69,7 @@ Partial Class Form1
         '
         'btnSourceFolder
         '
-        Me.btnSourceFolder.Location = New System.Drawing.Point(13, 116)
+        Me.btnSourceFolder.Location = New System.Drawing.Point(13, 114)
         Me.btnSourceFolder.Name = "btnSourceFolder"
         Me.btnSourceFolder.Size = New System.Drawing.Size(248, 40)
         Me.btnSourceFolder.TabIndex = 4
@@ -75,7 +78,7 @@ Partial Class Form1
         '
         'txtSourceFolderName
         '
-        Me.txtSourceFolderName.Location = New System.Drawing.Point(267, 123)
+        Me.txtSourceFolderName.Location = New System.Drawing.Point(267, 121)
         Me.txtSourceFolderName.Name = "txtSourceFolderName"
         Me.txtSourceFolderName.Size = New System.Drawing.Size(994, 26)
         Me.txtSourceFolderName.TabIndex = 5
@@ -86,7 +89,7 @@ Partial Class Form1
         '
         'btnOutputFolder
         '
-        Me.btnOutputFolder.Location = New System.Drawing.Point(11, 218)
+        Me.btnOutputFolder.Location = New System.Drawing.Point(15, 262)
         Me.btnOutputFolder.Name = "btnOutputFolder"
         Me.btnOutputFolder.Size = New System.Drawing.Size(248, 40)
         Me.btnOutputFolder.TabIndex = 6
@@ -95,14 +98,14 @@ Partial Class Form1
         '
         'txtOutputFoldername
         '
-        Me.txtOutputFoldername.Location = New System.Drawing.Point(267, 225)
+        Me.txtOutputFoldername.Location = New System.Drawing.Point(267, 269)
         Me.txtOutputFoldername.Name = "txtOutputFoldername"
         Me.txtOutputFoldername.Size = New System.Drawing.Size(994, 26)
         Me.txtOutputFoldername.TabIndex = 7
         '
         'btnADDILite
         '
-        Me.btnADDILite.Location = New System.Drawing.Point(1055, 314)
+        Me.btnADDILite.Location = New System.Drawing.Point(1055, 363)
         Me.btnADDILite.Name = "btnADDILite"
         Me.btnADDILite.Size = New System.Drawing.Size(96, 53)
         Me.btnADDILite.TabIndex = 8
@@ -112,7 +115,7 @@ Partial Class Form1
         'Label1
         '
         Me.Label1.AutoSize = True
-        Me.Label1.Location = New System.Drawing.Point(357, 330)
+        Me.Label1.Location = New System.Drawing.Point(357, 379)
         Me.Label1.Name = "Label1"
         Me.Label1.Size = New System.Drawing.Size(75, 20)
         Me.Label1.TabIndex = 11
@@ -120,7 +123,7 @@ Partial Class Form1
         '
         'txtDelimiter
         '
-        Me.txtDelimiter.Location = New System.Drawing.Point(438, 327)
+        Me.txtDelimiter.Location = New System.Drawing.Point(438, 376)
         Me.txtDelimiter.Name = "txtDelimiter"
         Me.txtDelimiter.Size = New System.Drawing.Size(31, 26)
         Me.txtDelimiter.TabIndex = 12
@@ -129,7 +132,7 @@ Partial Class Form1
         '
         'btnClose
         '
-        Me.btnClose.Location = New System.Drawing.Point(1172, 314)
+        Me.btnClose.Location = New System.Drawing.Point(1172, 363)
         Me.btnClose.Name = "btnClose"
         Me.btnClose.Size = New System.Drawing.Size(88, 51)
         Me.btnClose.TabIndex = 13
@@ -139,17 +142,17 @@ Partial Class Form1
         'lblCopybookMessage
         '
         Me.lblCopybookMessage.AutoSize = True
-        Me.lblCopybookMessage.Font = New System.Drawing.Font("Microsoft Sans Serif", 10.0!, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, CType(0, Byte))
-        Me.lblCopybookMessage.Location = New System.Drawing.Point(16, 370)
+        Me.lblCopybookMessage.Font = New System.Drawing.Font("Microsoft Sans Serif", 8.0!, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, CType(0, Byte))
+        Me.lblCopybookMessage.Location = New System.Drawing.Point(16, 419)
         Me.lblCopybookMessage.Name = "lblCopybookMessage"
-        Me.lblCopybookMessage.Size = New System.Drawing.Size(1021, 25)
+        Me.lblCopybookMessage.Size = New System.Drawing.Size(836, 20)
         Me.lblCopybookMessage.TabIndex = 15
         Me.lblCopybookMessage.Text = "Select Data Gathering Form, JCL JOB, Source, Telon, and Output buttons then click" &
     " ADDILite button to process files."
         '
         'ProgressBar1
         '
-        Me.ProgressBar1.Location = New System.Drawing.Point(12, 536)
+        Me.ProgressBar1.Location = New System.Drawing.Point(12, 585)
         Me.ProgressBar1.Name = "ProgressBar1"
         Me.ProgressBar1.Size = New System.Drawing.Size(1248, 30)
         Me.ProgressBar1.TabIndex = 16
@@ -157,7 +160,7 @@ Partial Class Form1
         'cbLogStmt
         '
         Me.cbLogStmt.AutoSize = True
-        Me.cbLogStmt.Location = New System.Drawing.Point(184, 328)
+        Me.cbLogStmt.Location = New System.Drawing.Point(184, 377)
         Me.cbLogStmt.Name = "cbLogStmt"
         Me.cbLogStmt.Size = New System.Drawing.Size(141, 24)
         Me.cbLogStmt.TabIndex = 10
@@ -167,7 +170,7 @@ Partial Class Form1
         'lblJobFileCount
         '
         Me.lblJobFileCount.AutoSize = True
-        Me.lblJobFileCount.Location = New System.Drawing.Point(12, 289)
+        Me.lblJobFileCount.Location = New System.Drawing.Point(10, 314)
         Me.lblJobFileCount.Name = "lblJobFileCount"
         Me.lblJobFileCount.Size = New System.Drawing.Size(161, 20)
         Me.lblJobFileCount.TabIndex = 18
@@ -176,7 +179,7 @@ Partial Class Form1
         'lblProcessingJob
         '
         Me.lblProcessingJob.AutoSize = True
-        Me.lblProcessingJob.Location = New System.Drawing.Point(38, 439)
+        Me.lblProcessingJob.Location = New System.Drawing.Point(38, 488)
         Me.lblProcessingJob.Name = "lblProcessingJob"
         Me.lblProcessingJob.Size = New System.Drawing.Size(121, 20)
         Me.lblProcessingJob.TabIndex = 19
@@ -185,7 +188,7 @@ Partial Class Form1
         'lblProcessingSource
         '
         Me.lblProcessingSource.AutoSize = True
-        Me.lblProcessingSource.Location = New System.Drawing.Point(56, 469)
+        Me.lblProcessingSource.Location = New System.Drawing.Point(56, 518)
         Me.lblProcessingSource.Name = "lblProcessingSource"
         Me.lblProcessingSource.Size = New System.Drawing.Size(146, 20)
         Me.lblProcessingSource.TabIndex = 20
@@ -194,7 +197,7 @@ Partial Class Form1
         'lblProcessingWorksheet
         '
         Me.lblProcessingWorksheet.AutoSize = True
-        Me.lblProcessingWorksheet.Location = New System.Drawing.Point(75, 502)
+        Me.lblProcessingWorksheet.Location = New System.Drawing.Point(75, 551)
         Me.lblProcessingWorksheet.Name = "lblProcessingWorksheet"
         Me.lblProcessingWorksheet.Size = New System.Drawing.Size(176, 20)
         Me.lblProcessingWorksheet.TabIndex = 21
@@ -203,7 +206,7 @@ Partial Class Form1
         'cbScanModeOnly
         '
         Me.cbScanModeOnly.AutoSize = True
-        Me.cbScanModeOnly.Location = New System.Drawing.Point(13, 328)
+        Me.cbScanModeOnly.Location = New System.Drawing.Point(13, 377)
         Me.cbScanModeOnly.Name = "cbScanModeOnly"
         Me.cbScanModeOnly.Size = New System.Drawing.Size(151, 24)
         Me.cbScanModeOnly.TabIndex = 9
@@ -228,7 +231,7 @@ Partial Class Form1
         '
         'btnTelonFolder
         '
-        Me.btnTelonFolder.Location = New System.Drawing.Point(14, 168)
+        Me.btnTelonFolder.Location = New System.Drawing.Point(14, 163)
         Me.btnTelonFolder.Name = "btnTelonFolder"
         Me.btnTelonFolder.Size = New System.Drawing.Size(248, 40)
         Me.btnTelonFolder.TabIndex = 24
@@ -237,16 +240,44 @@ Partial Class Form1
         '
         'txtTelonFoldername
         '
-        Me.txtTelonFoldername.Location = New System.Drawing.Point(269, 175)
+        Me.txtTelonFoldername.Location = New System.Drawing.Point(267, 170)
         Me.txtTelonFoldername.Name = "txtTelonFoldername"
         Me.txtTelonFoldername.Size = New System.Drawing.Size(994, 26)
         Me.txtTelonFoldername.TabIndex = 25
+        '
+        'btnIMSMapsFolder
+        '
+        Me.btnIMSMapsFolder.Location = New System.Drawing.Point(16, 213)
+        Me.btnIMSMapsFolder.Name = "btnIMSMapsFolder"
+        Me.btnIMSMapsFolder.Size = New System.Drawing.Size(248, 40)
+        Me.btnIMSMapsFolder.TabIndex = 26
+        Me.btnIMSMapsFolder.Text = "IMS MAPS Folder"
+        Me.btnIMSMapsFolder.UseVisualStyleBackColor = True
+        '
+        'txtIMSMapsFolderName
+        '
+        Me.txtIMSMapsFolderName.Location = New System.Drawing.Point(270, 220)
+        Me.txtIMSMapsFolderName.Name = "txtIMSMapsFolderName"
+        Me.txtIMSMapsFolderName.Size = New System.Drawing.Size(994, 26)
+        Me.txtIMSMapsFolderName.TabIndex = 27
+        '
+        'lblSourceFilesFound
+        '
+        Me.lblSourceFilesFound.AutoSize = True
+        Me.lblSourceFilesFound.Location = New System.Drawing.Point(12, 343)
+        Me.lblSourceFilesFound.Name = "lblSourceFilesFound"
+        Me.lblSourceFilesFound.Size = New System.Drawing.Size(154, 20)
+        Me.lblSourceFilesFound.TabIndex = 28
+        Me.lblSourceFilesFound.Text = "Source files found: 0"
         '
         'Form1
         '
         Me.AutoScaleDimensions = New System.Drawing.SizeF(9.0!, 20.0!)
         Me.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font
-        Me.ClientSize = New System.Drawing.Size(1279, 578)
+        Me.ClientSize = New System.Drawing.Size(1279, 630)
+        Me.Controls.Add(Me.lblSourceFilesFound)
+        Me.Controls.Add(Me.txtIMSMapsFolderName)
+        Me.Controls.Add(Me.btnIMSMapsFolder)
         Me.Controls.Add(Me.txtTelonFoldername)
         Me.Controls.Add(Me.btnTelonFolder)
         Me.Controls.Add(Me.txtDataGatheringForm)
@@ -300,4 +331,7 @@ Partial Class Form1
     Friend WithEvents txtDataGatheringForm As TextBox
     Friend WithEvents btnTelonFolder As Button
     Friend WithEvents txtTelonFoldername As TextBox
+    Friend WithEvents btnIMSMapsFolder As Button
+    Friend WithEvents txtIMSMapsFolderName As TextBox
+    Friend WithEvents lblSourceFilesFound As Label
 End Class
