@@ -46,8 +46,8 @@ Partial Class Form1
         Me.txtDataGatheringForm = New System.Windows.Forms.TextBox()
         Me.btnTelonFolder = New System.Windows.Forms.Button()
         Me.txtTelonFoldername = New System.Windows.Forms.TextBox()
-        Me.btnIMSMapsFolder = New System.Windows.Forms.Button()
-        Me.txtIMSMapsFolderName = New System.Windows.Forms.TextBox()
+        Me.btnScreenMapsFolder = New System.Windows.Forms.Button()
+        Me.txtScreenMapsFolderName = New System.Windows.Forms.TextBox()
         Me.lblSourceFilesFound = New System.Windows.Forms.Label()
         Me.SuspendLayout()
         '
@@ -152,7 +152,7 @@ Partial Class Form1
         '
         'ProgressBar1
         '
-        Me.ProgressBar1.Location = New System.Drawing.Point(12, 585)
+        Me.ProgressBar1.Location = New System.Drawing.Point(12, 607)
         Me.ProgressBar1.Name = "ProgressBar1"
         Me.ProgressBar1.Size = New System.Drawing.Size(1248, 30)
         Me.ProgressBar1.TabIndex = 16
@@ -245,21 +245,21 @@ Partial Class Form1
         Me.txtTelonFoldername.Size = New System.Drawing.Size(994, 26)
         Me.txtTelonFoldername.TabIndex = 25
         '
-        'btnIMSMapsFolder
+        'btnScreenMapsFolder
         '
-        Me.btnIMSMapsFolder.Location = New System.Drawing.Point(16, 213)
-        Me.btnIMSMapsFolder.Name = "btnIMSMapsFolder"
-        Me.btnIMSMapsFolder.Size = New System.Drawing.Size(248, 40)
-        Me.btnIMSMapsFolder.TabIndex = 26
-        Me.btnIMSMapsFolder.Text = "IMS MAPS Folder"
-        Me.btnIMSMapsFolder.UseVisualStyleBackColor = True
+        Me.btnScreenMapsFolder.Location = New System.Drawing.Point(16, 213)
+        Me.btnScreenMapsFolder.Name = "btnScreenMapsFolder"
+        Me.btnScreenMapsFolder.Size = New System.Drawing.Size(248, 40)
+        Me.btnScreenMapsFolder.TabIndex = 26
+        Me.btnScreenMapsFolder.Text = "Screen Maps Folder"
+        Me.btnScreenMapsFolder.UseVisualStyleBackColor = True
         '
-        'txtIMSMapsFolderName
+        'txtScreenMapsFolderName
         '
-        Me.txtIMSMapsFolderName.Location = New System.Drawing.Point(270, 220)
-        Me.txtIMSMapsFolderName.Name = "txtIMSMapsFolderName"
-        Me.txtIMSMapsFolderName.Size = New System.Drawing.Size(994, 26)
-        Me.txtIMSMapsFolderName.TabIndex = 27
+        Me.txtScreenMapsFolderName.Location = New System.Drawing.Point(270, 220)
+        Me.txtScreenMapsFolderName.Name = "txtScreenMapsFolderName"
+        Me.txtScreenMapsFolderName.Size = New System.Drawing.Size(994, 26)
+        Me.txtScreenMapsFolderName.TabIndex = 27
         '
         'lblSourceFilesFound
         '
@@ -274,10 +274,10 @@ Partial Class Form1
         '
         Me.AutoScaleDimensions = New System.Drawing.SizeF(9.0!, 20.0!)
         Me.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font
-        Me.ClientSize = New System.Drawing.Size(1279, 630)
+        Me.ClientSize = New System.Drawing.Size(1279, 652)
         Me.Controls.Add(Me.lblSourceFilesFound)
-        Me.Controls.Add(Me.txtIMSMapsFolderName)
-        Me.Controls.Add(Me.btnIMSMapsFolder)
+        Me.Controls.Add(Me.txtScreenMapsFolderName)
+        Me.Controls.Add(Me.btnScreenMapsFolder)
         Me.Controls.Add(Me.txtTelonFoldername)
         Me.Controls.Add(Me.btnTelonFolder)
         Me.Controls.Add(Me.txtDataGatheringForm)
@@ -331,7 +331,7 @@ Partial Class Form1
     Friend WithEvents txtDataGatheringForm As TextBox
     Friend WithEvents btnTelonFolder As Button
     Friend WithEvents txtTelonFoldername As TextBox
-    Friend WithEvents btnIMSMapsFolder As Button
-    Friend WithEvents txtIMSMapsFolderName As TextBox
+    Friend WithEvents btnScreenMapsFolder As Button
+    Friend WithEvents txtScreenMapsFolderName As TextBox
     Friend WithEvents lblSourceFilesFound As Label
 End Class
