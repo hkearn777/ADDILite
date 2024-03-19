@@ -13,10 +13,8 @@ Imports Microsoft.VisualBasic.Logging
 Public Class Form1
   ' ADDILite will read an IBM JCL syntax file and break apart its
   '  parts and pieces. Those parts are JOB, Executables, and Datasets.
-  ' This will also create a Panvalet compatible extraction commands
-  '  to pull out the Executables (programs) from their Library into
-  '  our own library.
-  ' This will also search for COBOL Sources to create the Data Details.
+
+  ' This will analyze COBOL and Easytrieve Sources to create the Data Details.
   ' '
   ' Latest change is to create a Plantuml compatible file to create flowcharts.
   ' Inputs:
@@ -29,8 +27,11 @@ Public Class Form1
   ' - PlantUml for creating flowchart
   '
   '***Be sure to change ProgramVersion when making changes!!!
-  Dim ProgramVersion As String = "v1.11"
+  Dim ProgramVersion As String = "v1.12"
   'Change-History.
+  ' 2024/02/27 v1.12 hk Create ScreenMaps Tab
+  '                    - Added Readonly option on excel SaveAs
+  '                    - Set Freeze Frames on first rows of the worksheets
   ' 2024/02/09 v1.11 hk v1.11 Create CICS Tab
   '                    - Create MAPS tab
   '                    - Corrected various errors in Puml flowcharts
@@ -79,6 +80,7 @@ Public Class Form1
   Dim InitDirectory As String = ""
   Dim folderPath As String = ""
   Dim Utilities As String()
+  Dim ControlLibraries As String()
 
   ' Arrays to hold the DB2 Declare to Member names
   ' these two array will share the same index
@@ -128,14 +130,15 @@ Public Class Form1
   Dim EXECSQLRow As Integer = 0
   Dim EXECCICSRow As Integer = 0
   Dim IMSRow As Integer = 0
-  Dim IMSMapRow As Integer = 0
+  Dim ScreenMapRow As Integer = 0
   Dim CallsRow As Integer = 0
+  Dim StatsRow As Integer = 0
 
   Dim jclStmt As New List(Of String)
   Dim ListOfExecs As New List(Of String)        'array holding the executable programs
 
   Dim swIPFile As StreamWriter = Nothing        'Instream proc file, temporary
-  Dim swDDFile As StreamWriter = Nothing
+  'Dim swDDFile As StreamWriter = Nothing
   Dim swPumlFile As StreamWriter = Nothing
 
   Dim LogFile As StreamWriter = Nothing
@@ -158,8 +161,10 @@ Public Class Form1
   Dim EXECSQLWorksheet As Microsoft.Office.Interop.Excel.Worksheet
   Dim EXECCICSWorksheet As Microsoft.Office.Interop.Excel.Worksheet
   Dim IMSWorksheet As Microsoft.Office.Interop.Excel.Worksheet
-  Dim IMSMapWorksheet As Microsoft.Office.Interop.Excel.Worksheet
+  Dim ScreenMapWorksheet As Microsoft.Office.Interop.Excel.Worksheet
   Dim CallsWorksheet As Microsoft.Office.Interop.Excel.Worksheet
+  Dim StatsWorksheet As Microsoft.Office.Interop.Excel.Worksheet
+
   Dim rngSummaryName As Microsoft.Office.Interop.Excel.Range
   Dim rngRecordName As Microsoft.Office.Interop.Excel.Range
   Dim rngRecordsName As Microsoft.Office.Interop.Excel.Range
@@ -169,9 +174,46 @@ Public Class Form1
   Dim rngEXECCICS As Microsoft.Office.Interop.Excel.Range
   Dim rngIMS As Microsoft.Office.Interop.Excel.Range
   Dim rngCalls As Microsoft.Office.Interop.Excel.Range
-  Dim rngIMSMap As Microsoft.Office.Interop.Excel.Range
+  Dim rngScreenMap As Microsoft.Office.Interop.Excel.Range
+  Dim rngStats As Microsoft.Office.Interop.Excel.Range
 
   Dim DefaultFormat = Microsoft.Office.Interop.Excel.XlFileFormat.xlWorkbookDefault
+  Dim SetAsReadOnly = Microsoft.Office.Interop.Excel.XlFileAccess.xlReadOnly
+
+  ' Statistical / Metric fields
+  'Dim CntBatchCobolPrograms As Integer = 0
+  'Dim CntBatchEasytrievePrograms As Integer = 0
+  'Dim CntOnlineCobolPrograms As Integer = 0
+  'Dim CntOnlineEasytrievePrograms As Integer = 0
+  'Dim CntUtilityPrograms As Integer = 0
+  'Dim CntCalledPrograms As Integer = 0
+  'Dim CntDataFiles As Integer = 0
+  'Dim CntReports As Integer = 0
+  'Dim CntTelonBatch As Integer = 0
+  'Dim CntTelonOnline As Integer = 0
+
+  Dim CntBatchJobs As Integer = 0
+  Dim CntSourceFiles As Integer = 0
+  Dim CntOutputFiles As Integer = 0
+  Dim CntTelonFiles As Integer = 0
+  Dim CntScreenMapFiles As Integer = 0
+  'Dim CntScreens As Integer = 0
+  'Dim CntDatabases As Integer = 0
+  'Dim CntTables As Integer = 0
+
+  'Dim ListOfBatchCobolPrograms As New List(Of String)
+  'Dim ListOfBatchEasytrievePrograms As New List(Of String)
+  'Dim ListOfOnlineCobolPrograms As New List(Of String)
+  'Dim ListOfOnlineEasytrievePrograms As New List(Of String)
+  'Dim ListOfUtilityPrograms As New List(Of String)
+  'Dim ListOfCalledPrograms As New List(Of String)
+  'Dim ListOfBatchJobs As New List(Of String)
+  'Dim ListOfReports As New List(Of String)
+  'Dim ListOfDataFiles As New List(Of String)
+  'Dim ListOfDatabases As New List(Of String)
+
+  Dim ListOfTables As New List(Of String)
+  Dim ListOfTableNames As New List(Of String)         'array to hold table names
 
   ' COBOL fields
   Dim SourceType As String = ""
@@ -181,6 +223,7 @@ Public Class Form1
   Dim lWord As New List(Of String)                    'Word Level value for IF syncs with cWord
   Dim ListofSourceFiles As New List(Of String)        'array to hold all the source files instead of using file.exist()
   Dim ListOfFiles As New List(Of String)              'array to hold File & DB2 Table names
+  Dim ListOfDDs As New List(Of String)                'array to hold the DD entries for 1 JOB
   Dim ListOfRecordNames As New List(Of String)          'array to hold read/written records
   Dim ListOfRecords As New List(Of String)              'array to hold read/written records
   Dim ListOfFields As New List(Of String)             'array to hold fields for each record
@@ -190,10 +233,13 @@ Public Class Form1
   Dim ListOfParagraphs As New List(Of String)         'array to hold COBOL paragraph names
   Dim ListOfCallPgms As New List(Of String)           'array to hold Call programs (sub routines)
   Dim ListOfEXECSQL As New List(Of String)            'array to hold EXEC SQL statments (cobol & easytrieve)
+  Dim ListOfDB2Tables As New List(Of String)          'array to hold the DB2 Table names found
   Dim ListOfIMSPgms As New List(Of String)            'array to hold IMS Programs (PSPNames=Program Name)
-  Dim ListOfDBDNames As New List(Of String)           'array to hold the DBDName values 
+  Dim ListOfDBDs As New List(Of String)               'array to hold the DBD usages values 
+  Dim ListOfDBDNames As New List(Of String)           'array to hold the DBD Names
   Dim ListOfCICSMapNames As New List(Of String)       'array to hold the CICS Map names (cobol)
-  Dim listofIMSMapNames As New List(Of String)        'array to hold the IMS Map names 
+  Dim ListofScreenMaps As New List(Of String)            'array to hold the IMS Map names and literals
+  Dim ListOfIMSMapNames As New List(Of String)        'array to hold the IMS Map Names
 
   Dim IFLevelIndex As New List(Of Integer)            'where in cWord the 'IF' is located
   Dim VerbNames As New List(Of String)
@@ -214,6 +260,7 @@ Public Class Form1
   Dim pumlMaxLineCnt As Integer = 1000
   Dim pumlLineCnt As Integer = 0
   Dim pumlPageCnt As Integer = 0
+  Dim ScreenType As String = ""
 
 
   Public Structure ProgramInfo
@@ -276,12 +323,35 @@ Public Class Form1
       txtJCLJOBFolderName.Text = folderPath & "\JOBS"
       txtSourceFolderName.Text = folderPath & "\SOURCES"
       txtTelonFoldername.Text = folderPath & "\TELON"
-      txtIMSMapsFolderName.Text = folderPath & "\IMSMAPS"
+      txtScreenMapsFolderName.Text = folderPath & "\SCREENS"
       txtOutputFoldername.Text = folderPath & "\OUTPUT"
+
+      CntBatchJobs = GetFileCount(txtJCLJOBFolderName.Text)
+      CntSourceFiles = GetFileCount(txtSourceFolderName.Text)
+      CntTelonFiles = GetFileCount(txtTelonFoldername.Text)
+      CntScreenMapFiles = GetFileCount(txtScreenMapsFolderName.Text)
+      CntOutputFiles = GetFileCount(txtOutputFoldername.Text)
+
+      btnJCLJOBFilename.Text = "JCL JOB Folder (" & CntBatchJobs & "):"
+      btnSourceFolder.Text = "Source Folder (" & CntSourceFiles & "):"
+      btnTelonFolder.Text = "Telon Members Folder (" & CntTelonFiles & "):"
+      btnScreenMapsFolder.Text = "Screen Maps Folder (" & CntScreenMapFiles & "):"
+      btnOutputFolder.Text = "Output Folder (" & CntOutputFiles & "):"
+
     Else
       Exit Sub
     End If
   End Sub
+  Function GetFileCount(ByRef myDirectoryName As String) As Integer
+    ' Get the number of files in the directory
+    Try
+      Return My.Computer.FileSystem.GetFiles(myDirectoryName).Count
+
+    Catch ex As Exception
+      MessageBox.Show("GetFileCount Error:" & ex.Message)
+      Return -1
+    End Try
+  End Function
   Private Sub btnJCLJOBFilename_Click(sender As Object, e As EventArgs) Handles btnJCLJOBFilename.Click
     ' grab the dgf's directory
     'Dim myFileInfo As System.IO.FileInfo
@@ -324,14 +394,14 @@ Public Class Form1
 
   End Sub
 
-  Private Sub btnMapsFolder_Click(sender As Object, e As EventArgs) Handles btnIMSMapsFolder.Click
+  Private Sub btnMapsFolder_Click(sender As Object, e As EventArgs) Handles btnScreenMapsFolder.Click
     ' browse for and select folder name
     Dim bfd_MapsFolder As New FolderBrowserDialog With {
-      .Description = "Enter IMS MAPS folder name",
+      .Description = "Enter Screen Maps folder name",
       .SelectedPath = txtJCLJOBFolderName.Text
     }
     If bfd_MapsFolder.ShowDialog() = DialogResult.OK Then
-      txtIMSMapsFolderName.Text = bfd_MapsFolder.SelectedPath
+      txtScreenMapsFolderName.Text = bfd_MapsFolder.SelectedPath
     End If
 
   End Sub
@@ -358,6 +428,10 @@ Public Class Form1
   End Sub
 
   Private Sub btnADDILite_Click(sender As Object, e As EventArgs) Handles btnADDILite.Click
+    Dim start_time As DateTime = Now
+    Dim stop_time As DateTime
+    Dim elapsed_time As TimeSpan
+
     DirectoryName = Path.GetDirectoryName(txtJCLJOBFolderName.Text)
 
     Delimiter = txtDelimiter.Text
@@ -375,7 +449,7 @@ Public Class Form1
     LogFile.WriteLine(Date.Now & ",JOB Folder," & txtJCLJOBFolderName.Text)
     LogFile.WriteLine(Date.Now & ",Source Folder," & txtSourceFolderName.Text)
     LogFile.WriteLine(Date.Now & ",TELON Folder," & txtTelonFoldername.Text)
-    LogFile.WriteLine(Date.Now & ",IMSMAP Folder," & txtIMSMapsFolderName.Text)
+    LogFile.WriteLine(Date.Now & ",Screen Map Folder," & txtScreenMapsFolderName.Text)
     LogFile.WriteLine(Date.Now & ",Output Folder," & txtOutputFoldername.Text)
     LogFile.WriteLine(Date.Now & ",Delimiter," & txtDelimiter.Text)
     LogFile.WriteLine(Date.Now & ",ScanModeOnly," & cbScanModeOnly.Checked)
@@ -414,6 +488,13 @@ Public Class Form1
       ListofSourceFiles.Add(fi.Name.ToUpper)
     Next
     lblSourceFilesFound.Text = "Source Files Found:" & Str(ListofSourceFiles.Count)
+
+    ' Count the Telon files to determine Batch and Online members
+    'Dim TelonBDfiles As String() = Directory.GetFiles(txtTelonFoldername.Text & "\", "*BD", SearchOption.AllDirectories)
+    'Dim TelonDRfiles As String() = Directory.GetFiles(txtTelonFoldername.Text & "\", "*DR", SearchOption.AllDirectories)
+    'CntTelonBatch = TelonBDfiles.Length + TelonDRfiles.Length
+    'Dim TelonSDfiles As String() = Directory.GetFiles(txtTelonFoldername.Text & "\", "*SD", SearchOption.AllDirectories)
+    'CntTelonOnline = TelonSDfiles.Length
 
 
     ' ready the progress bar
@@ -472,56 +553,16 @@ Public Class Form1
       Next index
     Next
 
-    ' Load the IMS Maps (screens) files to array
-    If txtIMSMapsFolderName.Text.Length > 0 Then
-      For Each foundFile As String In My.Computer.FileSystem.GetFiles(txtIMSMapsFolderName.Text)
-        Dim memberLines As String() = File.ReadAllLines(foundFile)
-        Dim srcWords As New List(Of String)
-        Dim MapName As String = ""
-        Dim literalsFound As String = ""
-        Dim literalsFoundCnt As Integer = 0
-        For index = 0 To memberLines.Count - 1
-          If memberLines(index).IndexOf(" FMT ") > -1 Then
-            Call GetSourceWords(memberLines(index), srcWords)
-            MapName = srcWords(0)
-            Continue For
-          End If
-          If memberLines(index).IndexOf(" DFLD ") > -1 Then
-            Call GetSourceWords(memberLines(index), srcWords)
-            Dim startIndex As Integer = -1
-            If srcWords(0) = "DFLD" Then
-              startIndex = 1
-            End If
-            If srcWords(1) = "DFLD" Then
-              startIndex = 2
-            End If
-            If startIndex > -1 Then
-              If srcWords(startIndex).StartsWith("'") Then
-                literalsFoundCnt += 1
-                If literalsFoundCnt <= 4 Then
-                  Dim quoteWords As String() = srcWords(startIndex).Split("'")
-                  literalsFound &= quoteWords(1) & vbNewLine
-                End If
-              End If
-            End If
-            Continue For
-          End If
-          If memberLines(index).IndexOf(" FMTEND ") > -1 Then
-            If literalsFound.Length > 2 Then
-              literalsFound = literalsFound.Substring(0, literalsFound.Length - 2)    'remove last vbNewLine
-            End If
-            listofIMSMapNames.Add(Path.GetFileName(foundFile) & Delimiter &
-                                  MapName & Delimiter &
-                                  literalsFound)
-            Exit For
-          End If
-        Next index
-      Next
-    End If
+    ' Load the Screen Maps (Telon, IMS, CICS, or PC ScreenIO) files to array
+    ' Decide which folder will hold the 'screen map' files. If its Telon files they are in
+    '   the Telon folder. If other they will be in the Screens folder. This is because
+    '   Telon members hold BOTH database info and Screen info. Other System (IMS/CICS) do not
+    '   hold database info only screen info.
+    Call LoadScreenMaps(txtScreenMapsFolderName.Text)
+    Call LoadScreenMaps(txtTelonFoldername.Text)
 
     ProgressBar1.PerformStep()
     ProgressBar1.Show()
-
 
 
     Dim ProgramsFileName = txtOutputFoldername.Text & "\ADDILite.xlsx"
@@ -550,21 +591,23 @@ Public Class Form1
       lblProcessingJob.Text = "Processing Job #" & Jobcount & ": " & JobFile
       LogFile.WriteLine(Date.Now & ",Processing Job," & Path.GetFileNameWithoutExtension(JobFile))
       FileNameOnly = Path.GetFileNameWithoutExtension(JobFile)
-      ProcessJOBFile(JobFile)
-      ProcessSourceFiles()
+      Call ProcessJOBFile(JobFile)
+      Call ProcessSourceFiles()
       ProgressBar1.PerformStep()
       ProgressBar1.Show()
       Call InitializeProgramVariables()
     Next
 
-    ProcessCallPgms(CallPgmsFileName)
+    Call ProcessCallPgms(CallPgmsFileName)
 
-    CreateEXECSQLWorksheet()
-    CreateEXECCICSWorksheet()
-    CreateIMSWorksheet()
-    CreateCallsWorksheet()
-    CreateIMSPSPNamesFile()
-    CreateIMSMAPSWorksheet()
+    Call CreateEXECSQLWorksheet()
+    Call CreateEXECCICSWorksheet()
+    Call CreateIMSWorksheet()
+    Call CreateCallsWorksheet()
+    Call CreateIMSPSPNamesFile()
+    Call CreateScreenMapWorksheet()
+
+    'Call CreateStatsWorksheet()
 
 
     ' Save Application Model Spreadsheet
@@ -575,7 +618,7 @@ Public Class Form1
       ' Format, Save and close Excel
       lblCopybookMessage.Text = "Saving Spreadsheet"
       Call FormatWorksheets()
-      workbook.SaveAs(ProgramsFileName, DefaultFormat)
+      workbook.SaveAs(ProgramsFileName, DefaultFormat,,, SetAsReadOnly)
       workbook.Close()
       objExcel.Quit()
     End If
@@ -587,10 +630,174 @@ Public Class Form1
     LogFile.Close()
     Me.Cursor = Cursors.Default
     lblCopybookMessage.Text = "Process Complete"
+
+    stop_time = Now
+    elapsed_time = stop_time.Subtract(start_time)
+
     System.Media.SystemSounds.Beep.Play()
-    MessageBox.Show("Process Complete")
+    MessageBox.Show("Process Complete: " & elapsed_time.TotalMinutes.ToString("000.00") & " Minutes")
   End Sub
 
+  Sub LoadScreenMaps(ByRef WorkFolder As String)
+    ' This will load Screen maps from either TELON (SD/DR/BD), CICS, IMS, or PC(ScreenIO) to the ListOfScreenMaps array
+    If WorkFolder.Length <= 0 Then
+      Exit Sub
+    End If
+
+    For Each foundFile As String In My.Computer.FileSystem.GetFiles(WorkFolder)
+      Dim memberLines As String() = File.ReadAllLines(foundFile)
+      Dim srcWords As New List(Of String)
+      Dim MapName As String = ""
+      Dim PanelName As String = ""
+      Dim PanelType As String = ""
+      Dim literalsFound As String = ""
+      Dim literalsFoundCnt As Integer = 0
+      Dim MbrLine As String = ""
+      Dim Text As String = ""
+      ScreenType = ""
+
+      For index = 0 To memberLines.Count - 1
+        Text = memberLines(index) & Space(80)
+        Text = Text.Substring(0, 72)
+        MbrLine &= Text.Substring(0, 71).Trim
+        If Text.Substring(71, 1) = "C" Then
+          Continue For
+        End If
+        If MbrLine.Trim.Length = 0 Then
+          Continue For
+        End If
+
+        ' Telon Screens pulled from (*SD, *DR, *BD)
+        If MbrLine.Trim.IndexOf("TELON ") > -1 Then
+          ScreenType = "TELON"
+          MbrLine = ""
+          Continue For
+        End If
+        If ScreenType = "TELON" And MbrLine.Substring(0, 1) <> "*" Then
+          Call GetSourceWords(MbrLine, srcWords)
+          Select Case srcWords(0)
+            Case "SCREEN", "DRIVER", "BATCH"
+              Dim screenWords As String() = srcWords(1).Split(",")
+              MapName = screenWords(0)
+              For Each screenWord In screenWords
+                If screenWord.StartsWith("DESC='") Then
+                  literalsFound = screenWord.Substring(6).Replace("'", "").Trim
+                  literalsFoundCnt = 1
+                End If
+              Next
+              ListofScreenMaps.Add(Path.GetFileName(foundFile) & Delimiter &
+                                  ScreenType & Delimiter &
+                                  MapName & Delimiter &
+                                  literalsFound)
+              Exit For
+          End Select
+        End If
+
+        ' IMS screens
+        If MbrLine.IndexOf(" FMT ") > -1 Then
+          ScreenType = "IMS"
+          Call GetSourceWords(MbrLine, srcWords)
+          MapName = srcWords(0)
+          MbrLine = ""
+          Continue For
+        End If
+        If ScreenType = "IMS" And MbrLine.IndexOf(" DFLD ") > -1 Then
+          Call GetSourceWords(MbrLine, srcWords)
+          Dim startIndex As Integer = -1
+          If srcWords(0) = "DFLD" Then
+            startIndex = 1
+          End If
+          If srcWords(1) = "DFLD" Then
+            startIndex = 2
+          End If
+          If startIndex > -1 Then
+            If srcWords(startIndex).StartsWith("'") Then
+              literalsFoundCnt += 1
+              If literalsFoundCnt <= 4 Then
+                Dim quoteWords As String() = srcWords(startIndex).Split("'")
+                literalsFound &= quoteWords(1) & vbNewLine
+              End If
+            End If
+          End If
+          MbrLine = ""
+          Continue For
+        End If
+        If ScreenType = "IMS" And MbrLine.IndexOf(" FMTEND ") > -1 Then
+          If literalsFound.Length > 2 Then
+            literalsFound = literalsFound.Substring(0, literalsFound.Length - 2)    'remove last vbNewLine
+          End If
+          ListofScreenMaps.Add(Path.GetFileName(foundFile) & Delimiter &
+                                  ScreenType & Delimiter &
+                                  MapName & Delimiter &
+                                  literalsFound)
+          If ListOfIMSMapNames.IndexOf(MapName) = -1 Then
+            ListOfIMSMapNames.Add(MapName)
+          End If
+          Exit For
+        End If
+
+        ' CICS Screens
+        If ScreenType = "" And MbrLine.IndexOf(" DFHMSD ") > -1 Then
+          ScreenType = "CICS"
+          Call GetSourceWords(MbrLine, srcWords)
+          MapName = srcWords(0)
+          MbrLine = ""
+          Continue For
+        End If
+        If ScreenType = "CICS" Then
+          If MbrLine.IndexOf(" INITIAL='") > -1 Then
+            literalsFoundCnt += 1
+            If literalsFoundCnt <= 4 Then
+              Dim quoteWords As String() = MbrLine.Split("'")
+              literalsFound &= quoteWords(1).Trim & vbNewLine
+            End If
+          End If
+          If MbrLine.IndexOf(" DFHMSD ") > -1 Or MbrLine.IndexOf(" END ") > -1 Then
+            If literalsFound.Length > 2 Then
+              literalsFound = literalsFound.Substring(0, literalsFound.Length - 2)    'remove last vbNewLine
+            End If
+            ListofScreenMaps.Add(Path.GetFileName(foundFile) & Delimiter &
+                                  ScreenType & Delimiter &
+                                  MapName & Delimiter &
+                                  literalsFound)
+            Exit For
+          End If
+        End If
+
+        ' PC Screens (ScreenIO) 
+        If MbrLine.Length >= 72 Then
+          ' store map/panel name and/or screen type (Pop-Up, Window, Main, etc.)
+          If MbrLine.Substring(6, 4) = "*:- " Then
+            ScreenType = "SCREENIO"
+            If MbrLine.Substring(21, 12) = "Panel Name: " Then
+              PanelName = MbrLine.Substring(33, 11).Trim
+            End If
+            If MbrLine.Substring(45, 11) = "PanelType: " Then
+              PanelType = MbrLine.Substring(56, 12).Trim
+            End If
+          End If
+          ' Get any comments when line has '*:> '
+          If MbrLine.Substring(6, 4) = "*:> " Then
+            literalsFound &= MbrLine.Substring(10, 60).Trim & vbNewLine
+          End If
+          ' store the screen map and exit loop when line has '*:+ '
+          If MbrLine.Substring(6, 4) = "*:+ " Then
+            If literalsFound.Length > 2 Then
+              literalsFound = literalsFound.Substring(0, literalsFound.Length - 2)    'remove last vbNewLine
+            End If
+            ListofScreenMaps.Add(Path.GetFileName(foundFile) & Delimiter &
+                                  PanelType & Delimiter &
+                                  PanelName & Delimiter &
+                                  literalsFound)
+            Exit For
+          End If
+        End If
+        MbrLine = ""
+      Next index
+    Next
+
+
+  End Sub
   Sub ProcessCallPgms(ByRef CallPgmsFileName As String)
     If ListOfCallPgms.Count = 0 Then
       Exit Sub
@@ -654,12 +861,12 @@ Public Class Form1
       Case Not Directory.Exists(txtTelonFoldername.Text)
         LogFile.WriteLine(Date.Now & ",ERROR! TELON folder name does not exists,")
 
-      Case txtIMSMapsFolderName.TextLength = 0
-        LogFile.WriteLine(Date.Now & ",ERROR! IMSMAP folder name required,")
-      Case Not IsValidFileNameOrPath(txtIMSMapsFolderName.Text)
-        LogFile.WriteLine(Date.Now & ",ERROR! IMSMAP folder name has invalid characters,")
-      Case Not Directory.Exists(txtIMSMapsFolderName.Text)
-        LogFile.WriteLine(Date.Now & ",ERROR! IMSMAP folder does not exists,")
+      Case txtScreenMapsFolderName.TextLength = 0
+        LogFile.WriteLine(Date.Now & ",ERROR! SCREENS folder name required,")
+      Case Not IsValidFileNameOrPath(txtScreenMapsFolderName.Text)
+        LogFile.WriteLine(Date.Now & ",ERROR! SCREENS folder name has invalid characters,")
+      Case Not Directory.Exists(txtScreenMapsFolderName.Text)
+        LogFile.WriteLine(Date.Now & ",ERROR! SCREENS folder does not exists,")
 
       Case txtOutputFoldername.TextLength = 0
         LogFile.WriteLine(Date.Now & ",ERROR! OUTPUTS folder name required,")
@@ -732,27 +939,31 @@ Public Class Form1
     Dim Command As Integer = 1
     Dim Label As Integer = 0
     Dim Parameters As Integer = 2
+    Dim jclProcName As String = ""
     For Each JCLLine In JCL
       Dim JCLStatement As String() = JCLLine.Split(Delimiter)
       jclWithProc.Add(JCLLine)
       Select Case JCLStatement(Command)
         Case "PROC"
-          ListOfInstreamProcs.Add(JCLStatement(Label).Substring(2))
+          jclProcName = JCLStatement(Label).Substring(2)
+          ListOfInstreamProcs.Add(jclProcName)
         Case "EXEC"
           If JCLStatement(Parameters).Substring(0, 4) = "PGM=" Then
             Exit Select
           End If
-          'this must be an exec <procname>, so need to load this proc here
+          'this must be an exec <procname>, so need to load this proc here, IF not an instream proc
           Dim ParmValues As String() = JCLStatement(Parameters).Split(",")
           Dim ProcName As String = txtSourceFolderName.Text & "\" & ParmValues(0)
-          Dim PROC As New List(Of String)
-          PROC = ReformatJCLAndLoadToArray(ProcName)
-          If PROC.Count = 0 Then
-            LogFile.WriteLine(Now.Date & ",Missing PROC member," & ParmValues(0))
+          If ListOfInstreamProcs.IndexOf(ParmValues(0)) = -1 Then
+            Dim PROC As New List(Of String)
+            PROC = ReformatJCLAndLoadToArray(ProcName)
+            If PROC.Count = 0 Then
+              LogFile.WriteLine(Now.Date & ",Missing PROC member," & ParmValues(0))
+            End If
+            For Each ProcLine In PROC
+              jclWithProc.Add("++" & ProcLine.Substring(2))
+            Next
           End If
-          For Each ProcLine In PROC
-            jclWithProc.Add("++" & ProcLine.Substring(2))
-          Next
       End Select
     Next
 
@@ -913,6 +1124,25 @@ Public Class Form1
       jclWords.Add(word)
     End If
   End Sub
+  Function RemoveGDGValuesFromDSN(ByRef dsn As String) As String
+    ' This will remove the (0), (+1), etc. numeric values from the dsn and return with just '()' empty parens
+    ' Hopefully there is not a PDS with a numeric member name. 
+    Dim OpenPIndex As Integer = dsn.IndexOf("(")
+    Dim ClosePIndex As Integer = dsn.IndexOf(")")
+    If OpenPIndex = -1 Or ClosePIndex = -1 Then
+      Return dsn
+    End If
+    Dim lenWithinParens As Integer = ClosePIndex - OpenPIndex - 1
+    ' check if any value between parens ie. it is '()'
+    If lenWithinParens < 1 Then
+      Return dsn
+    End If
+    Dim valueWithinParens As String = dsn.Substring(OpenPIndex + 1, lenWithinParens)
+    If Not IsNumeric(valueWithinParens) Then
+      Return dsn
+    End If
+    Return dsn.Substring(0, OpenPIndex) & "()"
+  End Function
   Function GetParm(ByRef SearchWithinThis As String, ByRef SearchForThis As String) As String
     GetParm = ""
     Dim FirstCharacter As Integer = SearchWithinThis.IndexOf(SearchForThis)
@@ -996,15 +1226,18 @@ Public Class Form1
     ' Write the output JOB, EXEC, DD, Panvalet script, and PUML files.
     ' return of -1 means an error
     ' return of 0 means all is okay
+    '**here**
+    ListOfDDs.Clear()       'in lieu of the swDDFile
+    'Dim DDFileName = txtOutputFoldername.Text & "/" & FileNameOnly & "_DD.csv"
+    'Try
+    '  swDDFile = My.Computer.FileSystem.OpenTextFileWriter(DDFileName, False)
+    'Catch ex As Exception
+    '  MessageBox.Show(ex.Message, "Error opening " & DDFileName)
+    '  WriteOutput = -1
+    '  Exit Function
+    'End Try
 
-    Dim DDFileName = txtOutputFoldername.Text & "/" & FileNameOnly & "_DD.csv"
-    Try
-      swDDFile = My.Computer.FileSystem.OpenTextFileWriter(DDFileName, False)
-    Catch ex As Exception
-      MessageBox.Show(ex.Message, "Error opening " & DDFileName)
-      WriteOutput = -1
-      Exit Function
-    End Try
+    Dim ListOfSymbolics As New List(Of String)
 
     WriteOutput = 0
 
@@ -1027,11 +1260,12 @@ Public Class Form1
           Call ProcessJOB()
         Case "PROC"
           procName = jLabel
+          ListOfSymbolics = LoadSymbolics(jParameters)
         Case "PEND"
         Case "EXEC"
           Call ProcessEXEC()
         Case "DD"
-          Call ProcessDD()          'this writes the _dd.csv record
+          Call ProcessDD(ListOfSymbolics)          'this writes the _dd.csv record
         Case "SET"
           Continue For
         Case "OUTPUT"
@@ -1060,12 +1294,20 @@ Public Class Form1
     Next
     ' close the files
 
-    swDDFile.Close()
+    'swDDFile.Close() we use the ListOfDDs array instead
 
-    Call CreatePuml()
+    Call CreateJCLPuml()
 
     Call CreatePrograms()
 
+  End Function
+  Function LoadSymbolics(ByRef jParameters As String) As List(Of String)
+    Dim jparms As String() = jParameters.Split(",")
+    Dim jsymbols As New List(Of String)
+    For Each jvalue In jparms
+      jsymbols.Add(jvalue)
+    Next
+    Return jsymbols
   End Function
 
   Sub GetLabelControlParms(statement As String,
@@ -1160,14 +1402,23 @@ Public Class Form1
 
   End Sub
 
-  Sub ProcessDD()
+  Sub ProcessDD(ByRef ListOfSymbolics As List(Of String))
     ' Process the DD statement
+    ' Only substitue symbolics on DSN
 
     Dim db2 As String = ""
     If jLabel = "CAFIN" Then
       db2 = "DB2"
     End If
     Dim dsn As String = GetParm(jParameters, "DSN=")
+    If dsn.Length > 0 Then
+      If dsn.Substring(0, 2) <> "&&" Then
+        If dsn.IndexOf("&") > -1 Then
+          dsn = ReplaceSymbolics(dsn, ListOfSymbolics)
+        End If
+      End If
+    End If
+
     Dim reportID As String = ""
     Dim sysout As String = GetParm(jParameters, "SYSOUT=")
     Select Case sysout.Length
@@ -1181,12 +1432,17 @@ Public Class Form1
             Else
               sysout = "SYSOUT=" & sysout
             End If
+            dsn = sysout
+            Exit Select
         End Select
         If sysout = "*" Then
           sysout = "SYSOUT=" & msgClass
+          dsn = sysout
+          Exit Select
         End If
         If dsn.Length = 0 Then
-          dsn = sysout
+          dsn = "SYSOUT=" & sysout
+          Exit Select
         End If
 
       Case Else
@@ -1194,6 +1450,10 @@ Public Class Form1
         sysout = "SYSOUT=" & sysoutParms(0)
         reportID = sysoutParms(1)
     End Select
+
+    ' Adjust for GDG type of datasets; remove the numeric (ie, (0) or (+1))
+    ' But be careful of PDS libraries
+    dsn = RemoveGDGValuesFromDSN(dsn)
 
 
     Dim unit As String = GetParm(jParameters, "UNIT=")
@@ -1245,8 +1505,8 @@ Public Class Form1
       dcbRecfm = GetParm(jParameters, "RECFM=")
     End If
 
-    ' write the csv record 
-    swDDFile.WriteLine(jobName & txtDelimiter.Text &
+    ' write the csv record to array instead of to swDDFile.writeline
+    ListOfDDs.Add(jobName & txtDelimiter.Text &
                        LTrim(Str(jobSequence)) & txtDelimiter.Text &
                        procName & txtDelimiter.Text &
                        LTrim(Str(procSequence)) & txtDelimiter.Text &
@@ -1272,7 +1532,54 @@ Public Class Form1
     prevStepName = stepName
   End Sub
 
-  Sub CreatePuml()
+  Function ReplaceSymbolics(ByRef dsn As String, ByRef ListOfSymbolics As List(Of String)) As String
+    ' this will loop thru, as needed, replacing any symbolic with value from the ListOfSymbolics array
+    ' find a symbolic which is terminated with a period, an &, or end of line
+    If ListOfSymbolics.Count <= 0 Then
+      Return dsn
+    End If
+    If dsn.Length = 0 Then
+      Return dsn
+    End If
+    Dim x As Integer = 0
+    Dim y As Integer = 0
+    Dim symLength As Integer = 0
+    Dim symName As String = ""
+    Do Until x > dsn.Length - 1
+      x = dsn.IndexOf("&", x)
+      If x = -1 Then
+        Exit Do
+      End If
+      'now find ending of symbolic
+      For y = x + 1 To dsn.Length - 1
+        Select Case dsn.Substring(y, 1)
+          Case "&", "(", ")", ".", ","
+            Exit For
+        End Select
+      Next
+      If y > dsn.Length - 1 Then
+        y = dsn.Length - 1
+      End If
+      symLength = y - x
+      If symLength > 0 Then
+        symName = dsn.Substring(x, symLength).Replace("&", "")
+        For Each symbol In ListOfSymbolics
+          If symbol.IndexOf(symName) > -1 Then
+            Dim symSplit As String() = symbol.Split("=")
+            Dim symValue As String = symSplit(1).Replace("'", "")
+            dsn = dsn.Replace("&" & symName, symValue)
+            Exit For
+          End If
+        Next
+      Else
+        Exit Do
+      End If
+      x += symLength
+    Loop
+
+    Return dsn
+  End Function
+  Sub CreateJCLPuml()
     ' Open the output file PUML
     Dim PumlFileName = txtOutputFoldername.Text & "\" & FileNameOnly & ".puml"
     swPumlFile = My.Computer.FileSystem.OpenTextFileWriter(PumlFileName, False)
@@ -1282,21 +1589,25 @@ Public Class Form1
     swPumlFile.WriteLine("header ADDILite(c), by IBM")
     swPumlFile.WriteLine("title Flowchart of JOB: " & FileNameOnly)
 
-    ' Read the DD CSV file back in and load to array
-    Dim FileName = txtOutputFoldername.Text & "/" & FileNameOnly & "_DD.csv"
-    If Not File.Exists(FileName) Then
+    ' Read the DD CSV file back in and load to one DD statement array with all its attributes
+    If ListOfDDs.Count = 0 Then
       Exit Sub
     End If
+    'Dim FileName = txtOutputFoldername.Text & "/" & FileNameOnly & "_DD.csv"
+    'If Not File.Exists(FileName) Then
+    '  Exit Sub
+    'End If
     Dim csvCnt As Integer = 0
-    Dim csvFile As FileIO.TextFieldParser = New FileIO.TextFieldParser(FileName)
+    'Dim csvFile As FileIO.TextFieldParser = New FileIO.TextFieldParser(FileName)
     Dim csvRecord As String()           ' all fields(columns) for a given record
-    csvFile.TextFieldType = FileIO.FieldType.Delimited
-    csvFile.Delimiters = New String() {"|"}
-    csvFile.HasFieldsEnclosedInQuotes = True
+    'csvFile.TextFieldType = FileIO.FieldType.Delimited
+    'csvFile.Delimiters = New String() {"|"}
+    'csvFile.HasFieldsEnclosedInQuotes = True
     Dim ListOfSteps As New List(Of String)
 
-    Do While Not csvFile.EndOfData
-      csvRecord = csvFile.ReadFields
+    'Do While Not csvFile.EndOfData
+    For Each DDStmt In ListOfDDs
+      csvRecord = DDStmt.Split(Delimiter)
       csvCnt += 1
       jobName = csvRecord(0)
       jobSequence = Val(csvRecord(1))
@@ -1305,7 +1616,7 @@ Public Class Form1
       stepName = csvRecord(4)
       pgmName = csvRecord(5)
       If pgmName.Length = 0 Then
-        Continue Do
+        Continue For
       End If
       execSequence = Val(csvRecord(6))
       Dim DDName As String = csvRecord(7).Replace("$", "S")
@@ -1337,7 +1648,7 @@ Public Class Form1
       If Val(DDSeq) = 1 And Val(ddConcatSeq) = 0 Then
         ListOfSteps.Add(stepName)
         swPumlFile.WriteLine()
-        swPumlFile.WriteLine("node " & Chr(34) & pgmName & Chr(34) & " as " & stepName)
+        swPumlFile.WriteLine("node " & Chr(34) & stepName & ":\n" & pgmName & Chr(34) & " as " & stepName)
       End If
 
 
@@ -1354,12 +1665,17 @@ Public Class Form1
             If dispEnd = "DELETE" Then
               dsn = "<s:red>" & dsn & "</s>"
             End If
-            swPumlFile.WriteLine("file " & Chr(34) & dsn & Chr(34) & " as " & stepName & "." & DDName)
+            swPumlFile.WriteLine("file " & Chr(34) & DDName & ":\n" & dsn & Chr(34) & " as " & stepName & "." & DDName)
+            swPumlFile.WriteLine(stepName & InOrOut & stepName & "." & DDName)
+          End If
+          If reportID.Length > 0 Then
+            swPumlFile.WriteLine("file #palegreen " & Chr(34) & DDName & ":\nReport Id:\n" & reportID & Chr(34) & " as " & stepName & "." & DDName)
             swPumlFile.WriteLine(stepName & InOrOut & stepName & "." & DDName)
           End If
       End Select
 
-    Loop
+    Next
+
     ' write the final step connections
     swPumlFile.WriteLine("' STEP CONNECTIONS")
     For stepIndex = 0 To ListOfSteps.Count - 1
@@ -1501,25 +1817,33 @@ Public Class Form1
       worksheet.Range("T1").Value = "ReportDescription"
       worksheet.Range("U1").Value = "SourceType"
       ProgramsRow = 1
+      worksheet.Activate()
+      worksheet.Application.ActiveWindow.SplitRow = 1
+      worksheet.Application.ActiveWindow.FreezePanes = True
     End If
 
     ' Write the data
 
     ' Read the DD CSV file back in and load to array
-    Dim FileName = txtOutputFoldername.Text & "/" & FileNameOnly & "_DD.csv"
-    If Not File.Exists(FileName) Then
+    If ListOfDDs.Count = 0 Then
       Exit Sub
     End If
-    Dim csvCnt As Integer = 0
-    Dim csvFile As FileIO.TextFieldParser = New FileIO.TextFieldParser(FileName)
+    'Dim FileName = txtOutputFoldername.Text & "/" & FileNameOnly & "_DD.csv"
+    'If Not File.Exists(FileName) Then
+    ' Exit Sub
+    'End If
+    'Dim csvCnt As Integer = 0
+    'Dim csvFile As FileIO.TextFieldParser = New FileIO.TextFieldParser(FileName)
     Dim csvRecord As String()           ' all fields(columns) for a given record
-    csvFile.TextFieldType = FileIO.FieldType.Delimited
-    csvFile.Delimiters = New String() {"|"}
-    csvFile.HasFieldsEnclosedInQuotes = True
+    'csvFile.TextFieldType = FileIO.FieldType.Delimited
+    'csvFile.Delimiters = New String() {"|"}
+    'csvFile.HasFieldsEnclosedInQuotes = True
     Dim row As String = ""
     Dim cnt As Integer = 0
-    Do While Not csvFile.EndOfData
-      csvRecord = csvFile.ReadFields
+
+    'Do While Not csvFile.EndOfData
+    For Each DDStmt In ListOfDDs
+      csvRecord = DDStmt.Split(Delimiter)
       cnt += 1
       jobName = csvRecord(0)
       jobSequence = Val(csvRecord(1))
@@ -1570,30 +1894,88 @@ Public Class Form1
         If ListOfExecs.IndexOf(pgmName & Delimiter & SourceType) = -1 Then
           ListOfExecs.Add(pgmName & Delimiter & SourceType)
         End If
-        'Select Case pgmName
-        '  Case "IEFBR14", "SORT", "IEBGENER", "IEBCOPY", "IDCAMS", "DSNUTILB", "CBLTDLI",
-        '       "SRCHPRNT", "CMSAUTO1", "PKZIP", "PKUNZIP", "IKJEFT01", "A4204030", "OFORMAT", "ODATE", "DFSRRC00",
-        '       "FTP", "ICETOOL", "FILEMGR", "IRXJCL", "INITFILE", "EZTPA00", "IERRCO00", "ABEND", "DFSBBO00",
-        '       "IKJEFT1B", "SPOLSPIN", "ASAABEND", "ADMAABT", "ADRABND", "OSIUB000",
-        '       "OCJULIAN", "ICJULIAN", "DMBATCH", "OCURDATE", "OCURTIME", "OMOCNTRY"
-        '  Case Else
-        '    If ListOfExecs.IndexOf(pgmName & Delimiter & SourceType) = -1 Then
-        '      ListOfExecs.Add(pgmName & Delimiter & SourceType)
-        '    End If
-        'End Select
       End If
+      ' Stats / Metrics
+      'If ddSequence = 1 And ddConcatSeq = 0 And SourceType = "COBOL" And jobName.ToUpper <> "ONLINE" Then
+      '  If ListOfBatchCobolPrograms.IndexOf(pgmName) = -1 Then
+      '    ListOfBatchCobolPrograms.Add(pgmName)
+      '  End If
+      '  CntBatchCobolPrograms += 1
+      'End If
+      'If ddSequence = 1 And ddConcatSeq = 0 And SourceType = "Easytrieve" And jobName.ToUpper <> "ONLINE" Then
+      '  If ListOfBatchEasytrievePrograms.IndexOf(pgmName) = -1 Then
+      '    ListOfBatchEasytrievePrograms.Add(pgmName)
+      '  End If
+      '  CntBatchEasytrievePrograms += 1
+      'End If
+      'If ddSequence = 1 And ddConcatSeq = 0 And SourceType = "COBOL" And jobName.ToUpper = "ONLINE" Then
+      '  If ListOfOnlineCobolPrograms.IndexOf(pgmName) = -1 Then
+      '    ListOfOnlineCobolPrograms.Add(pgmName)
+      '  End If
+      '  CntOnlineCobolPrograms += 1
+      'End If
+      'If ddSequence = 1 And ddConcatSeq = 0 And SourceType = "Easytrieve" And jobName.ToUpper = "ONLINE" Then
+      '  If ListOfOnlineEasytrievePrograms.IndexOf(pgmName) = -1 Then
+      '    ListOfOnlineEasytrievePrograms.Add(pgmName)
+      '  End If
+      '  CntOnlineEasytrievePrograms += 1
+      'End If
+      'If ddSequence = 1 And ddConcatSeq = 0 And SourceType = "UTILITY" Then
+      '  If ListOfUtilityPrograms.IndexOf(pgmName) = -1 Then
+      '    ListOfUtilityPrograms.Add(pgmName)
+      '  End If
+      '  CntUtilityPrograms += 1
+      'End If
+      'If execSequence = 1 And ddSequence = 1 And jobName.ToUpper <> "ONLINE" And jobName.ToUpper <> "CALLPGMS" Then
+      '  If ListOfBatchJobs.IndexOf(jobName) = -1 Then
+      '    ListOfBatchJobs.Add(jobName)
+      '  End If
+      '  CntBatchJobs += 1
+      'End If
+      'If reportID.Trim.Length > 0 Then
+      '  If reportID <> "INTRDR" Then
+      '    If ListOfReports.IndexOf(reportID) = -1 Then
+      '      ListOfReports.Add(reportID)
+      '    End If
+      '    CntReports += 1
+      '  End If
+      'End If
+      'If dsn.Trim.Length > 0 And pgmName <> "CALLPGMS" Then
+      '  Dim dsnBase As String = dsn
+      '  Dim x As Integer = dsn.IndexOf("(")
+      '  If x > -1 Then
+      '    dsnBase = dsn.Substring(0, x)
+      '  End If
+      '  If dsn.IndexOf("SYSOUT=") = -1 And Array.IndexOf(ControlLibraries, dsnBase) = -1 Then
+      '    Select Case DDName
+      '      Case "STEPLIB", "SYSUDUMP", "SYSABOUT", "SYSDBOUT", "CEEDUMP", "LEMSGS",
+      '           "ABNLHELP", "ABNLSPRT", "ABNLDUMP", "ABNLSORT",
+      '           "DFSRESLB", "IMS", "IMSERROR", "IMSERR"
+      '      Case Else
+      '        If ListOfDataFiles.IndexOf(dsn) = -1 Then
+      '          ListOfDataFiles.Add(dsn)
+      '        End If
+      '        CntDataFiles += 1
+      '    End Select
+      '  End If
+      'End If
+
+      '
       If cnt Mod 100 = 0 Then
         lblProcessingWorksheet.Text = "Processing Worksheet: " & FileNameOnly & " : Programs = " & cnt
       End If
-    Loop
+    Next
     lblProcessingWorksheet.Text = "Processing Worksheet: " & FileNameOnly & " : Programs Complete"
 
   End Sub
   Sub ProcessSourceFiles()
     Dim SourceRecordsCount As Integer = 0
+    Dim execCnt As Integer = 0
+    Dim execCount As Integer = ListOfExecs.Count
     ' loop through the list of executables. Note we may be adding while processing (called members)
     For Each exec In ListOfExecs
-      lblProcessingSource.Text = "Processing Source: " & exec
+      execCnt += 1
+      lblProcessingSource.Text = "Processing Source " & execCnt & " of " & execCount & ":" & exec
       Dim execs As String() = exec.Split(Delimiter)
       If execs.Count >= 2 Then
         exec = execs(0).Replace(Delimiter, "")
@@ -2275,7 +2657,7 @@ Public Class Form1
     Dim x As Integer = 0
     Dim y As Integer = 0
     Dim z As Integer = 0
-    Dim ListOfTables As New List(Of String)
+    'Dim ListOfTables As New List(Of String)
     Dim JustTheTable As String = ""
     For Each pgm In listOfPrograms
       Select Case SourceType
@@ -3023,7 +3405,7 @@ Public Class Form1
     Call CreateRecordFile()
 
     ' Create the Business Rules
-    Call CreateBRCOBOL(exec)
+    'Call CreateBRCOBOL(exec)
 
     ' Call CreateComponentsFile()
 
@@ -3049,7 +3431,7 @@ Public Class Form1
     End Try
 
     Dim FileName As String = txtSourceFolderName.Text & "\" & exec
-    If ListofSourceFiles.IndexOf(FileName) = -1 Then
+    If ListofSourceFiles.IndexOf(exec) = -1 Then
       LogFile.WriteLine(Date.Now & ",Source File Not Found?," & exec)
       LoadEasytrieveStatementsToArray = -1
       Exit Function
@@ -3338,6 +3720,9 @@ Public Class Form1
       RecordsWorksheet.Range("N1").Value = "Copybook"
       RecordsWorksheet.Range("O1").Value = "FDOrg"
       RecordsRow = 1
+      RecordsWorksheet.Activate()
+      RecordsWorksheet.Application.ActiveWindow.SplitRow = 1
+      RecordsWorksheet.Application.ActiveWindow.FreezePanes = True
     End If
 
     ' write the Records data
@@ -3402,6 +3787,9 @@ Public Class Form1
       FieldsWorksheet.Range("N1").Value = "Length"
       FieldsWorksheet.Range("O1").Value = "Redefines"
       FieldsRow = 1
+      FieldsWorksheet.Activate()
+      FieldsWorksheet.Application.ActiveWindow.SplitRow = 1
+      FieldsWorksheet.Application.ActiveWindow.FreezePanes = True
     End If
     '
     ' write the Fields data
@@ -3464,9 +3852,6 @@ Public Class Form1
       rngRecordName.Columns.AutoFit()
       ' ignore error flag that numbers being loaded into a text field
       objExcel.ErrorCheckingOptions.NumberAsText = False
-      'worksheet.Select(1)
-      'worksheet.Activate()
-      'worksheet.FreezePanes(2, 1)
     End If
 
     ' Format the Records Sheet - first row bold the columns
@@ -3480,9 +3865,6 @@ Public Class Form1
       rngRecordsName.Columns.AutoFit()
       ' ignore error flag that numbers being loaded into a text field
       objExcel.ErrorCheckingOptions.NumberAsText = False
-      'RecordsWorksheet.Select(2)
-      'RecordsWorksheet.Activate()
-      'RecordsWorksheet.FreezePanes(2, 1)
     End If
 
     ' Format the Fields worksheet - first row bold the columns
@@ -3496,9 +3878,6 @@ Public Class Form1
       rngFieldsName.Columns.AutoFit()
       ' ignore error flag that numbers being loaded into a text field
       objExcel.ErrorCheckingOptions.NumberAsText = False
-      'FieldsWorksheet.Select(3)
-      'FieldsWorksheet.Activate()
-      'FieldsWorksheet.FreezePanes(2, 1)
     End If
 
     If CommentsRow > 0 Then
@@ -3513,9 +3892,6 @@ Public Class Form1
       rngComments.VerticalAlignment = Excel.XlVAlign.xlVAlignTop
       ' ignore error flag that numbers being loaded into a text field
       objExcel.ErrorCheckingOptions.NumberAsText = False
-      'CommentsWorksheet.Select(4)
-      'CommentsWorksheet.Activate()
-      'CommentsWorksheet.FreezePanes(2, 1)
     End If
 
     If EXECSQLRow > 0 Then
@@ -3574,16 +3950,30 @@ Public Class Form1
       objExcel.ErrorCheckingOptions.NumberAsText = False
     End If
 
-    If IMSMapRow > 0 Then
-      Dim row As Integer = LTrim(Str(IMSMapRow))
+    If ScreenMapRow > 0 Then
+      Dim row As Integer = LTrim(Str(ScreenMapRow))
       ' Format the Sheet - first row bold the columns
-      rngIMSMap = IMSMapWorksheet.Range("A1:C1")
-      rngIMSMap.Font.Bold = True
+      rngScreenMap = ScreenMapWorksheet.Range("A1:D1")
+      rngScreenMap.Font.Bold = True
       ' data area autofit all columns
-      rngIMSMap = IMSMapWorksheet.Range("A1:C" & row)
-      workbook.Worksheets("IMSMaps").Range("A1").AutoFilter
-      rngIMSMap.Columns.AutoFit()
-      rngIMSMap.VerticalAlignment = Excel.XlVAlign.xlVAlignTop
+      rngScreenMap = ScreenMapWorksheet.Range("A1:D" & row)
+      workbook.Worksheets("ScreenMaps").Range("A1").AutoFilter
+      rngScreenMap.Columns.AutoFit()
+      rngScreenMap.VerticalAlignment = Excel.XlVAlign.xlVAlignTop
+      ' ignore error flag that numbers being loaded into a text field
+      objExcel.ErrorCheckingOptions.NumberAsText = False
+    End If
+
+    If StatsRow > 0 Then
+      Dim row As Integer = LTrim(Str(StatsRow))
+      ' Format the Sheet - first row bold the columns
+      rngStats = StatsWorksheet.Range("A1:C1")
+      rngStats.Font.Bold = True
+      ' data area autofit all columns
+      rngStats = StatsWorksheet.Range("A1:C" & row)
+      workbook.Worksheets("Stats").Range("A1").AutoFilter
+      rngStats.Columns.AutoFit()
+      rngStats.VerticalAlignment = Excel.XlVAlign.xlVAlignTop
       ' ignore error flag that numbers being loaded into a text field
       objExcel.ErrorCheckingOptions.NumberAsText = False
     End If
@@ -3609,6 +3999,9 @@ Public Class Form1
       CommentsWorksheet.Range("E1").Value = "Line#"
       CommentsWorksheet.Range("F1").Value = "Comment"
       CommentsRow = 1
+      CommentsWorksheet.Activate()
+      CommentsWorksheet.Application.ActiveWindow.SplitRow = 1
+      CommentsWorksheet.Application.ActiveWindow.FreezePanes = True
     End If
     ' load comments to spreadsheet. Merge sequential lines numbers into one row/cell
     Dim prevLineNum As Integer = -1
@@ -3662,8 +4055,12 @@ Public Class Form1
       EXECSQLWorksheet.Range("F1").Value = "Cursor"
       EXECSQLWorksheet.Range("G1").Value = "Statement"
       EXECSQLRow = 1
+      EXECSQLWorksheet.Activate()
+      EXECSQLWorksheet.Application.ActiveWindow.SplitRow = 1
+      EXECSQLWorksheet.Application.ActiveWindow.FreezePanes = True
     End If
     ' load EXECSQL to spreadsheet.
+    Dim Tables As String()
     For Each execsql In ListOfEXECSQL
       cnt += 1
       Dim ExecSqlColumns As String() = execsql.Split(Delimiter)
@@ -3677,6 +4074,15 @@ Public Class Form1
       EXECSQLWorksheet.Range("E" & row).Value = Table
       EXECSQLWorksheet.Range("F" & row).Value = ExecSqlColumns(5)       'Cursor
       EXECSQLWorksheet.Range("G" & row).Value = AddNewLineAboutEveryNthCharacters(ExecSqlColumns(6), vbNewLine, 60) 'Statement
+
+      Tables = Table.Split(",")
+      For Each Table In Tables
+        If Table.Trim.Length > 0 Then
+          If ListOfTableNames.IndexOf(Table) = -1 Then
+            ListOfTableNames.Add(Table)
+          End If
+        End If
+      Next
 
       If cnt Mod 100 = 0 Then
         lblProcessingWorksheet.Text = "Processing Worksheet: " & FileNameOnly &
@@ -3705,6 +4111,9 @@ Public Class Form1
       EXECCICSWorksheet.Range("E1").Value = "ExecCICS"
       EXECCICSWorksheet.Range("F1").Value = "MapName"
       EXECCICSRow = 1
+      EXECCICSWorksheet.Activate()
+      EXECCICSWorksheet.Application.ActiveWindow.SplitRow = 1
+      EXECCICSWorksheet.Application.ActiveWindow.FreezePanes = True
     End If
     ' load EXECCICS to spreadsheet.
     For Each execCICS In ListOfCICSMapNames
@@ -3750,15 +4159,18 @@ Public Class Form1
       IMSWorksheet.Range("B1").Value = "PSP Name"
       IMSWorksheet.Range("C1").Value = "Type"
       IMSRow = 1
+      IMSWorksheet.Activate()
+      IMSWorksheet.Application.ActiveWindow.SplitRow = 1
+      IMSWorksheet.Application.ActiveWindow.FreezePanes = True
     End If
 
     Call AddToListOfDBDNames()
     Call AddtoListOfDBDNamesTelons()
 
-    lblProcessingWorksheet.Text = "Processing DBDNames: " & ListOfDBDNames.Count
+    lblProcessingWorksheet.Text = "Processing DBDNames: " & ListOfDBDs.Count
 
-    For IMSIndx As Integer = 0 To ListOfDBDNames.Count - 1
-      Dim IMSColumns As String() = ListOfDBDNames(IMSIndx).Split(Delimiter)
+    For IMSIndx As Integer = 0 To ListOfDBDs.Count - 1
+      Dim IMSColumns As String() = ListOfDBDs(IMSIndx).Split(Delimiter)
       IMSRow += 1
       Dim row As String = LTrim(Str(IMSRow))
       IMSWorksheet.Range("A" & row).Value = IMSColumns(0)       'DBD Name
@@ -3784,8 +4196,10 @@ Public Class Form1
       CallsWorksheet.Range("C1").Value = "Source Type"
       CallsWorksheet.Range("D1").Value = "Module"
       CallsWorksheet.Range("E1").Value = "Call Type"
-
       CallsRow = 1
+      CallsWorksheet.Activate()
+      CallsWorksheet.Application.ActiveWindow.SplitRow = 1
+      CallsWorksheet.Application.ActiveWindow.FreezePanes = True
     End If
 
 
@@ -3805,41 +4219,152 @@ Public Class Form1
     lblProcessingWorksheet.Text = "Processing CALLS worksheet Complete"
 
   End Sub
-  Sub CreateIMSMAPSWorksheet()
-    '* Create the IMS MAP worksheet from the listofIMSMapNames array
-    lblProcessingWorksheet.Text = "Processing Worksheet: " & FileNameOnly & " : IMSMaps = " & listofIMSMapNames.Count
+  Sub CreateScreenMapWorksheet()
+    '* Create the Screen Map worksheet from the listofScreenMaps array
+
+    lblProcessingWorksheet.Text = "Processing Worksheet: " & FileNameOnly & " : Screen Maps = " & ListofScreenMaps.Count
 
     Dim cnt As Integer = 0
     Dim row As Integer = 0
     Dim Statement As String = ""
     Dim Table As String = ""
-    If IMSMapRow = 0 Then
-      IMSMapWorksheet = workbook.Sheets.Add(After:=workbook.Worksheets(workbook.Worksheets.Count))
-      IMSMapWorksheet.Name = "IMSMaps"
+    If ScreenMapRow = 0 Then
+      ScreenMapWorksheet = workbook.Sheets.Add(After:=workbook.Worksheets(workbook.Worksheets.Count))
+      ScreenMapWorksheet.Name = "ScreenMaps"
       ' Write the Column Headers row
-      IMSMapWorksheet.Range("A1").Value = "MapSource"
-      IMSMapWorksheet.Range("B1").Value = "FMTName"
-      IMSMapWorksheet.Range("C1").Value = "DFLD_Literals"
-      IMSMapRow = 1
+      Select Case ScreenType
+        Case "IMS"
+          ScreenMapWorksheet.Range("A1").Value = "MapSource"
+          ScreenMapWorksheet.Range("B1").Value = "IMS"
+          ScreenMapWorksheet.Range("C1").Value = "FMTName"
+          ScreenMapWorksheet.Range("D1").Value = "DFLD_Literals"
+        Case "CICS"
+          ScreenMapWorksheet.Range("A1").Value = "MapSource"
+          ScreenMapWorksheet.Range("B1").Value = "CICS"
+          ScreenMapWorksheet.Range("C1").Value = "DFHMSDName"
+          ScreenMapWorksheet.Range("D1").Value = "Literals"
+        Case Else
+          ScreenMapWorksheet.Range("A1").Value = "MapSource"
+          ScreenMapWorksheet.Range("B1").Value = "PanelType"
+          ScreenMapWorksheet.Range("C1").Value = "PanelName"
+          ScreenMapWorksheet.Range("D1").Value = "Comments"
+      End Select
+      ScreenMapRow = 1
+      ScreenMapWorksheet.Activate()
+      ScreenMapWorksheet.Application.ActiveWindow.SplitRow = 1
+      ScreenMapWorksheet.Application.ActiveWindow.FreezePanes = True
     End If
+
     ' load IMSMapNames to spreadsheet.
-    For Each IMSMaps In listofIMSMapNames
+    For Each IMSMaps In ListofScreenMaps
       cnt += 1
-      Dim IMSMapColumns As String() = IMSMaps.Split(Delimiter)
-      IMSMapRow += 1
-      row = LTrim(Str(IMSMapRow))
-      IMSMapWorksheet.Range("A" & row).Value = IMSMapColumns(0)       'MapSource
-      IMSMapWorksheet.Range("B" & row).Value = IMSMapColumns(1)       'FMTName
-      IMSMapWorksheet.Range("C" & row).Value = IMSMapColumns(2)       'DFLD Literals
+      Dim ScreenMapColumns As String() = IMSMaps.Split(Delimiter)
+      ScreenMapRow += 1
+      row = LTrim(Str(ScreenMapRow))
+      If ScreenMapColumns.Count >= 4 Then
+        ScreenMapWorksheet.Range("A" & row).Value = ScreenMapColumns(0)       'MapSource
+        ScreenMapWorksheet.Range("B" & row).Value = ScreenMapColumns(1)       'IMS/CICS/PanelType
+        ScreenMapWorksheet.Range("C" & row).Value = ScreenMapColumns(2)       'FMTName/DFHMSD/PanelName
+        ScreenMapWorksheet.Range("D" & row).Value = ScreenMapColumns(3)       'Literals or Comments
+      End If
       If cnt Mod 100 = 0 Then
         lblProcessingWorksheet.Text = "Processing Worksheet: " & FileNameOnly &
-          " : IMSMaps = " & listofIMSMapNames.Count &
+          " : IMSMaps = " & ListofScreenMaps.Count &
           " # " & cnt
       End If
     Next
-    lblProcessingWorksheet.Text = "Processing Worksheet: " & FileNameOnly & " : IMSMaps Complete"
+    lblProcessingWorksheet.Text = "Processing Worksheet: " & FileNameOnly & " : Screen Maps Complete"
 
   End Sub
+  'Sub CreateStatsWorksheet()
+  '  ' report out the Statistics / Metrics of this model
+  '  lblProcessingWorksheet.Text = "Processing Stats Worksheet"
+  '  '
+  '  Dim cnt As Integer = 0
+  '  Dim row As Integer = 0
+  '  Dim Statement As String = ""
+  '  Dim Table As String = ""
+  '  If StatsRow = 0 Then
+  '    StatsWorksheet = workbook.Sheets.Add(After:=workbook.Worksheets(workbook.Worksheets.Count))
+  '    StatsWorksheet.Name = "Stats"
+  '    ' Write the Column Headers row
+  '    StatsWorksheet.Range("A1").Value = "Metric"
+  '    StatsWorksheet.Range("B1").Value = "Times"
+  '    StatsWorksheet.Range("C1").Value = "Unique"
+  '    StatsRow = 1
+  '    StatsWorksheet.Activate()
+  '    StatsWorksheet.Application.ActiveWindow.SplitRow = 1
+  '    StatsWorksheet.Application.ActiveWindow.FreezePanes = True
+  '  End If
+  '  ' load all the various counters, etc. to spreadsheet.
+  '  StatsRow += 1 : row = LTrim(Str(StatsRow))
+  '  StatsWorksheet.Range("A" & row).Value = "COBOL Batch Programs"
+  '  StatsWorksheet.Range("B" & row).Value = CntBatchCobolPrograms
+  '  StatsWorksheet.Range("C" & row).Value = ListOfBatchCobolPrograms.Count
+
+  '  StatsRow += 1 : row = LTrim(Str(StatsRow))
+  '  StatsWorksheet.Range("A" & row).Value = "Easytrieve Batch Programs"
+  '  StatsWorksheet.Range("B" & row).Value = CntBatchEasytrievePrograms
+  '  StatsWorksheet.Range("C" & row).Value = ListOfBatchEasytrievePrograms.Count
+
+  '  StatsRow += 1 : row = LTrim(Str(StatsRow))
+  '  StatsWorksheet.Range("A" & row).Value = "COBOL Online Programs"
+  '  StatsWorksheet.Range("B" & row).Value = CntOnlineCobolPrograms
+  '  StatsWorksheet.Range("C" & row).Value = ListOfOnlineCobolPrograms.Count
+
+  '  StatsRow += 1 : row = LTrim(Str(StatsRow))
+  '  StatsWorksheet.Range("A" & row).Value = "Easytrieve Online Programs"
+  '  StatsWorksheet.Range("B" & row).Value = CntOnlineEasytrievePrograms
+  '  StatsWorksheet.Range("C" & row).Value = ListOfOnlineEasytrievePrograms.Count
+
+  '  StatsRow += 1 : row = LTrim(Str(StatsRow))
+  '  StatsWorksheet.Range("A" & row).Value = "Generated Screen Maps (SD)"
+  '  StatsWorksheet.Range("B" & row).Value = ""
+  '  StatsWorksheet.Range("C" & row).Value = CntTelonOnline
+
+  '  StatsRow += 1 : row = LTrim(Str(StatsRow))
+  '  StatsWorksheet.Range("A" & row).Value = "Generated Batch Programs (BD & DR)"
+  '  StatsWorksheet.Range("B" & row).Value = ""
+  '  StatsWorksheet.Range("C" & row).Value = CntTelonBatch
+
+  '  StatsRow += 1 : row = LTrim(Str(StatsRow))
+  '  StatsWorksheet.Range("A" & row).Value = "Utility Programs Executed"
+  '  StatsWorksheet.Range("B" & row).Value = CntUtilityPrograms
+  '  StatsWorksheet.Range("C" & row).Value = ListOfUtilityPrograms.Count
+
+  '  StatsRow += 1 : row = LTrim(Str(StatsRow))
+  '  StatsWorksheet.Range("A" & row).Value = "Data Files"
+  '  StatsWorksheet.Range("B" & row).Value = CntDataFiles
+  '  StatsWorksheet.Range("C" & row).Value = ListOfDataFiles.Count
+
+  '  StatsRow += 1 : row = LTrim(Str(StatsRow))
+  '  StatsWorksheet.Range("A" & row).Value = "Reports created"
+  '  StatsWorksheet.Range("B" & row).Value = CntReports
+  '  StatsWorksheet.Range("C" & row).Value = ListOfReports.Count
+
+  '  StatsRow += 1 : row = LTrim(Str(StatsRow))
+  '  StatsWorksheet.Range("A" & row).Value = "Batch Jobs"
+  '  StatsWorksheet.Range("B" & row).Value = ""
+  '  StatsWorksheet.Range("C" & row).Value = CntBatchJobs
+
+  '  StatsRow += 1 : row = LTrim(Str(StatsRow))
+  '  StatsWorksheet.Range("A" & row).Value = "MFS Maps (IMS)"
+  '  StatsWorksheet.Range("B" & row).Value = ""
+  '  StatsWorksheet.Range("C" & row).Value = ListOfIMSMapNames.Count
+
+  '  StatsRow += 1 : row = LTrim(Str(StatsRow))
+  '  StatsWorksheet.Range("A" & row).Value = "IMS DBDs"
+  '  StatsWorksheet.Range("B" & row).Value = ""
+  '  StatsWorksheet.Range("C" & row).Value = ListOfDBDNames.Count
+
+  '  StatsRow += 1 : row = LTrim(Str(StatsRow))
+  '  StatsWorksheet.Range("A" & row).Value = "DB2 Tables"
+  '  StatsWorksheet.Range("B" & row).Value = ""
+  '  StatsWorksheet.Range("C" & row).Value = ListOfTableNames.Count
+
+  '  lblProcessingWorksheet.Text = "Processing Stats Worksheet Complete."
+  'End Sub
+
   Sub AddToListOfDBDNames()
     ' Process the DBDNames.txt file, if exists, and put into ListOf array
     Dim DBDFileName = txtSourceFolderName.Text & "\DBDnames.txt"
@@ -3852,8 +4377,11 @@ Public Class Form1
       Dim IMSColumns As String() = DBDLines(IMSIndx).Split(Delimiter)
       Dim pspName As String = IMSColumns(0)       'PSP Name
       Dim dbdName As String = IMSColumns(2)       'DBD Name
-      If ListOfDBDNames.IndexOf(dbdName & Delimiter & pspName & Delimiter & "SOURCE") = -1 Then
-        ListOfDBDNames.Add(dbdName & Delimiter & pspName & Delimiter & "SOURCE")
+      If ListOfDBDs.IndexOf(dbdName & Delimiter & pspName & Delimiter & "SOURCE") = -1 Then
+        ListOfDBDs.Add(dbdName & Delimiter & pspName & Delimiter & "SOURCE")
+      End If
+      If ListOfDBDNames.IndexOf(dbdName) = -1 Then
+        ListOfDBDNames.Add(dbdName)
       End If
     Next
   End Sub
@@ -3875,8 +4403,11 @@ Public Class Form1
           If dbdNames.Count > 0 Then
             Dim dbdName As String = dbdNames(1)
             Dim pspName As String = Path.GetFileNameWithoutExtension(foundFile)
-            If ListOfDBDNames.IndexOf(dbdName & Delimiter & pspName & Delimiter & "TELON") = -1 Then
-              ListOfDBDNames.Add(dbdName & Delimiter & pspName & Delimiter & "TELON")
+            If ListOfDBDs.IndexOf(dbdName & Delimiter & pspName & Delimiter & "TELON") = -1 Then
+              ListOfDBDs.Add(dbdName & Delimiter & pspName & Delimiter & "TELON")
+            End If
+            If ListOfDBDNames.IndexOf(dbdName) = -1 Then
+              ListOfDBDNames.Add(dbdName)
             End If
           End If
         End If
@@ -4396,6 +4927,7 @@ Public Class Form1
     Dim statement As String = ""
     Dim FDFileName As String = ""
     Dim srcWords As New List(Of String)
+    Dim VaryingName As String = ""
     ListOfFiles.Clear()
     For stmtIndex As Integer = pgm.EnvironmentDivision + 1 To pgm.ProcedureDivision - 1
       statement = SrcStmt(stmtIndex)
@@ -4414,15 +4946,31 @@ Public Class Form1
             Else
               FDFileName = srcWords(1)
             End If
+            VaryingName = ""
             For x As Integer = 0 To srcWords.Count - 1
               If srcWords(x) = "ASSIGN" Then
                 If srcWords(x + 1) <> "TO" Then
                   DDName = srcWords(x + 1)
+                  If DDName = "VARYING" Then
+                    VaryingName = srcWords(x + 2)
+                  End If
                 Else
                   If x + 2 <= srcWords.Count - 1 Then
                     DDName = srcWords(x + 2)
+                    If DDName = "VARYING" Then
+                      VaryingName = srcWords(x + 3)
+                    End If
                   End If
                 End If
+                '
+                ' if ddname is varying we need to find that value in working storage.
+                If VaryingName.Length > 0 Then
+                  DDName = GetVariablesValue(VaryingName)
+                  If DDName.Length = 0 Then
+                    DDName = VaryingName
+                  End If
+                End If
+                '
               End If
             Next
             ListOfFiles.Add(srcWords(1) & Delimiter &
@@ -4474,6 +5022,47 @@ Public Class Form1
       End Select
     Next
     GetListOfFiles = ListOfFiles
+  End Function
+  Function GetVariablesValue(ByRef VaryingName As String) As String
+    'search through the Data Division for given VaryingName and grab its compile time value
+    ' note. NOT handling Redefines
+    Dim valueOfVariable As String = ""
+    For index As Integer = pgm.DataDivision To pgm.ProcedureDivision - 1
+      If SrcStmt(index).Substring(0, 1) = "*" Then
+        Continue For
+      End If
+      If SrcStmt(index).IndexOf(VaryingName) > -1 Then
+        'variable name is found. get it's level #.
+        Dim vnWords As New List(Of String)
+        Call GetSourceWords(SrcStmt(index), vnWords)
+        Dim vIndex As Integer = vnWords.IndexOf("VALUE")
+        If vIndex > -1 Then
+          Return vnWords(vIndex + 1)
+        End If
+        ' The VALUE is not on the variable name; maybe its on is child fields
+        Dim vnLevel As Integer = Val(vnWords(0))
+        For valueIndex As Integer = index + 1 To pgm.ProcedureDivision - 1
+          If SrcStmt(valueIndex).Substring(0, 1) = "*" Then
+            Continue For
+          End If
+          Dim vaWords As New List(Of String)
+          Call GetSourceWords(SrcStmt(valueIndex), vaWords)
+          If Not IsNumeric(vaWords(0)) Then
+            Exit For
+          End If
+          Dim vaLevel As Integer = vaWords(0)
+          If vaLevel <= vnLevel Then
+            Exit For
+          End If
+          Dim vaIndex As Integer = vaWords.IndexOf("VALUE")
+          If vaIndex > -1 Then
+            valueOfVariable &= vaWords(vaIndex + 1)
+          End If
+        Next
+        Return valueOfVariable
+      End If
+    Next
+    Return valueOfVariable
   End Function
   Function GetListOfRecordNamesFILE(ByRef filename As String, ByRef FileIndex As Integer) As List(Of String)
     ' Use the Data Division index to search Stmt array to get the FD record location,
@@ -6204,6 +6793,15 @@ Public Class Form1
     Else
       Utilities = File.ReadAllLines(UtilitiesFileName)
     End If
+
+    Dim ControlLibrariesFileName As String = InitDirectory & "\ControlLibraries.txt"
+    If Not File.Exists(ControlLibrariesFileName) Then
+      MessageBox.Show("Caution! No ControlLibraries.txt file found in folder:" & InitDirectory)
+      ControlLibraries(0) = ""
+    Else
+      ControlLibraries = File.ReadAllLines(ControlLibrariesFileName)
+    End If
+
 
     ' This area is the COBOL Verb array with counts. 
     ' **BE SURE TO KEEP VerbNames AND VerbCount ARRAYS IN SYNC!!!**
