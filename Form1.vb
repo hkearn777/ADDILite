@@ -27,8 +27,12 @@ Public Class Form1
   ' - PlantUml for creating flowchart
   '
   '***Be sure to change ProgramVersion when making changes!!!
-  Dim ProgramVersion As String = "v1.12"
+  Dim ProgramVersion As String = "v1.13"
   'Change-History.
+  ' 2024/03/20 v1.13 hk Create JCL Comments Tab
+  '                    - Handle inline Easytrieve code via in-stream data sets (DD *)
+  '                    - New Source Type: Assembler
+  ' 2024/03/20 v1.13 hk Create JCL Comments Tab
   ' 2024/02/27 v1.12 hk Create ScreenMaps Tab
   '                    - Added Readonly option on excel SaveAs
   '                    - Set Freeze Frames on first rows of the worksheets
@@ -94,6 +98,7 @@ Public Class Form1
   ' JCL
   Dim DirectoryName As String = ""
   Dim FileNameOnly As String = ""
+  Dim FileNameWithExtension As String = ""
   Dim tempNoContdJCLFileName As String = ""
   Dim tempCobFileName As String = ""
   Dim tempEZTFileName As String = ""
@@ -123,6 +128,7 @@ Public Class Form1
   Dim execSequence As Integer = 0
 
   Dim SummaryRow As Integer = 0
+  Dim JobCommentsRow As Integer = 0
   Dim ProgramsRow As Integer = 0
   Dim RecordsRow As Integer = 0
   Dim FieldsRow As Integer = 0
@@ -136,10 +142,12 @@ Public Class Form1
 
   Dim jclStmt As New List(Of String)
   Dim ListOfExecs As New List(Of String)        'array holding the executable programs
+  Dim ListOfEasytrieveLoadAndGo As New Dictionary(Of String, String) 'array holding the names of the 'load and go' Easytrieve programs
 
   Dim swIPFile As StreamWriter = Nothing        'Instream proc file, temporary
   'Dim swDDFile As StreamWriter = Nothing
   Dim swPumlFile As StreamWriter = Nothing
+  Dim swInstreamDatasetFile As StreamWriter = Nothing
 
   Dim LogFile As StreamWriter = Nothing
   Dim LogStmtFile As StreamWriter = Nothing
@@ -153,6 +161,7 @@ Public Class Form1
   Dim dgfWorksheet As Microsoft.Office.Interop.Excel.Worksheet
   ' Model 
   Dim workbook As Microsoft.Office.Interop.Excel.Workbook
+  Dim JobCommentsWorksheet As Microsoft.Office.Interop.Excel.Worksheet
   Dim worksheet As Microsoft.Office.Interop.Excel.Worksheet
   Dim SummaryWorksheet As Microsoft.Office.Interop.Excel.Worksheet
   Dim RecordsWorksheet As Microsoft.Office.Interop.Excel.Worksheet
@@ -166,6 +175,7 @@ Public Class Form1
   Dim StatsWorksheet As Microsoft.Office.Interop.Excel.Worksheet
 
   Dim rngSummaryName As Microsoft.Office.Interop.Excel.Range
+  Dim rngJobComments As Microsoft.Office.Interop.Excel.Range
   Dim rngRecordName As Microsoft.Office.Interop.Excel.Range
   Dim rngRecordsName As Microsoft.Office.Interop.Excel.Range
   Dim rngFieldsName As Microsoft.Office.Interop.Excel.Range
@@ -261,6 +271,7 @@ Public Class Form1
   Dim pumlLineCnt As Integer = 0
   Dim pumlPageCnt As Integer = 0
   Dim ScreenType As String = ""
+  Dim numLoadAndGo As Integer = -1
 
 
   Public Structure ProgramInfo
@@ -480,14 +491,6 @@ Public Class Form1
     NumberOfJobsToProcess = My.Computer.FileSystem.GetFiles(txtJCLJOBFolderName.Text).Count
     lblJobFileCount.Text = "JCL Job files found:" & Str(NumberOfJobsToProcess)
 
-    ' Build a list of source files so we don't have to use file exist function, just the list search.
-    Dim di As New IO.DirectoryInfo(txtSourceFolderName.Text)
-    Dim aryFi As IO.FileInfo() = di.GetFiles("*.*")
-    Dim fi As IO.FileInfo
-    For Each fi In aryFi
-      ListofSourceFiles.Add(fi.Name.ToUpper)
-    Next
-    lblSourceFilesFound.Text = "Source Files Found:" & Str(ListofSourceFiles.Count)
 
     ' Count the Telon files to determine Batch and Online members
     'Dim TelonBDfiles As String() = Directory.GetFiles(txtTelonFoldername.Text & "\", "*BD", SearchOption.AllDirectories)
@@ -581,6 +584,19 @@ Public Class Form1
     ' Create the Summary tab (aka Datagathering form details)
     CreateSummary()
 
+    ' Create, if any, all the in-stream data files as defined in the JOBS
+    For Each JobFile In ListOfJobs
+      Call CreateInStreamDataSets(JobFile)
+    Next
+
+    ' Build a list of source files so we don't have to use file exist function, just the list search.
+    Dim di As New IO.DirectoryInfo(txtSourceFolderName.Text)
+    Dim aryFi As IO.FileInfo() = di.GetFiles("*.*")
+    Dim fi As IO.FileInfo
+    For Each fi In aryFi
+      ListofSourceFiles.Add(fi.Name.ToUpper)
+    Next
+    lblSourceFilesFound.Text = "Source Files Found:" & Str(ListofSourceFiles.Count)
 
     ' Process All the jobs in the JCL Folder.
     '  An addtional job could be created if should there be call subroutines
@@ -591,6 +607,7 @@ Public Class Form1
       lblProcessingJob.Text = "Processing Job #" & Jobcount & ": " & JobFile
       LogFile.WriteLine(Date.Now & ",Processing Job," & Path.GetFileNameWithoutExtension(JobFile))
       FileNameOnly = Path.GetFileNameWithoutExtension(JobFile)
+      FileNameWithExtension = Path.GetFileName(JobFile)
       Call ProcessJOBFile(JobFile)
       Call ProcessSourceFiles()
       ProgressBar1.PerformStep()
@@ -652,6 +669,7 @@ Public Class Form1
       Dim PanelType As String = ""
       Dim literalsFound As String = ""
       Dim literalsFoundCnt As Integer = 0
+      Dim literalsFoundMax As Integer = 6
       Dim MbrLine As String = ""
       Dim Text As String = ""
       ScreenType = ""
@@ -660,18 +678,21 @@ Public Class Form1
         Text = memberLines(index) & Space(80)
         Text = Text.Substring(0, 72)
         MbrLine &= Text.Substring(0, 71).Trim
-        If Text.Substring(71, 1) = "C" Then
-          Continue For
-        End If
+        Select Case Text.Substring(71, 1)
+          Case "C", "X"
+            Continue For
+        End Select
         If MbrLine.Trim.Length = 0 Then
           Continue For
         End If
 
         ' Telon Screens pulled from (*SD, *DR, *BD)
-        If MbrLine.Trim.IndexOf("TELON ") > -1 Then
-          ScreenType = "TELON"
-          MbrLine = ""
-          Continue For
+        If ScreenType = "" Then
+          If MbrLine.Trim.IndexOf("TELON") > -1 Then
+            ScreenType = "TELON"
+            MbrLine = ""
+            Continue For
+          End If
         End If
         If ScreenType = "TELON" And MbrLine.Substring(0, 1) <> "*" Then
           Call GetSourceWords(MbrLine, srcWords)
@@ -683,6 +704,7 @@ Public Class Form1
                 If screenWord.StartsWith("DESC='") Then
                   literalsFound = screenWord.Substring(6).Replace("'", "").Trim
                   literalsFoundCnt = 1
+                  Exit For
                 End If
               Next
               ListofScreenMaps.Add(Path.GetFileName(foundFile) & Delimiter &
@@ -694,65 +716,75 @@ Public Class Form1
         End If
 
         ' IMS screens
-        If MbrLine.IndexOf(" FMT ") > -1 Then
-          ScreenType = "IMS"
+        If ScreenType = "" Then
           Call GetSourceWords(MbrLine, srcWords)
-          MapName = srcWords(0)
-          MbrLine = ""
-          Continue For
+          If srcWords.Count >= 2 Then
+            If srcWords(1) = "FMT" Then
+              ScreenType = "IMS"
+              MapName = srcWords(0)
+              MbrLine = ""
+              Continue For
+            End If
+          End If
         End If
-        If ScreenType = "IMS" And MbrLine.IndexOf(" DFLD ") > -1 Then
+        If ScreenType = "IMS" Then
           Call GetSourceWords(MbrLine, srcWords)
-          Dim startIndex As Integer = -1
-          If srcWords(0) = "DFLD" Then
-            startIndex = 1
-          End If
-          If srcWords(1) = "DFLD" Then
-            startIndex = 2
-          End If
-          If startIndex > -1 Then
-            If srcWords(startIndex).StartsWith("'") Then
-              literalsFoundCnt += 1
-              If literalsFoundCnt <= 4 Then
-                Dim quoteWords As String() = srcWords(startIndex).Split("'")
-                literalsFound &= quoteWords(1) & vbNewLine
+          If srcWords.Count >= 2 Then
+            Dim startIndex As Integer = -1
+            If srcWords(0) = "DFLD" Then
+              startIndex = 1
+            End If
+            If srcWords(1) = "DFLD" Then
+              startIndex = 2
+            End If
+            If startIndex > -1 Then
+              If srcWords(startIndex).StartsWith("'") Then
+                literalsFoundCnt += 1
+                If literalsFoundCnt <= literalsFoundMax Then
+                  Dim quoteWords As String() = srcWords(startIndex).Split("'")
+                  literalsFound &= quoteWords(1).Trim & vbNewLine
+                End If
               End If
             End If
           End If
+          If MbrLine = "END" Or literalsFoundCnt > literalsFoundMax Then
+            If literalsFound.Length > 2 Then
+              literalsFound = literalsFound.Substring(0, literalsFound.Length - 2)    'remove last vbNewLine
+            End If
+            ListofScreenMaps.Add(Path.GetFileName(foundFile) & Delimiter &
+                                    ScreenType & Delimiter &
+                                    MapName & Delimiter &
+                                    literalsFound)
+            If ListOfIMSMapNames.IndexOf(MapName) = -1 Then
+              ListOfIMSMapNames.Add(MapName)
+            End If
+            Exit For
+          End If
           MbrLine = ""
           Continue For
-        End If
-        If ScreenType = "IMS" And MbrLine.IndexOf(" FMTEND ") > -1 Then
-          If literalsFound.Length > 2 Then
-            literalsFound = literalsFound.Substring(0, literalsFound.Length - 2)    'remove last vbNewLine
-          End If
-          ListofScreenMaps.Add(Path.GetFileName(foundFile) & Delimiter &
-                                  ScreenType & Delimiter &
-                                  MapName & Delimiter &
-                                  literalsFound)
-          If ListOfIMSMapNames.IndexOf(MapName) = -1 Then
-            ListOfIMSMapNames.Add(MapName)
-          End If
-          Exit For
         End If
 
         ' CICS Screens
-        If ScreenType = "" And MbrLine.IndexOf(" DFHMSD ") > -1 Then
-          ScreenType = "CICS"
+        If ScreenType = "" Then
           Call GetSourceWords(MbrLine, srcWords)
-          MapName = srcWords(0)
-          MbrLine = ""
-          Continue For
+          If srcWords.Count >= 2 Then
+            If srcWords(1) = "DFHMSD" Then
+              ScreenType = "CICS"
+              MapName = srcWords(0)
+              MbrLine = ""
+              Continue For
+            End If
+          End If
         End If
         If ScreenType = "CICS" Then
-          If MbrLine.IndexOf(" INITIAL='") > -1 Then
+          If MbrLine.IndexOf("INITIAL='") > -1 Then
             literalsFoundCnt += 1
-            If literalsFoundCnt <= 4 Then
+            If literalsFoundCnt <= literalsFoundMax Then
               Dim quoteWords As String() = MbrLine.Split("'")
               literalsFound &= quoteWords(1).Trim & vbNewLine
             End If
           End If
-          If MbrLine.IndexOf(" DFHMSD ") > -1 Or MbrLine.IndexOf(" END ") > -1 Then
+          If literalsFoundCnt > literalsFoundMax Or MbrLine = "END" Then
             If literalsFound.Length > 2 Then
               literalsFound = literalsFound.Substring(0, literalsFound.Length - 2)    'remove last vbNewLine
             End If
@@ -987,14 +1019,11 @@ Public Class Form1
     Dim continuation As Boolean = False
     Dim jStatement As String = ""
     Dim jclWords As New List(Of String)
+    Dim comment As String = ""
 
     Dim JCLLines As String() = File.ReadAllLines(Jobfile)
     For Each JCLLine In JCLLines
       text1 = JCLLine.Replace(vbTab, Space(1))
-      ' drop comments
-      If Mid(text1, 1, 3) = "//*" Or Mid(text1, 1, 3) = "++*" Then
-        Continue For
-      End If
       ' drop data (of an DD * statement) or not a JCL statement
       If Mid(text1, 1, 2) = "//" Or Mid(text1, 1, 2) = "++" Then
       Else
@@ -1014,6 +1043,21 @@ Public Class Form1
         If Mid(text1, 72, 1) = "+" Then
           Mid(text1, 72, 1) = " "
         End If
+      End If
+      ' store the comments
+      If Mid(text1, 1, 3) = "//*" Or Mid(text1, 1, 3) = "++*" Then
+        If text1.IndexOf("//*PRODUCTION ") > -1 Then
+          Continue For
+        End If
+        If text1.IndexOf("//*REP ") > -1 Then
+          Continue For
+        End If
+        comment = text1.Replace("*", "").Replace("//", "").Replace("++", "").Trim
+        If comment.Length = 0 Then
+          Continue For
+        End If
+        JCL.Add(Mid(text1, 1, 2) & "*" & Delimiter & "COMMENT" & Delimiter & comment.Replace(Delimiter, " ").Trim)
+        Continue For
       End If
       ' remove leading slashes if this line is a continuation
       If continuation = True Then
@@ -1070,6 +1114,158 @@ Public Class Form1
         Exit Function
       End If
     Next
+  End Function
+
+  Sub CreateInStreamDataSets(ByRef JobFile As String)
+    'This will scan for 'DD *' JCL statement and create a source file with pattern
+    '  <JOB name>_<Step name>_<DD name>
+    ' This will ignore any 'DD DATA' JCL statements for now...
+    ' Input: JOBS folder name (global variable)
+    '        SOURCES folder name (global variable)
+    ' Output: files written to the SOURCES folder name
+    '***here***
+    FileNameOnly = Path.GetFileNameWithoutExtension(JobFile)
+    FileNameWithExtension = Path.GetFileName(JobFile)
+    Dim JCLLines As String() = File.ReadAllLines(JobFile)
+    Dim JCLWords As New List(Of String)
+    Dim execIndex As Integer = -1
+    jobName = ""
+    stepName = ""
+    DDName = ""
+    For JCLIndex As Integer = 0 To JCLLines.Count - 1
+      Dim JCLLine As String = JCLLines(JCLIndex)
+      Dim tWord = JCLLine.Split(" ")
+      JCLWords.Clear()
+      For Each JCLword In tWord
+        If JCLword.Trim.Length > 0 Then        'dropping empty words
+          JCLWords.Add(JCLword.ToUpper)
+        End If
+      Next
+      If JCLWords.Count < 3 Then
+        Continue For
+      End If
+      If JCLWords(0).Length < 3 Then
+        Continue For
+      End If
+      If JCLWords(0).Substring(0, 3) = "//*" Then
+        Continue For
+      End If
+      If JCLWords(0).Length < 2 Then
+        Continue For
+      End If
+      If JCLWords(0).Substring(0, 2) = "/*" Then
+        Continue For
+      End If
+      Select Case JCLWords(1)
+        Case "JOB"
+          jobName = JCLWords(0).Replace("//", "").Trim()
+        Case "EXEC"
+          stepName = JCLWords(0).Replace("//", "").Trim()
+          If JCLWords(2).IndexOf("PGM=EZTPA00") > -1 Then
+            pgmName = "EZTPA00"
+            execIndex = JCLIndex
+          Else
+            pgmName = ""
+          End If
+        Case "DD"
+          DDName = JCLWords(0).Replace("//", "").Trim()
+          If DDName.IndexOf(".") > -1 Then
+            Dim stepanddd = DDName.Split(".")
+            If stepanddd.Count >= 2 Then
+              stepName = stepanddd(0)
+              DDName = stepanddd(1)
+            End If
+            ' need to find pgmName for this DD Override by using the stepName
+            pgmName = FindExecPgmName(JCLLines)
+          End If
+          If JCLWords(2) = "*" Then
+            Call CreateInstreamDataset(JCLLines, JCLIndex)
+            Continue For
+          End If
+          ' in case it is easytrieve and a SYSIN DD DSN
+          If pgmName = "EZTPA00" And DDName = "SYSIN" Then
+            Dim memberName As String = GrabPDSMemberName(JCLWords(2))
+            If memberName.Length = 0 Then
+              Continue For
+            End If
+            Dim myKey As String = FileNameOnly & "_" & jobName & "_" & stepName
+            ListOfEasytrieveLoadAndGo.Add(myKey, memberName)
+          End If
+      End Select
+    Next
+  End Sub
+  Function FindExecPgmName(ByRef JCLLines As String()) As String
+    Dim JCLWords As New List(Of String)
+    For JCLIndex As Integer = 0 To JCLLines.Count - 1
+      Dim JCLLine As String = JCLLines(JCLIndex)
+      Dim tWord = JCLLine.Split(" ")
+      JCLWords.Clear()
+      For Each JCLword In tWord
+        If JCLword.Trim.Length > 0 Then        'dropping empty words
+          JCLWords.Add(JCLword.ToUpper)
+        End If
+      Next
+      If JCLWords.Count < 3 Then
+        Continue For
+      End If
+      If JCLWords(0).Length < 3 Then
+        Continue For
+      End If
+      If JCLWords(0).Substring(0, 3) = "//*" Then
+        Continue For
+      End If
+      If JCLWords(0).Length < 2 Then
+        Continue For
+      End If
+      If JCLWords(0).Substring(0, 2) = "/*" Then
+        Continue For
+      End If
+      Select Case JCLWords(1)
+        Case "EXEC"
+          Dim findStepName As String = JCLWords(0).Replace("//", "").Trim()
+          If findStepName = stepName Then
+            Return GetParmPGM(JCLWords(2))
+          End If
+      End Select
+    Next
+    Return ""
+  End Function
+  Sub CreateInstreamDataset(ByRef JCLLines As String(), ByRef JCLIndex As Integer)
+    ' This will write out the instream data set
+    ' Input fields (Global): FileNameOnly, JobName StepName, DDName
+    '      JCLLines() argument
+    ' Output file will be named: <filenameonly>_<jobname>_<stepname>_<ddname>
+    numLoadAndGo += 1
+    Dim InstreamDatasetFileName = txtSourceFolderName.Text & "\#ADDI" & LTrim(Str(numLoadAndGo))
+    swInstreamDatasetFile = My.Computer.FileSystem.OpenTextFileWriter(InstreamDatasetFileName, False)
+
+    ' Write the data after the 'DD *' until we reach a '//' or '/*' or end of array
+    For JCLIndex = JCLIndex + 1 To JCLLines.Count - 1
+      If JCLLines(JCLIndex).Length >= 2 Then
+        Select Case JCLLines(JCLIndex).Substring(0, 2)
+          Case "//", "/*"
+            Exit For
+        End Select
+        swInstreamDatasetFile.WriteLine(JCLLines(JCLIndex))
+      End If
+    Next
+    If JCLIndex < JCLLines.Count - 1 Then
+      JCLIndex -= 1
+    End If
+    swInstreamDatasetFile.Close()
+    If pgmName = "EZTPA00" And DDName = "SYSIN" Then
+      Dim myKey As String = FileNameOnly & "_" & jobName & "_" & stepName
+      Dim myValue As String = "#ADDI" & LTrim(Str(numLoadAndGo))
+      ListOfEasytrieveLoadAndGo.Add(myKey, myValue)
+    End If
+  End Sub
+  Function GrabPDSMemberName(ByRef text As String) As String
+    Dim OpenParenIndex As Integer = text.IndexOf("(")
+    Dim CloseParenIndex As Integer = text.IndexOf(")")
+    If OpenParenIndex < 0 Or CloseParenIndex < 0 Then
+      Return ""
+    End If
+    Return text.Substring(OpenParenIndex + 1, (CloseParenIndex - OpenParenIndex - 1))
   End Function
   Sub LogStmtArray(ByRef theFileName As String, theStmtArray As List(Of String))
     ' write the stmt array to a file for debugging purposes
@@ -1226,16 +1422,8 @@ Public Class Form1
     ' Write the output JOB, EXEC, DD, Panvalet script, and PUML files.
     ' return of -1 means an error
     ' return of 0 means all is okay
-    '**here**
+
     ListOfDDs.Clear()       'in lieu of the swDDFile
-    'Dim DDFileName = txtOutputFoldername.Text & "/" & FileNameOnly & "_DD.csv"
-    'Try
-    '  swDDFile = My.Computer.FileSystem.OpenTextFileWriter(DDFileName, False)
-    'Catch ex As Exception
-    '  MessageBox.Show(ex.Message, "Error opening " & DDFileName)
-    '  WriteOutput = -1
-    '  Exit Function
-    'End Try
 
     Dim ListOfSymbolics As New List(Of String)
 
@@ -1256,6 +1444,7 @@ Public Class Form1
       End If
 
       Select Case jControl
+        Case "COMMENT"
         Case "JOB"
           Call ProcessJOB()
         Case "PROC"
@@ -1263,7 +1452,7 @@ Public Class Form1
           ListOfSymbolics = LoadSymbolics(jParameters)
         Case "PEND"
         Case "EXEC"
-          Call ProcessEXEC()
+          Call ProcessEXEC(True)
         Case "DD"
           Call ProcessDD(ListOfSymbolics)          'this writes the _dd.csv record
         Case "SET"
@@ -1292,11 +1481,10 @@ Public Class Form1
       End Select
 
     Next
-    ' close the files
-
-    'swDDFile.Close() we use the ListOfDDs array instead
 
     Call CreateJCLPuml()
+
+    Call CreateJobComments()
 
     Call CreatePrograms()
 
@@ -1346,7 +1534,7 @@ Public Class Form1
     '    RTrim(jParameters))
     InstreamProc = ""
   End Sub
-  Sub ProcessEXEC()
+  Sub ProcessEXEC(ByVal NeedSourceType As Boolean)
     ' The "EXEC" control is for either PROC or a PGM
     ' For PROC it could be "EXEC <procname>" or "EXEC PROC=<procname"
     ' For PGM it is "EXEC PGM=<pgmname>"
@@ -1377,11 +1565,26 @@ Public Class Form1
       Exit Sub
     End If
 
+    ' At this time we need to check if its an Easytrieve load-and-go program (EZTPA00)
+    '  if so, we need to substitue the pgmName with the actual program from the DD SYSIN statement
+    '  from a PDS member name of the DSN, 
+    '  or from a Instream-data (ie DD *)
+    '  which was identified during the ProcessJob routine.
+    If pgmName = "EZTPA00" Then
+      Dim myKey As String = FileNameOnly & "_" & jobName & "_" & stepName
+      Dim myValue As String = Nothing
+      If ListOfEasytrieveLoadAndGo.TryGetValue(myKey, myValue) Then
+        pgmName = myValue
+      End If
+    End If
+
     ' Is this an IMS program? If so, we need to get the real program name.
     If pgmName <> "DFSRRC00" Then
       execSequence += 1
-      SourceType = GetSourceType(pgmName)
-      execName = pgmName
+      If NeedSourceType Then
+        SourceType = GetSourceType(pgmName)
+        execName = pgmName
+      End If
       Exit Sub
     End If
 
@@ -1391,14 +1594,19 @@ Public Class Form1
     Dim tempstr As String = GetParm(jParameters, "PARM=")
     If tempstr.Length = 0 Then
       pgmName = "IMS Unknown"
-      SourceType = "Unknown"
+      If NeedSourceType Then
+        SourceType = "Unknown"
+      End If
       Exit Sub
     End If
 
     'tempstr = 'DLI,P2BPCSD1,P2BPCSD1'
     Dim temparray As String() = tempstr.Split(",")
     pgmName = temparray(1)
-    SourceType = GetSourceType(pgmName)
+
+    If NeedSourceType Then
+      SourceType = GetSourceType(pgmName)
+    End If
 
   End Sub
 
@@ -1787,10 +1995,69 @@ Public Class Form1
 
 
   End Sub
+
+  Sub CreateJobComments()
+    ' Build the JobComments Worksheet.
+    ' Process through the JclStmt array. Look for an 'EXEC' command and then process backwards
+    '  to find the first of the comments. Then string (vbLF) comments together and write
+    '  an entry for that 'EXEC'
+    lblProcessingWorksheet.Text = "Processing Job Comments: " & FileNameOnly
+    If JobCommentsRow = 0 Then
+      JobCommentsWorksheet = workbook.Sheets.Add(After:=workbook.Worksheets(workbook.Worksheets.Count))
+      JobCommentsWorksheet.Name = "JobComments"
+      ' Write the column headings row
+      JobCommentsWorksheet.Range("A1").Value = "Source"
+      JobCommentsWorksheet.Range("B1").Value = "JobName"
+      JobCommentsWorksheet.Range("C1").Value = "Program"
+      JobCommentsWorksheet.Range("D1").Value = "StepName"
+      JobCommentsWorksheet.Range("E1").Value = "Comments above Program"
+      JobCommentsRow = 1
+      JobCommentsWorksheet.Activate()
+      JobCommentsWorksheet.Application.ActiveWindow.SplitRow = 1
+      JobCommentsWorksheet.Application.ActiveWindow.FreezePanes = True
+    End If
+    '
+    ' find the EXEC statement
+    Dim row As String = ""
+    For index = 0 To jclStmt.Count - 1
+      Dim statement As String = jclStmt(index)
+      Call GetLabelControlParms(statement, jLabel, jControl, jParameters)
+      Select Case jControl
+        Case "EXEC"
+          stepName = jLabel
+          Call ProcessEXEC(False)
+          Dim comment As String = ""
+          For pgmIndex As Integer = index - 1 To 0 Step -1
+            Call GetLabelControlParms(jclStmt(pgmIndex), jLabel, jControl, jParameters)
+            If jControl = "COMMENT" Then
+              comment = jParameters.Replace("=", "") & vbLf & comment
+            Else
+              If jControl <> "PROC" Then
+                Exit For
+              End If
+            End If
+          Next
+          If comment.EndsWith(vbLf) Then
+            comment = comment.Remove(comment.Length - 1)
+          End If
+          'write the comment line
+          If comment.Length > 0 Then
+            JobCommentsRow += 1
+            row = LTrim(Str(JobCommentsRow))
+            JobCommentsWorksheet.Range("A" & row).Value = FileNameWithExtension
+            JobCommentsWorksheet.Range("B" & row).Value = jobName
+            JobCommentsWorksheet.Range("C" & row).Value = pgmName
+            JobCommentsWorksheet.Range("D" & row).Value = stepName
+            JobCommentsWorksheet.Range("E" & row).Value = comment
+          End If
+      End Select
+    Next
+    lblProcessingWorksheet.Text = "Processing Job Comments: " & FileNameOnly & " : Complete"
+  End Sub
   Sub CreatePrograms()
 
     ' Build the worksheetsheet. Programs sheet is a list of all JCL Jobs with programs and DD details.
-    lblProcessingWorksheet.Text = "Processing Worksheet: " & FileNameOnly & " : Programs"
+    lblProcessingWorksheet.Text = "Processing Programs: " & FileNameOnly & " : Rows = " & ListOfDDs.Count
     If ProgramsRow = 0 Then
       worksheet = workbook.Sheets.Add(After:=workbook.Worksheets(workbook.Worksheets.Count))
       worksheet.Name = "Programs"
@@ -1962,10 +2229,10 @@ Public Class Form1
 
       '
       If cnt Mod 100 = 0 Then
-        lblProcessingWorksheet.Text = "Processing Worksheet: " & FileNameOnly & " : Programs = " & cnt
+        lblProcessingWorksheet.Text = "Processing Programs: " & FileNameOnly & " : Rows = " & cnt
       End If
     Next
-    lblProcessingWorksheet.Text = "Processing Worksheet: " & FileNameOnly & " : Programs Complete"
+    lblProcessingWorksheet.Text = "Processing Programs: " & FileNameOnly & " : Complete"
 
   End Sub
   Sub ProcessSourceFiles()
@@ -2500,6 +2767,9 @@ Public Class Form1
             Case SrcStmt(stmtIndex).Substring(0, 1) = "*"
               Continue For
             Case (SrcStmt(stmtIndex).IndexOf("IDENTIFICATION DIVISION.") > -1) Or
+                (SrcStmt(stmtIndex).IndexOf("IDENTIFICATION  DIVISION.") > -1) Or
+                (SrcStmt(stmtIndex).IndexOf("IDENTIFICATION   DIVISION.") > -1) Or
+                (SrcStmt(stmtIndex).IndexOf("IDENTIFICATION    DIVISION.") > -1) Or
                 (SrcStmt(stmtIndex).IndexOf("ID DIVISION.") > -1)
               If pgm.ProcedureDivision >= 1 Then
                 pgm.EndProgram = stmtIndex - 1
@@ -2510,7 +2780,12 @@ Public Class Form1
               pgm.EnvironmentDivision = -1
               pgm.DataDivision = -1
               pgm.ProcedureDivision = -1
-            Case SrcStmt(stmtIndex).IndexOf("ENVIRONMENT DIVISION.") > -1
+            Case (SrcStmt(stmtIndex).IndexOf("ENVIRONMENT DIVISION.") > -1) Or
+                (SrcStmt(stmtIndex).IndexOf("ENVIRONMENT  DIVISION.") > -1) Or
+                (SrcStmt(stmtIndex).IndexOf("ENVIRONMENT   DIVISION.") > -1) Or
+                (SrcStmt(stmtIndex).IndexOf("ENVIRONMENT    DIVISION.") > -1) Or
+                (SrcStmt(stmtIndex).IndexOf("ENVIRONMENT     DIVISION.") > -1) Or
+                (SrcStmt(stmtIndex).IndexOf("ENVIRONMENT      DIVISION.") > -1)
               pgm.EnvironmentDivision = stmtIndex
             Case SrcStmt(stmtIndex).IndexOf("DATA DIVISION.") > -1
               pgm.DataDivision = stmtIndex
@@ -2518,7 +2793,7 @@ Public Class Form1
               pgm.ProcedureDivision = stmtIndex
             Case SrcStmt(stmtIndex).IndexOf("PROGRAM-ID.") > -1
               Dim tmppgmid As String = SrcStmt(stmtIndex).Trim
-              pgm.ProgramId = tmppgmid.Substring(11).Replace(".", "").Trim
+              pgm.ProgramId = tmppgmid.Substring(11).Replace(".", "").Replace("'", "").Trim
           End Select
           If pgm.ProcedureDivision > -1 Then
             If SrcStmt(stmtIndex).IndexOf(" CALL ") > -1 Then
@@ -3077,6 +3352,7 @@ Public Class Form1
                       If cWord(z) = "WHERE" Or cWord(z) = "END-EXEC" Then
                         If ListOfTables.IndexOf(Table) = -1 Then
                           ListOfTables.Add(Table)
+                          Table = ""
                           Exit For
                         End If
                       End If
@@ -3096,6 +3372,12 @@ Public Class Form1
                     Next z
                   End If
                 Next y
+                If Table.Length > 0 Then
+                  If ListOfTables.IndexOf(Table) = -1 Then
+                    ListOfTables.Add(Table)
+                    Table = ""
+                  End If
+                End If
                 Table = ""
                 For Each TableEntry In ListOfTables
                   Dim SchemaOrTable As String() = TableEntry.Split(".")
@@ -3218,47 +3500,62 @@ Public Class Form1
     Return ""
   End Function
   Function GetSourceType(ByRef FileName As String) As String
-    ' Identify if this file is COBOL or Easytrieve or Utility
+    ' Identify if this file is COBOL or Easytrieve or Utility or Assembler
     ' FileName must exist in the source directory.
     GetSourceType = ""
     If FileName.Trim.Length = 0 Then
       LogFile.WriteLine(Date.Now & ",Filename for GetSourcetype is empty," & FileNameOnly)
-      GetSourceType = "UTILITY"
-      Exit Function
+      Return "UTILITY"
     End If
     If Array.IndexOf(Utilities, FileName) > -1 Then
-      GetSourceType = "UTILITY"
-      Exit Function
+      Return "UTILITY"
     End If
 
     Dim FoundCobolFileName As String = SourceExists(FileName)
     If FoundCobolFileName.Length = 0 Then
       LogFile.WriteLine(Date.Now & ",Source File Not found," & FileName)
-      GetSourceType = "NotFound"
-      Exit Function
+      Return "NotFound"
     End If
+
+    Dim myFileLen As Long = FileLen(txtSourceFolderName.Text & "\" & FoundCobolFileName)
+    If myFileLen = 0 Then
+      LogFile.WriteLine(Date.Now & ",Source File Length is zero," & FileName)
+      Return "NotFound"
+    End If
+
     Dim CobolLines As String() = File.ReadAllLines(txtSourceFolderName.Text & "\" & FoundCobolFileName)
 
     For index As Integer = 0 To CobolLines.Count - 1
       If Len(Trim(CobolLines(index))) = 0 Then
         Continue For
       End If
+      ' COBOL
       If (CobolLines(index).ToUpper.IndexOf("IDENTIFICATION DIVISION.") > -1) Or
         (CobolLines(index).ToUpper.IndexOf("IDENTIFICATION  DIVISION.") > -1) Or
+        (CobolLines(index).ToUpper.IndexOf("IDENTIFICATION   DIVISION.") > -1) Or
+        (CobolLines(index).ToUpper.IndexOf("IDENTIFICATION    DIVISION.") > -1) Or
         (CobolLines(index).ToUpper.IndexOf("ID DIVISION.") > -1) Then
-        GetSourceType = "COBOL"
-        Exit Function
+        Return "COBOL"
       End If
+      ' Easytrieve
       If CobolLines(index).Length >= 6 Then
         Select Case CobolLines(index).ToUpper.Substring(0, 4)
           Case "PARM", "FILE", "SORT", "JOB "
-            GetSourceType = "Easytrieve"
-            Exit Function
+            Return "Easytrieve"
         End Select
+        If CobolLines(index).Substring(0, 1) = "%" Then
+          Return "Easytrieve"
+        End If
+      End If
+      ' Mainframe Assembler
+      If (CobolLines(index).ToUpper.IndexOf(" CSECT") > -1) Or
+          (CobolLines(index).IndexOf(" AMODE") > -1) Or
+          (CobolLines(index).IndexOf(" RMODE") > -1) Then
+        Return "Assembler"
       End If
     Next
     LogFile.WriteLine(Date.Now & ",Unknown Type of Source File," & FileName)
-    GetSourceType = "Unknown"
+    Return "Unknown"
 
   End Function
   Sub FillInAreas(ByVal CobolLine As String,
@@ -3699,7 +3996,7 @@ Public Class Form1
     '
     ' Create the Excel Records sheet.
     '
-    lblProcessingWorksheet.Text = "Processing Worksheet: " & FileNameOnly & " : Records = " & ListOfRecords.Count
+    lblProcessingWorksheet.Text = "Processing Records: " & FileNameOnly & " : Rows = " & ListOfRecords.Count
     If RecordsRow = 0 Then
       RecordsWorksheet = workbook.Sheets.Add(After:=workbook.Worksheets(workbook.Worksheets.Count))
       RecordsWorksheet.Name = "Records"
@@ -3754,18 +4051,18 @@ Public Class Form1
           RecordsWorksheet.Range("O" & row).Value = DelimText(14)      'FDOrg
         End If
         If cnt Mod 100 = 0 Then
-          lblProcessingWorksheet.Text = "Processing Worksheet: " & FileNameOnly &
-            " : Records = " & ListOfRecords.Count &
+          lblProcessingWorksheet.Text = "Processing Records: " & FileNameOnly &
+            " : Rows = " & ListOfRecords.Count &
             " # " & cnt
         End If
       Next
 
     End If
-    lblProcessingWorksheet.Text = "Processing Worksheet: " & FileNameOnly & " : Records Complete"
+    lblProcessingWorksheet.Text = "Processing Records: " & FileNameOnly & " : Complete"
     '
     ' Create the Fields worksheet
     '
-    lblProcessingWorksheet.Text = "Processing Worksheet: " & FileNameOnly & " : Fields = " & ListOfFields.Count
+    lblProcessingWorksheet.Text = "Processing Fields: " & FileNameOnly & " : Rows = " & ListOfFields.Count
 
     If FieldsRow = 0 Then
       FieldsWorksheet = workbook.Sheets.Add(After:=workbook.Worksheets(workbook.Worksheets.Count))
@@ -3820,13 +4117,13 @@ Public Class Form1
           FieldsWorksheet.Range("O" & row).Value = DelimText(14)      'Redefines fieldnames
         End If
         If cnt Mod 100 = 0 Then
-          lblProcessingWorksheet.Text = "Processing Worksheet: " & FileNameOnly &
-            " : Fields = " & ListOfFields.Count &
+          lblProcessingWorksheet.Text = "Processing Fields: " & FileNameOnly &
+            " : Rowss = " & ListOfFields.Count &
             " # " & cnt
         End If
       Next
     End If
-    lblProcessingWorksheet.Text = "Processing Worksheet: " & FileNameOnly & " : Fields Complete"
+    lblProcessingWorksheet.Text = "Processing Fields: " & FileNameOnly & " : Complete"
 
   End Sub
   Sub FormatWorksheets()
@@ -3837,6 +4134,23 @@ Public Class Form1
       rngSummaryName = SummaryWorksheet.Range("A1:B" & LTrim(Str(SummaryRow)))
       rngSummaryName.Columns.AutoFit()
       rngSummaryName.Rows.AutoFit()
+    End If
+
+    ' Format the JobComments sheet - first row bold the columns
+    If JobCommentsRow > 1 Then
+      Dim row As Integer = LTrim(Str(JobCommentsRow))
+      ' Format the Sheet - first row bold the columns
+      rngJobComments = JobCommentsWorksheet.Range("A1:E1")
+      rngJobComments.Font.Bold = True
+      ' data area autofit all columns
+      rngJobComments = JobCommentsWorksheet.Range("A1:E" & row)
+      'rngRecordName.AutoFilter()
+      workbook.Worksheets("JobComments").Range("A1").AutoFilter
+      rngJobComments.VerticalAlignment = Excel.XlVAlign.xlVAlignTop
+      rngJobComments.Columns.AutoFit()
+      rngJobComments.Rows.AutoFit()
+      ' ignore error flag that numbers being loaded into a text field
+      objExcel.ErrorCheckingOptions.NumberAsText = False
     End If
 
     ' Format the Programs sheet - first row bold the columns
@@ -3888,8 +4202,9 @@ Public Class Form1
       ' data area autofit all columns
       rngComments = CommentsWorksheet.Range("A1:F" & row)
       workbook.Worksheets("Comments").Range("A1").AutoFilter
-      rngComments.Columns.AutoFit()
       rngComments.VerticalAlignment = Excel.XlVAlign.xlVAlignTop
+      rngComments.Columns.AutoFit()
+      rngComments.Rows.AutoFit()
       ' ignore error flag that numbers being loaded into a text field
       objExcel.ErrorCheckingOptions.NumberAsText = False
     End If
@@ -3903,6 +4218,7 @@ Public Class Form1
       rngEXECSQL = EXECSQLWorksheet.Range("A1:G" & row)
       workbook.Worksheets("ExecSQL").Range("A1").AutoFilter
       rngEXECSQL.Columns.AutoFit()
+      rngEXECSQL.Rows.AutoFit()
       rngEXECSQL.VerticalAlignment = Excel.XlVAlign.xlVAlignTop
       ' ignore error flag that numbers being loaded into a text field
       objExcel.ErrorCheckingOptions.NumberAsText = False
@@ -3958,8 +4274,9 @@ Public Class Form1
       ' data area autofit all columns
       rngScreenMap = ScreenMapWorksheet.Range("A1:D" & row)
       workbook.Worksheets("ScreenMaps").Range("A1").AutoFilter
-      rngScreenMap.Columns.AutoFit()
       rngScreenMap.VerticalAlignment = Excel.XlVAlign.xlVAlignTop
+      rngScreenMap.Columns.AutoFit()
+      rngScreenMap.Rows.AutoFit()
       ' ignore error flag that numbers being loaded into a text field
       objExcel.ErrorCheckingOptions.NumberAsText = False
     End If
@@ -3984,7 +4301,7 @@ Public Class Form1
   End Sub
   Sub CreateCommentsWorksheet()
     '* Create the Comments worksheet from the listofcomments array
-    lblProcessingWorksheet.Text = "Processing Worksheet: " & FileNameOnly & " : Comments = " & ListOfComments.Count
+    lblProcessingWorksheet.Text = "Processing Comments: " & FileNameOnly & " : Rows = " & ListOfComments.Count
 
     Dim cnt As Integer = 0
     Dim row As Integer = 0
@@ -4028,16 +4345,16 @@ Public Class Form1
       prevLineNum = currLineNum
       prevProgram = currProgram
       If cnt Mod 100 = 0 Then
-        lblProcessingWorksheet.Text = "Processing Worksheet: " & FileNameOnly &
-          " : Comments = " & ListOfComments.Count &
+        lblProcessingWorksheet.Text = "Processing Comments: " & FileNameOnly &
+          " : Rows = " & ListOfComments.Count &
           " # " & cnt
       End If
     Next
-    lblProcessingWorksheet.Text = "Processing Worksheet: " & FileNameOnly & " : Comments Complete"
+    lblProcessingWorksheet.Text = "Processing Comments: " & FileNameOnly & " : Complete"
   End Sub
   Sub CreateEXECSQLWorksheet()
     '* Create the ExecSQL worksheet from the listofexecsql array
-    lblProcessingWorksheet.Text = "Processing Worksheet: " & FileNameOnly & " : ExecSql = " & ListOfEXECSQL.Count
+    lblProcessingWorksheet.Text = "Processing ExecSQL: " & FileNameOnly & " : Rows = " & ListOfEXECSQL.Count
 
     Dim cnt As Integer = 0
     Dim row As Integer = 0
@@ -4085,16 +4402,16 @@ Public Class Form1
       Next
 
       If cnt Mod 100 = 0 Then
-        lblProcessingWorksheet.Text = "Processing Worksheet: " & FileNameOnly &
-          " : ExecSQL = " & ListOfEXECSQL.Count &
+        lblProcessingWorksheet.Text = "Processing ExecSQL: " & FileNameOnly &
+          " : Rows = " & ListOfEXECSQL.Count &
           " # " & cnt
       End If
     Next
-    lblProcessingWorksheet.Text = "Processing Worksheet: " & FileNameOnly & " : ExecSql Complete"
+    lblProcessingWorksheet.Text = "Processing ExecSQL: " & FileNameOnly & " : Complete"
   End Sub
   Sub CreateEXECCICSWorksheet()
     '* Create the ExecCICS worksheet from the listofCICSMapNames array
-    lblProcessingWorksheet.Text = "Processing Worksheet: " & FileNameOnly & " : ExecCICS = " & ListOfCICSMapNames.Count
+    lblProcessingWorksheet.Text = "Processing ExecCICS: " & FileNameOnly & " : Rows = " & ListOfCICSMapNames.Count
 
     Dim cnt As Integer = 0
     Dim row As Integer = 0
@@ -4129,12 +4446,12 @@ Public Class Form1
       EXECCICSWorksheet.Range("F" & row).Value = ExecCICSColumns(5)       'MapName
 
       If cnt Mod 100 = 0 Then
-        lblProcessingWorksheet.Text = "Processing Worksheet: " & FileNameOnly &
-          " : ExecCICS = " & ListOfCICSMapNames.Count &
+        lblProcessingWorksheet.Text = "Processing ExecCICS: " & FileNameOnly &
+          " : Rows = " & ListOfCICSMapNames.Count &
           " # " & cnt
       End If
     Next
-    lblProcessingWorksheet.Text = "Processing Worksheet: " & FileNameOnly & " : ExecCICS Complete"
+    lblProcessingWorksheet.Text = "Processing ExecCICS: " & FileNameOnly & " : Complete"
   End Sub
 
   Sub CreateIMSWorksheet()
@@ -4222,7 +4539,7 @@ Public Class Form1
   Sub CreateScreenMapWorksheet()
     '* Create the Screen Map worksheet from the listofScreenMaps array
 
-    lblProcessingWorksheet.Text = "Processing Worksheet: " & FileNameOnly & " : Screen Maps = " & ListofScreenMaps.Count
+    lblProcessingWorksheet.Text = "Processing ScreenMaps: " & FileNameOnly & " : Rows = " & ListofScreenMaps.Count
 
     Dim cnt As Integer = 0
     Dim row As Integer = 0
@@ -4232,23 +4549,10 @@ Public Class Form1
       ScreenMapWorksheet = workbook.Sheets.Add(After:=workbook.Worksheets(workbook.Worksheets.Count))
       ScreenMapWorksheet.Name = "ScreenMaps"
       ' Write the Column Headers row
-      Select Case ScreenType
-        Case "IMS"
-          ScreenMapWorksheet.Range("A1").Value = "MapSource"
-          ScreenMapWorksheet.Range("B1").Value = "IMS"
-          ScreenMapWorksheet.Range("C1").Value = "FMTName"
-          ScreenMapWorksheet.Range("D1").Value = "DFLD_Literals"
-        Case "CICS"
-          ScreenMapWorksheet.Range("A1").Value = "MapSource"
-          ScreenMapWorksheet.Range("B1").Value = "CICS"
-          ScreenMapWorksheet.Range("C1").Value = "DFHMSDName"
-          ScreenMapWorksheet.Range("D1").Value = "Literals"
-        Case Else
-          ScreenMapWorksheet.Range("A1").Value = "MapSource"
-          ScreenMapWorksheet.Range("B1").Value = "PanelType"
-          ScreenMapWorksheet.Range("C1").Value = "PanelName"
-          ScreenMapWorksheet.Range("D1").Value = "Comments"
-      End Select
+      ScreenMapWorksheet.Range("A1").Value = "MapSource"
+      ScreenMapWorksheet.Range("B1").Value = "Type"
+      ScreenMapWorksheet.Range("C1").Value = "Name"
+      ScreenMapWorksheet.Range("D1").Value = "Literals"
       ScreenMapRow = 1
       ScreenMapWorksheet.Activate()
       ScreenMapWorksheet.Application.ActiveWindow.SplitRow = 1
@@ -4268,12 +4572,12 @@ Public Class Form1
         ScreenMapWorksheet.Range("D" & row).Value = ScreenMapColumns(3)       'Literals or Comments
       End If
       If cnt Mod 100 = 0 Then
-        lblProcessingWorksheet.Text = "Processing Worksheet: " & FileNameOnly &
-          " : IMSMaps = " & ListofScreenMaps.Count &
+        lblProcessingWorksheet.Text = "Processing ScreenMaps: " & FileNameOnly &
+          " : Rows = " & ListofScreenMaps.Count &
           " # " & cnt
       End If
     Next
-    lblProcessingWorksheet.Text = "Processing Worksheet: " & FileNameOnly & " : Screen Maps Complete"
+    lblProcessingWorksheet.Text = "Processing ScreenMaps: " & FileNameOnly & " : Complete"
 
   End Sub
   'Sub CreateStatsWorksheet()
@@ -4737,7 +5041,11 @@ Public Class Form1
               pumlFile.WriteLine("")
               ParagraphStarted = False
             Case "REPORT"
-              Call ProcessPumlParagraphEasytrieve(ParagraphStarted, cWord(wordIndex + 1))
+              If wordIndex + 1 < cWord.Count - 1 Then
+                Call ProcessPumlParagraphEasytrieve(ParagraphStarted, cWord(wordIndex + 1))
+              Else
+                Call ProcessPumlParagraphEasytrieve(ParagraphStarted, "REPORT")
+              End If
               wordIndex = cWord.Count - 1
             Case "SEQUENCE"
               wordIndex = cWord.Count - 1
@@ -6116,7 +6424,7 @@ Public Class Form1
     Dim file_name_1 As String = ""
     Dim level As String = ""
     Dim OpenMode As String = ""
-    Dim RecordingMode As String = ""
+    Dim RecordingMode As String = "V"
     Dim RecordSizeMinimum As Integer = 0
     Dim RecordSizeMaximum As Integer = 0
     Dim assignment_name_1 As String = ""
@@ -6180,80 +6488,52 @@ Public Class Form1
 
         level = fdWords(0)
 
-        Dim fdword1 As String = ""
-        Dim fdword2 As String = ""
-        Dim fdword3 As String = ""
-        RecordingMode = "V"
-        index = fdWords.IndexOf("RECORDING")
-        If index > -1 Then
-          ' sloppy code, I know...
-          If index + 1 <= fdWords.Count - 1 Then
-            fdword1 = fdWords(index + 1)
-          End If
-          If index + 2 <= fdWords.Count - 1 Then
-            fdword2 = fdWords(index + 2)
-          End If
-          If index + 3 <= fdWords.Count - 1 Then
-            fdword3 = fdWords(index + 3)
-          End If
-          If fdword1 = "MODE" And fdword2 = "IS" Then
-            RecordingMode = fdword3
-          End If
-          If fdword1 = "MODE" Or fdword1 = "IS" Then
-            RecordingMode = fdword2
-          End If
-          RecordingMode = fdword1
-        End If
+        ' Find the FD clauses. At present only care about Recording Mode and Record Contains
 
-        RecordSizeMinimum = 0
-        ' search to find the RECORD CLAUSE
-        index2 = -1
-        index3 = -1
-        For index = 0 To fdWords.Count - 1
-          If fdWords(index).Equals("RECORD") Then
-            Select Case True
-              Case IsNumeric(fdWords(index + 1))
-                index2 = index + 1
-                If fdWords(index2 + 1) = "TO" Then
-                  index3 = index2 + 2
-                End If
-                Exit For
-              Case fdWords(index + 1).Equals("CONTAIN") Or
-                   fdWords(index + 1).Equals("CONTAINS")
-                If IsNumeric(fdWords(index + 2)) Then
-                  index2 = index + 2
-                End If
-                If fdWords(index2 + 1) = "TO" Then
-                  index3 = index2 + 2
-                End If
-                Exit For
-              Case fdWords(index + 1).Equals("IS")
-                If fdWords(index + 2).Equals("VARYING") Then
-                  index2 = index + 3
-                  index2 = GetIndexForRecordSize(index2, fdWords)
-                  If fdWords(index2 + 1) = "TO" Then
-                    index3 = index2 + 2
-                  End If
-                  Exit For
-                End If
-              Case fdWords(index + 1).Equals("VARYING")
-                index2 = index + 2
-                index2 = GetIndexForRecordSize(index2, fdWords)
-                If fdWords(index2 + 1) = "TO" Then
-                  index3 = index2 + 2
-                End If
-                Exit For
-            End Select
-          End If
+        ' define and clear out the FD clause indexes
+        Dim fdClauseName(10) As String
+        Dim fdClauseFirstIndex(10) As Integer
+        Dim fdClauseLastIndex(10) As Integer
+        For x = 0 To 10
+          fdClauseName(x) = ""
+          fdClauseFirstIndex(x) = fdWords.Count
+          fdClauseLastIndex(x) = fdWords.Count - 1
         Next
-        If index2 > -1 Then
-          RecordSizeMinimum = Val(fdWords(index2))
-        End If
-
-        RecordSizeMaximum = RecordSizeMinimum
-        If index3 > -1 Then
-          RecordSizeMaximum = Val(fdWords(index3))
-        End If
+        ' find and set the FD clause name and starting word indexes
+        Dim fdClauseIndex As Integer = -1
+        Dim fdClauseIndexMax As Integer = -1
+        For FDindex As Integer = 0 To fdWords.Count - 1
+          Select Case fdWords(FDindex)
+            Case "BLOCK", "LABEL", "VALUE", "DATA", "RECORDING", "LINAGE", "CODESET"
+              Call AddToFDClause(fdWords(FDindex), FDindex, fdClauseIndex, fdClauseName, fdClauseFirstIndex, fdClauseLastIndex)
+            Case "RECORD"
+              If Not (fdWords(FDindex - 1) = "LABEL" Or fdWords(FDindex - 1) = "DATA") Then
+                Call AddToFDClause(fdWords(FDindex), FDindex, fdClauseIndex, fdClauseName, fdClauseFirstIndex, fdClauseLastIndex)
+              End If
+          End Select
+        Next
+        fdClauseIndexMax = fdClauseIndex
+        ' set the LAST index for each clause
+        For FDIndex As Integer = 0 To fdClauseIndexMax
+          fdClauseLastIndex(FDIndex) = fdClauseFirstIndex(FDIndex + 1) - 1
+        Next
+        'Now loop through the FD Clauses
+        For fdClauseIndex = 0 To fdClauseIndexMax
+          Select Case fdClauseName(fdClauseIndex)
+            Case "RECORDING"
+              RecordingMode = fdWords(fdClauseLastIndex(fdClauseIndex))
+            Case "RECORD"
+              For index = fdClauseFirstIndex(fdClauseIndex) + 1 To fdClauseLastIndex(fdClauseIndex)
+                If IsNumeric(fdWords(index)) Then
+                  If RecordSizeMinimum = 0 Then
+                    RecordSizeMinimum = fdWords(index)
+                  Else
+                    RecordSizeMaximum = fdWords(index)
+                  End If
+                End If
+              Next
+          End Select
+        Next
 
         OpenMode = GetOpenMode(pgmName, file_name_1)
 
@@ -6281,6 +6561,18 @@ Public Class Form1
                          organization)
 
   End Function
+  Sub AddToFDClause(ByRef NameOfClause As String,
+                    ByRef fdIndex As Integer,
+                         ByRef fdClauseIndex As Integer,
+                         ByRef fdClauseName() As String,
+                         ByRef fdClauseFirstIndex() As Integer,
+                         ByRef fdClauseLastIndex() As Integer)
+    ' this will add an entry to the FDClause arrays
+    fdClauseIndex += 1
+    fdClauseName(fdClauseIndex) = NameOfClause
+    fdClauseFirstIndex(fdClauseIndex) = fdIndex
+    fdClauseLastIndex(fdClauseIndex) = -1
+  End Sub
   Function GetIndexForRecordSize(ByVal index As Integer, ByRef fdWords As List(Of String)) As Integer
     GetIndexForRecordSize = index
     Select Case True
@@ -6289,7 +6581,10 @@ Public Class Form1
       Case IsNumeric(fdWords(index + 2)) : GetIndexForRecordSize += 2
       Case IsNumeric(fdWords(index + 3)) : GetIndexForRecordSize += 3
       Case Else
-        MessageBox.Show("Unknown 'IS VARYING' syntax@" & pgmName & "FD:" & fdWords.ToString)
+        'MessageBox.Show("Unknown 'IS VARYING' syntax@" & pgmName & "FD:" & fdWords.ToString)
+        Dim tempx As String = pgmName & " FDwords(0)=" & fdWords(0) & " index=" & Str(index)
+        LogFile.WriteLine(Date.Now & ",Unknown 'IS VARYING' syntax," & tempx)
+        Exit Select
     End Select
   End Function
   Function LocateFDStatement(ByRef filename As String, ByRef fdWords As List(Of String)) As Integer
