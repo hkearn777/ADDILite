@@ -188,7 +188,7 @@ Partial Class Form1
         'lblProcessingSource
         '
         Me.lblProcessingSource.AutoSize = True
-        Me.lblProcessingSource.Location = New System.Drawing.Point(56, 518)
+        Me.lblProcessingSource.Location = New System.Drawing.Point(56, 519)
         Me.lblProcessingSource.Name = "lblProcessingSource"
         Me.lblProcessingSource.Size = New System.Drawing.Size(146, 20)
         Me.lblProcessingSource.TabIndex = 20
@@ -197,7 +197,7 @@ Partial Class Form1
         'lblProcessingWorksheet
         '
         Me.lblProcessingWorksheet.AutoSize = True
-        Me.lblProcessingWorksheet.Location = New System.Drawing.Point(75, 551)
+        Me.lblProcessingWorksheet.Location = New System.Drawing.Point(75, 552)
         Me.lblProcessingWorksheet.Name = "lblProcessingWorksheet"
         Me.lblProcessingWorksheet.Size = New System.Drawing.Size(176, 20)
         Me.lblProcessingWorksheet.TabIndex = 21

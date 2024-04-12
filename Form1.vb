@@ -6,9 +6,6 @@ Imports Microsoft.Office
 Imports Microsoft.Office.Interop
 Imports Microsoft.Office.Interop.Excel
 Imports Microsoft.VisualBasic.Logging
-'Imports System.Reflection.Emit
-'Imports System.Runtime.Remoting.Metadata.W3cXsd2001
-'Imports System.Security.Cryptography
 
 Public Class Form1
   ' ADDILite will read an IBM JCL syntax file and break apart its
@@ -16,7 +13,6 @@ Public Class Form1
 
   ' This will analyze COBOL and Easytrieve Sources to create the Data Details.
   ' '
-  ' Latest change is to create a Plantuml compatible file to create flowcharts.
   ' Inputs:
   ' - JCL source text (*.jcl)
   ' - Proclib for PROCS
@@ -27,8 +23,10 @@ Public Class Form1
   ' - PlantUml for creating flowchart
   '
   '***Be sure to change ProgramVersion when making changes!!!
-  Dim ProgramVersion As String = "v1.13"
+  Dim ProgramVersion As String = "v1.2"
   'Change-History.
+  ' 2024/04/10 v1.2  hk Create Jobs Tab
+  '                    -Create Libraries Tab
   ' 2024/03/20 v1.13 hk Create JCL Comments Tab
   '                    - Handle inline Easytrieve code via in-stream data sets (DD *)
   '                    - New Source Type: Assembler
@@ -94,6 +92,7 @@ Public Class Form1
   Dim ListOfDataGathering As New List(Of String)
   Dim NumberOfJobsToProcess As Integer = 0
   Dim ListOfJobs As New List(Of String)
+  Dim ListOfLibraries As New List(Of String)              'array to hold JOBLIB, STEPLIB, JCLLIB names
 
   ' JCL
   Dim DirectoryName As String = ""
@@ -109,7 +108,19 @@ Public Class Form1
   Dim procName As String = ""
   Dim jobName As String = ""
   Dim jobClass As String = ""
-  Dim msgClass As String = ""
+  Dim jobMsgClass As String = ""
+  Dim JobSourceName As String = ""
+  Dim JobAccountInfo As String = ""
+  Dim JobProgrammerName As String = ""
+  Dim JobTime As String = ""
+  Dim JobSend As String = ""
+  Dim JobRoute As String = ""
+  Dim JobParm As String = ""
+  Dim JobRegion As String = ""
+  Dim JobCond As String = ""
+  Dim JobJCLLib As String = ""
+  Dim JobTyprun As String = ""
+  Dim JobLib As String = ""
   Dim prevPgmName As String = ""
   Dim prevStepName As String = ""
   Dim prevDDName As String = ""
@@ -128,6 +139,7 @@ Public Class Form1
   Dim execSequence As Integer = 0
 
   Dim SummaryRow As Integer = 0
+  Dim JobRow As Integer = 0
   Dim JobCommentsRow As Integer = 0
   Dim ProgramsRow As Integer = 0
   Dim RecordsRow As Integer = 0
@@ -139,6 +151,7 @@ Public Class Form1
   Dim ScreenMapRow As Integer = 0
   Dim CallsRow As Integer = 0
   Dim StatsRow As Integer = 0
+  Dim LibrariesRow As Integer = 0
 
   Dim jclStmt As New List(Of String)
   Dim ListOfExecs As New List(Of String)        'array holding the executable programs
@@ -161,9 +174,10 @@ Public Class Form1
   Dim dgfWorksheet As Microsoft.Office.Interop.Excel.Worksheet
   ' Model 
   Dim workbook As Microsoft.Office.Interop.Excel.Workbook
-  Dim JobCommentsWorksheet As Microsoft.Office.Interop.Excel.Worksheet
   Dim worksheet As Microsoft.Office.Interop.Excel.Worksheet
   Dim SummaryWorksheet As Microsoft.Office.Interop.Excel.Worksheet
+  Dim JobsWorksheet As Microsoft.Office.Interop.Excel.Worksheet
+  Dim JobCommentsWorksheet As Microsoft.Office.Interop.Excel.Worksheet
   Dim RecordsWorksheet As Microsoft.Office.Interop.Excel.Worksheet
   Dim FieldsWorksheet As Microsoft.Office.Interop.Excel.Worksheet
   Dim CommentsWorksheet As Microsoft.Office.Interop.Excel.Worksheet
@@ -173,8 +187,10 @@ Public Class Form1
   Dim ScreenMapWorksheet As Microsoft.Office.Interop.Excel.Worksheet
   Dim CallsWorksheet As Microsoft.Office.Interop.Excel.Worksheet
   Dim StatsWorksheet As Microsoft.Office.Interop.Excel.Worksheet
+  Dim LibrariesWorksheet As Microsoft.Office.Interop.Excel.Worksheet
 
   Dim rngSummaryName As Microsoft.Office.Interop.Excel.Range
+  Dim rngJobs As Microsoft.Office.Interop.Excel.Range
   Dim rngJobComments As Microsoft.Office.Interop.Excel.Range
   Dim rngRecordName As Microsoft.Office.Interop.Excel.Range
   Dim rngRecordsName As Microsoft.Office.Interop.Excel.Range
@@ -186,6 +202,7 @@ Public Class Form1
   Dim rngCalls As Microsoft.Office.Interop.Excel.Range
   Dim rngScreenMap As Microsoft.Office.Interop.Excel.Range
   Dim rngStats As Microsoft.Office.Interop.Excel.Range
+  Dim rngLibraries As Microsoft.Office.Interop.Excel.Range
 
   Dim DefaultFormat = Microsoft.Office.Interop.Excel.XlFileFormat.xlWorkbookDefault
   Dim SetAsReadOnly = Microsoft.Office.Interop.Excel.XlFileAccess.xlReadOnly
@@ -623,6 +640,7 @@ Public Class Form1
     Call CreateCallsWorksheet()
     Call CreateIMSPSPNamesFile()
     Call CreateScreenMapWorksheet()
+    Call CreateLibrariesWorksheet()
 
     'Call CreateStatsWorksheet()
 
@@ -838,7 +856,7 @@ Public Class Form1
     ' create the CallPgms.jcl file
     swCallPgmsFile = New StreamWriter(CallPgmsFileName, False)
     Dim pgmCnt As Integer = 0
-    swCallPgmsFile.WriteLine("//CALLPGMS JOB 'SUBROUTINES CALLED'")
+    swCallPgmsFile.WriteLine("//CALLPGMS JOB '0000','SUBROUTINES CALLED'")
     For Each callpgm In ListOfCallPgms
       pgmCnt += 1
       Dim execs As String() = callpgm.Split(Delimiter)
@@ -1025,17 +1043,22 @@ Public Class Form1
     For Each JCLLine In JCLLines
       text1 = JCLLine.Replace(vbTab, Space(1))
       ' drop data (of an DD * statement) or not a JCL statement
-      If Mid(text1, 1, 2) = "//" Or Mid(text1, 1, 2) = "++" Then
-      Else
-        Continue For
-      End If
-      ' drop JES commands
-      If Mid(text1, 1, 14) = "//SEND OUTPUT " Then
-        Continue For
-      End If
-      If Mid(text1, 1, 9) = "/*JOBPARM" Then
-        Continue For
-      End If
+      Select Case Mid(text1, 1, 2)
+        Case "//", "++", "/*"
+        Case Else
+          Continue For
+      End Select
+      'If Mid(text1, 1, 2) = "//" Or Mid(text1, 1, 2) = "++" Then
+      'Else
+      '  Continue For
+      'End If
+      '' drop JES commands
+      'If Mid(text1, 1, 14) = "//SEND OUTPUT " Then
+      '  Continue For
+      'End If
+      'If Mid(text1, 1, 9) = "/*JOBPARM" Then
+      '  Continue For
+      'End If
       ' Keep columns 1-72, remove columns 73-80
       text1 = Microsoft.VisualBasic.Left(Mid(text1, 1) + Space(80), 72)
       ' remove '+' in column 72 (which used to mean continuation?)
@@ -1408,18 +1431,30 @@ Public Class Form1
 
   Function GetFirstParm(parameter As String) As String
     ' Extract the first parameter from the jParameters, could have a comma or EOL
-    GetFirstParm = ""
     Dim commaLocation As Integer = parameter.IndexOf(",")
     Select Case commaLocation
       Case -1
-        GetFirstParm = RTrim(parameter)
+        Return RTrim(parameter)
       Case Else
-        GetFirstParm = Microsoft.VisualBasic.Left(parameter, commaLocation)
+        Return Microsoft.VisualBasic.Left(parameter, commaLocation)
     End Select
+  End Function
+  Function GetSecondJobParm(parameter As String) As String
+    ' Extract the second parameter from the JOB Parameters
+    ' This presumes NO commas within quotes!
+    ' This presumes JOB card is valid syntax. There must be Acct Info, and Programmer-name parms minimum.
+    Dim jobwords As String() = parameter.Split(",")
+    If jobwords.Length = 0 Then
+      Return ""
+    End If
+    If jobwords.Count >= 2 Then
+      Return jobwords(1)
+    End If
+    Return ""
   End Function
 
   Function WriteOutput() As Integer
-    ' Write the output JOB, EXEC, DD, Panvalet script, and PUML files.
+    ' Write the details to the spreadsheet tabs: Jobs, JobComments, Programs and JCLPuml file
     ' return of -1 means an error
     ' return of 0 means all is okay
 
@@ -1429,17 +1464,30 @@ Public Class Form1
 
     WriteOutput = 0
 
-    ' Write the details to the files
+    JobSourceName = FileNameOnly
+
+    ' Values found on the JOB card
     jobName = ""
     jobClass = ""
-    msgClass = ""
+    jobMsgClass = ""
+    JobAccountInfo = ""
+    JobProgrammerName = ""
+    JobTime = ""
+    JobCond = ""
+    JobTyprun = ""
+    JobRegion = ""
+    ' Values found on the Jes2, route and send card(s)
+    JobSend = ""
+    JobRoute = ""
+    JobParm = ""
+    JobJCLLib = ""
+    JobLib = ""
 
     For Each statement As String In jclStmt
       Call GetLabelControlParms(statement, jLabel, jControl, jParameters)
       If Len(jControl) = 0 Then
         'MessageBox.Show("JCL control not found:" & statement)
         LogFile.WriteLine(Date.Now & ",JCL control not found,'" & statement & ": " & FileNameOnly & "'")
-        'WriteOutput = -1
         Continue For
       End If
 
@@ -1458,15 +1506,23 @@ Public Class Form1
         Case "SET"
           Continue For
         Case "OUTPUT"
-          Continue For
+          JobSend = jParameters
         Case "IF"
           Continue For
         Case "ENDIF"
           Continue For
         Case "JCLLIB"
-          Continue For
+          Call ProcessJCLLIB()
+
 
         Case Else
+          If jLabel = "/*JOBPARM" Then
+            JobParm = jControl
+            Continue For
+          End If
+          If jLabel = "/*" Then
+            Continue For
+          End If
           If jLabel = "IF" And jControl = "RC" Then
             Continue For
           End If
@@ -1483,6 +1539,8 @@ Public Class Form1
     Next
 
     Call CreateJCLPuml()
+
+    Call CreateJobWorksheet()
 
     Call CreateJobComments()
 
@@ -1513,6 +1571,10 @@ Public Class Form1
     jControl = jclWords(1)
     jParameters = jclWords(2)
 
+    If jLabel = "/*JOBPARM" Then
+      Exit Sub
+    End If
+
     jLabel = jLabel.Remove(0, 2) 'remove the  leading // or ++ symbols
     If Len(jLabel) = 0 Then
       jLabel = jLabelPrev
@@ -1520,19 +1582,31 @@ Public Class Form1
 
   End Sub
   Sub ProcessJOB()
-    'jobSequence += 1
+    ' Extract out values from the JCL JOB card
     procSequence = 0
     execSequence = 0
     ddSequence = 0
     jobName = jLabel
-    msgClass = GetParm(jParameters, "MSGCLASS=")
+    jobMsgClass = GetParm(jParameters, "MSGCLASS=")
     jobClass = GetParm(jParameters, "CLASS=")
-    'swJobFile.WriteLine(jLabel & txtDelimiter.Text &
-    '    LTrim(Str(jobSequence)) & txtDelimiter.Text &
-    '    jobClass & Delimiter &
-    '    msgClass & Delimiter &
-    '    RTrim(jParameters))
+    JobTime = GetParm(jParameters, "TIME=")
+    JobRegion = GetParm(jParameters, "REGION=")
+    JobCond = GetParm(jParameters, "COND")
+    JobAccountInfo = GetFirstParm(jParameters).Replace("'", "").Trim
+    JobProgrammerName = GetSecondJobParm(jParameters).Replace("'", "").Trim
+
     InstreamProc = ""
+  End Sub
+  Sub ProcessJCLLIB()
+    ' Grab/format the JCLLIB value(s)
+    JobJCLLib = jParameters
+    ' add libraries to array
+    Dim jcllibs As String() = jParameters.Replace("ORDER=", "").Replace("(", "").Replace(")", "").Split(",")
+    For Each jcllib In jcllibs
+      If ListOfLibraries.IndexOf(jcllib & Delimiter & "JCLLIB") = -1 Then
+        ListOfLibraries.Add(jcllib & Delimiter & "JCLLIB")
+      End If
+    Next
   End Sub
   Sub ProcessEXEC(ByVal NeedSourceType As Boolean)
     ' The "EXEC" control is for either PROC or a PGM
@@ -1543,7 +1617,7 @@ Public Class Form1
     If jobName.Length = 0 Then
       jobName = FileNameOnly
       jobClass = "?"
-      msgClass = "?"
+      jobMsgClass = "?"
     End If
     '
     stepName = jLabel
@@ -1612,12 +1686,13 @@ Public Class Form1
 
   Sub ProcessDD(ByRef ListOfSymbolics As List(Of String))
     ' Process the DD statement
-    ' Only substitue symbolics on DSN
 
     Dim db2 As String = ""
     If jLabel = "CAFIN" Then
       db2 = "DB2"
     End If
+
+    ' Only substitue symbolics on DSN
     Dim dsn As String = GetParm(jParameters, "DSN=")
     If dsn.Length > 0 Then
       If dsn.Substring(0, 2) <> "&&" Then
@@ -1625,6 +1700,27 @@ Public Class Form1
           dsn = ReplaceSymbolics(dsn, ListOfSymbolics)
         End If
       End If
+    End If
+
+    ' Handle JOBLIB
+    If jLabel = "JOBLIB" Then
+      JobLib = dsn
+      If ListOfLibraries.IndexOf(JobLib & Delimiter & "JOBLIB") = -1 Then
+        ListOfLibraries.Add(JobLib & Delimiter & "JOBLIB")
+      End If
+      Exit Sub
+    End If
+
+    ' Handle Steplib
+    If jLabel = "STEPLIB" Then
+      Select Case jobName
+        Case "CALLPGMS", "ONLINE"
+        Case Else
+          Dim steplib = dsn
+          If ListOfLibraries.IndexOf(steplib & Delimiter & "STEPLIB") = -1 Then
+            ListOfLibraries.Add(steplib & Delimiter & "STEPLIB")
+          End If
+      End Select
     End If
 
     Dim reportID As String = ""
@@ -1636,7 +1732,7 @@ Public Class Form1
         Select Case jLabel
           Case "SYSOUT", "SYSPRINT", "SYSUDUMP"
             If sysout = "*" Then
-              sysout = "SYSOUT=" & msgClass
+              sysout = "SYSOUT=" & jobMsgClass
             Else
               sysout = "SYSOUT=" & sysout
             End If
@@ -1644,7 +1740,7 @@ Public Class Form1
             Exit Select
         End Select
         If sysout = "*" Then
-          sysout = "SYSOUT=" & msgClass
+          sysout = "SYSOUT=" & jobMsgClass
           dsn = sysout
           Exit Select
         End If
@@ -1995,7 +2091,54 @@ Public Class Form1
 
 
   End Sub
+  Sub CreateJobWorksheet()
+    ' Build the Jobs Worksheet
+    ' Given a set of variables write 1 row on the JOB tab
 
+    If JobRow = 0 Then
+      JobsWorksheet = workbook.Sheets.Add(After:=workbook.Worksheets(workbook.Worksheets.Count))
+      JobsWorksheet.Name = "Jobs"
+      ' Write the column headings row
+      JobsWorksheet.Range("A1").Value = "Job_Source"
+      JobsWorksheet.Range("B1").Value = "Job_Name"
+      JobsWorksheet.Range("C1").Value = "AccountInfo"
+      JobsWorksheet.Range("D1").Value = "ProgrammerName"
+      JobsWorksheet.Range("E1").Value = "Time"
+      JobsWorksheet.Range("F1").Value = "Class"
+      JobsWorksheet.Range("G1").Value = "MsgC"
+      JobsWorksheet.Range("H1").Value = "Send"
+      JobsWorksheet.Range("I1").Value = "Route"
+      JobsWorksheet.Range("J1").Value = "JobParm"
+      JobsWorksheet.Range("K1").Value = "Region"
+      JobsWorksheet.Range("L1").Value = "COND"
+      JobsWorksheet.Range("M1").Value = "JCLLIB"
+      JobsWorksheet.Range("N1").Value = "JOBLIB"
+      JobsWorksheet.Range("O1").Value = "Typrun"
+      JobRow = 1
+      JobsWorksheet.Activate()
+      JobsWorksheet.Application.ActiveWindow.SplitRow = 1
+      JobsWorksheet.Application.ActiveWindow.FreezePanes = True
+    End If
+
+    JobRow += 1
+    Dim row As Integer = LTrim(Str(JobRow))
+    JobsWorksheet.Range("A" & row).Value = JobSourceName
+    JobsWorksheet.Range("B" & row).Value = jobName
+    JobsWorksheet.Range("C" & row).Value = JobAccountInfo
+    JobsWorksheet.Range("D" & row).Value = JobProgrammerName
+    JobsWorksheet.Range("E" & row).Value = JobTime
+    JobsWorksheet.Range("F" & row).Value = jobClass
+    JobsWorksheet.Range("G" & row).Value = jobMsgClass
+    JobsWorksheet.Range("H" & row).Value = JobSend
+    JobsWorksheet.Range("I" & row).Value = JobRoute
+    JobsWorksheet.Range("J" & row).Value = JobParm
+    JobsWorksheet.Range("K" & row).Value = JobRegion
+    JobsWorksheet.Range("L" & row).Value = JobCond.Replace("=", "")
+    JobsWorksheet.Range("M" & row).Value = JobJCLLib
+    JobsWorksheet.Range("N" & row).Value = JobLib
+    JobsWorksheet.Range("O" & row).Value = JobTyprun
+
+  End Sub
   Sub CreateJobComments()
     ' Build the JobComments Worksheet.
     ' Process through the JclStmt array. Look for an 'EXEC' command and then process backwards
@@ -4136,6 +4279,23 @@ Public Class Form1
       rngSummaryName.Rows.AutoFit()
     End If
 
+    ' Format the Jobs sheet - first row bold the columns
+    If JobRow > 1 Then
+      Dim row As Integer = LTrim(Str(JobRow))
+      ' Format the Sheet - first row bold the columns
+      rngJobs = JobsWorksheet.Range("A1:N1")
+      rngJobs.Font.Bold = True
+      ' data area autofit all columns
+      rngJobs = JobsWorksheet.Range("A1:N" & row)
+      workbook.Worksheets("Jobs").Range("A1").AutoFilter
+      rngJobs.VerticalAlignment = Excel.XlVAlign.xlVAlignTop
+      rngJobs.Columns.AutoFit()
+      rngJobs.Rows.AutoFit()
+      ' ignore error flag that numbers being loaded into a text field
+      objExcel.ErrorCheckingOptions.NumberAsText = False
+    End If
+
+
     ' Format the JobComments sheet - first row bold the columns
     If JobCommentsRow > 1 Then
       Dim row As Integer = LTrim(Str(JobCommentsRow))
@@ -4291,6 +4451,21 @@ Public Class Form1
       workbook.Worksheets("Stats").Range("A1").AutoFilter
       rngStats.Columns.AutoFit()
       rngStats.VerticalAlignment = Excel.XlVAlign.xlVAlignTop
+      ' ignore error flag that numbers being loaded into a text field
+      objExcel.ErrorCheckingOptions.NumberAsText = False
+    End If
+
+    If LibrariesRow > 0 Then
+      Dim row As Integer = LTrim(Str(LibrariesRow))
+      ' Format the Sheet - first row bold the columns
+      rngLibraries = LibrariesWorksheet.Range("A1:B1")
+      rngLibraries.Font.Bold = True
+      ' data area autofit all columns
+      rngLibraries = LibrariesWorksheet.Range("A1:B" & row)
+      workbook.Worksheets("Libraries").Range("A1").AutoFilter
+      rngLibraries.Columns.AutoFit()
+      rngLibraries.Rows.AutoFit()
+      rngLibraries.VerticalAlignment = Excel.XlVAlign.xlVAlignTop
       ' ignore error flag that numbers being loaded into a text field
       objExcel.ErrorCheckingOptions.NumberAsText = False
     End If
@@ -4578,6 +4753,33 @@ Public Class Form1
       End If
     Next
     lblProcessingWorksheet.Text = "Processing ScreenMaps: " & FileNameOnly & " : Complete"
+
+  End Sub
+  Sub CreateLibrariesWorksheet()
+    Dim row As Integer = 0
+    If LibrariesRow = 0 Then
+      LibrariesWorksheet = workbook.Sheets.Add(After:=workbook.Worksheets(workbook.Worksheets.Count))
+      LibrariesWorksheet.Name = "Libraries"
+      ' Write the Column Headers row
+      LibrariesWorksheet.Range("A1").Value = "Library"
+      LibrariesWorksheet.Range("B1").Value = "Type"
+      LibrariesRow = 1
+      LibrariesWorksheet.Activate()
+      LibrariesWorksheet.Application.ActiveWindow.SplitRow = 1
+      LibrariesWorksheet.Application.ActiveWindow.FreezePanes = True
+    End If
+
+    ' load Libraries array to spreadsheet.
+    ListOfLibraries.Sort()
+    For Each entry In ListOfLibraries
+      Dim LibrariesColumns As String() = entry.Split(Delimiter)
+      LibrariesRow += 1
+      row = LTrim(Str(LibrariesRow))
+      If LibrariesColumns.Count >= 2 Then
+        LibrariesWorksheet.Range("A" & row).Value = LibrariesColumns(0)       'Library name
+        LibrariesWorksheet.Range("B" & row).Value = LibrariesColumns(1)       'Type: JOBLIB, STEPLIB, JCLLIB
+      End If
+    Next
 
   End Sub
   'Sub CreateStatsWorksheet()
@@ -7039,7 +7241,7 @@ Public Class Form1
     procName = ""
     jobName = ""
     jobClass = ""
-    msgClass = ""
+    jobMsgClass = ""
     prevPgmName = ""
     prevStepName = ""
     prevDDName = ""
