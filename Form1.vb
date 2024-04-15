@@ -23,8 +23,10 @@ Public Class Form1
   ' - PlantUml for creating flowchart
   '
   '***Be sure to change ProgramVersion when making changes!!!
-  Dim ProgramVersion As String = "v1.2"
+  Dim ProgramVersion As String = "v1.2.1"
   'Change-History.
+  ' 2024/04/13 v1.2.1 hk Revised Programs tab and new Files Tab
+  '                    - Added Libraries tab.
   ' 2024/04/10 v1.2  hk Create Jobs Tab
   '                    -Create Libraries Tab
   ' 2024/03/20 v1.13 hk Create JCL Comments Tab
@@ -142,6 +144,7 @@ Public Class Form1
   Dim JobRow As Integer = 0
   Dim JobCommentsRow As Integer = 0
   Dim ProgramsRow As Integer = 0
+  Dim FilesRow As Integer = 0
   Dim RecordsRow As Integer = 0
   Dim FieldsRow As Integer = 0
   Dim CommentsRow As Integer = 0
@@ -174,7 +177,8 @@ Public Class Form1
   Dim dgfWorksheet As Microsoft.Office.Interop.Excel.Worksheet
   ' Model 
   Dim workbook As Microsoft.Office.Interop.Excel.Workbook
-  Dim worksheet As Microsoft.Office.Interop.Excel.Worksheet
+  Dim FilesWorksheet As Microsoft.Office.Interop.Excel.Worksheet
+  Dim ProgramsWorksheet As Microsoft.Office.Interop.Excel.Worksheet
   Dim SummaryWorksheet As Microsoft.Office.Interop.Excel.Worksheet
   Dim JobsWorksheet As Microsoft.Office.Interop.Excel.Worksheet
   Dim JobCommentsWorksheet As Microsoft.Office.Interop.Excel.Worksheet
@@ -192,7 +196,8 @@ Public Class Form1
   Dim rngSummaryName As Microsoft.Office.Interop.Excel.Range
   Dim rngJobs As Microsoft.Office.Interop.Excel.Range
   Dim rngJobComments As Microsoft.Office.Interop.Excel.Range
-  Dim rngRecordName As Microsoft.Office.Interop.Excel.Range
+  Dim rngPrograms As Microsoft.Office.Interop.Excel.Range
+  Dim rngFiles As Microsoft.Office.Interop.Excel.Range
   Dim rngRecordsName As Microsoft.Office.Interop.Excel.Range
   Dim rngFieldsName As Microsoft.Office.Interop.Excel.Range
   Dim rngComments As Microsoft.Office.Interop.Excel.Range
@@ -1516,6 +1521,10 @@ Public Class Form1
 
 
         Case Else
+          If jLabel = "/*ROUTE" Then
+            JobRoute = jControl & " " & jParameters
+            Continue For
+          End If
           If jLabel = "/*JOBPARM" Then
             JobParm = jControl
             Continue For
@@ -1544,7 +1553,9 @@ Public Class Form1
 
     Call CreateJobComments()
 
-    Call CreatePrograms()
+    Call CreateProgramsTab()
+    Call CreateFilesTab()
+
 
   End Function
   Function LoadSymbolics(ByRef jParameters As String) As List(Of String)
@@ -1571,7 +1582,7 @@ Public Class Form1
     jControl = jclWords(1)
     jParameters = jclWords(2)
 
-    If jLabel = "/*JOBPARM" Then
+    If jLabel = "/*JOBPARM" Or jLabel = "/*ROUTE" Then
       Exit Sub
     End If
 
@@ -2197,39 +2208,102 @@ Public Class Form1
     Next
     lblProcessingWorksheet.Text = "Processing Job Comments: " & FileNameOnly & " : Complete"
   End Sub
-  Sub CreatePrograms()
+  Sub CreateProgramsTab()
 
-    ' Build the worksheetsheet. Programs sheet is a list of all JCL Jobs with programs and DD details.
+    ' Build the Programs worksheet. Programs sheet is a list of all JCL Jobs with programs.
     lblProcessingWorksheet.Text = "Processing Programs: " & FileNameOnly & " : Rows = " & ListOfDDs.Count
     If ProgramsRow = 0 Then
-      worksheet = workbook.Sheets.Add(After:=workbook.Worksheets(workbook.Worksheets.Count))
-      worksheet.Name = "Programs"
+      ProgramsWorksheet = workbook.Sheets.Add(After:=workbook.Worksheets(workbook.Worksheets.Count))
+      ProgramsWorksheet.Name = "Programs"
       ' Write the column headings row
-      worksheet.Range("A1").Value = "JobName"
-      worksheet.Range("B1").Value = "JobSeq"
-      worksheet.Range("C1").Value = "ProcName"
-      worksheet.Range("D1").Value = "ProcSeq"
-      worksheet.Range("E1").Value = "StepName"
-      worksheet.Range("F1").Value = "ExecName"
-      worksheet.Range("G1").Value = "PgmName"
-      worksheet.Range("H1").Value = "PgmSeq"
-      worksheet.Range("I1").Value = "DD"
-      worksheet.Range("J1").Value = "DDSeq"
-      worksheet.Range("K1").Value = "DDConcatSeq"
-      worksheet.Range("L1").Value = "DatasetName"
-      worksheet.Range("M1").Value = "StartDisp"
-      worksheet.Range("N1").Value = "EndDisp"
-      worksheet.Range("O1").Value = "AbendDisp"
-      worksheet.Range("P1").Value = "RecFM"
-      worksheet.Range("Q1").Value = "LRECL"
-      worksheet.Range("R1").Value = "DBMS"
-      worksheet.Range("S1").Value = "ReportId"
-      worksheet.Range("T1").Value = "ReportDescription"
-      worksheet.Range("U1").Value = "SourceType"
+      ProgramsWorksheet.Range("A1").Value = "Job_Source"
+      ProgramsWorksheet.Range("B1").Value = "Job_Name"
+      ProgramsWorksheet.Range("C1").Value = "Proc_Name"
+      ProgramsWorksheet.Range("D1").Value = "StepName"
+      ProgramsWorksheet.Range("E1").Value = "ExecName"
+      ProgramsWorksheet.Range("F1").Value = "PgmName"
+      ProgramsWorksheet.Range("G1").Value = "SourceType"
       ProgramsRow = 1
-      worksheet.Activate()
-      worksheet.Application.ActiveWindow.SplitRow = 1
-      worksheet.Application.ActiveWindow.FreezePanes = True
+      ProgramsWorksheet.Activate()
+      ProgramsWorksheet.Application.ActiveWindow.SplitRow = 1
+      ProgramsWorksheet.Application.ActiveWindow.FreezePanes = True
+    End If
+
+    ' Process through the DD Array 
+    If ListOfDDs.Count = 0 Then
+      Exit Sub
+    End If
+
+    Dim cnt As Integer = 0
+
+    For Each DDStmt In ListOfDDs
+      Dim csvRecord As String()           ' all fields(columns) for a given record
+      csvRecord = DDStmt.Split(Delimiter)
+      cnt += 1
+      jobName = csvRecord(0)
+      jobSequence = Val(csvRecord(1))
+      procName = csvRecord(2)
+      procSequence = Val(csvRecord(3))
+      stepName = csvRecord(4)
+      pgmName = csvRecord(5)
+      ddSequence = csvRecord(8)
+      ddConcatSeq = Val(csvRecord(9))
+      SourceType = csvRecord(19)
+      execName = csvRecord(20)
+      If ddSequence = 1 And ddConcatSeq = 0 And (SourceType = "COBOL" Or SourceType = "Easytrieve") Then
+        ProgramsRow += 1
+        Dim row As String = LTrim(Str(ProgramsRow))
+        ProgramsWorksheet.Range("A" & row).Value = JobSourceName
+        ProgramsWorksheet.Range("B" & row).Value = jobName
+        ProgramsWorksheet.Range("C" & row).Value = procName
+        ProgramsWorksheet.Range("D" & row).Value = stepName
+        ProgramsWorksheet.Range("E" & row).Value = execName
+        ProgramsWorksheet.Range("F" & row).Value = pgmName
+        ProgramsWorksheet.Range("G" & row).Value = SourceType
+        ' load up a list of executable programs to analyze
+        If SourceType = "COBOL" Or SourceType = "Easytrieve" Then
+          If ListOfExecs.IndexOf(pgmName & Delimiter & SourceType) = -1 Then
+            ListOfExecs.Add(pgmName & Delimiter & SourceType)
+          End If
+        End If
+      End If
+      '
+      If cnt Mod 100 = 0 Then
+        lblProcessingWorksheet.Text = "Processing Programs: " & FileNameOnly & " : Rows = " & cnt
+      End If
+    Next
+    lblProcessingWorksheet.Text = "Processing Programs: " & FileNameOnly & " : Complete"
+
+  End Sub
+  Sub CreateFilesTab()
+
+    ' Build the Files Tab. This is a list of all Files (DD) in the JCL Jobs.
+    lblProcessingWorksheet.Text = "Processing Files: " & FileNameOnly & " : Rows = " & ListOfDDs.Count
+    If FilesRow = 0 Then
+      FilesWorksheet = workbook.Sheets.Add(After:=workbook.Worksheets(workbook.Worksheets.Count))
+      FilesWorksheet.Name = "Files"
+      ' Write the column headings row
+      FilesWorksheet.Range("A1").Value = "Job_Source"
+      FilesWorksheet.Range("B1").Value = "Job_Name"
+      FilesWorksheet.Range("C1").Value = "ProcName"
+      FilesWorksheet.Range("D1").Value = "StepName"
+      FilesWorksheet.Range("E1").Value = "ExecName"
+      FilesWorksheet.Range("F1").Value = "PgmName"
+      FilesWorksheet.Range("G1").Value = "DD"
+      FilesWorksheet.Range("H1").Value = "DDSeq"
+      FilesWorksheet.Range("I1").Value = "DDConcatSeq"
+      FilesWorksheet.Range("J1").Value = "DatasetName"
+      FilesWorksheet.Range("K1").Value = "StartDisp"
+      FilesWorksheet.Range("L1").Value = "EndDisp"
+      FilesWorksheet.Range("M1").Value = "AbendDisp"
+      FilesWorksheet.Range("N1").Value = "RecFM"
+      FilesWorksheet.Range("O1").Value = "LRECL"
+      FilesWorksheet.Range("P1").Value = "DBMS"
+      FilesWorksheet.Range("Q1").Value = "ReportId"
+      FilesRow = 1
+      FilesWorksheet.Activate()
+      FilesWorksheet.Application.ActiveWindow.SplitRow = 1
+      FilesWorksheet.Application.ActiveWindow.FreezePanes = True
     End If
 
     ' Write the data
@@ -2276,108 +2350,40 @@ Public Class Form1
       Dim reportDescription As String = csvRecord(18)
       SourceType = csvRecord(19)
       execName = csvRecord(20)
-      ProgramsRow += 1
-      row = LTrim(Str(ProgramsRow))
-      worksheet.Range("A" & row).Value = jobName
-      worksheet.Range("B" & row).Value = LTrim(Str(jobSequence))
-      worksheet.Range("C" & row).Value = procName
-      worksheet.Range("D" & row).Value = LTrim(Str(procSequence))
-      worksheet.Range("E" & row).Value = stepName
-      worksheet.Range("F" & row).Value = execName
-      worksheet.Range("G" & row).Value = pgmName
-      worksheet.Range("H" & row).Value = LTrim(Str(execSequence))
-      worksheet.Range("I" & row).Value = DDName
-      worksheet.Range("J" & row).Value = LTrim(Str(ddSequence))
-      worksheet.Range("K" & row).Value = LTrim(Str(ddConcatSeq))
-      worksheet.Range("L" & row).Value = dsn
-      worksheet.Range("M" & row).Value = startDisp
-      worksheet.Range("N" & row).Value = endDisp
-      worksheet.Range("O" & row).Value = abendDisp
-      worksheet.Range("P" & row).Value = dcbRecFM
-      worksheet.Range("Q" & row).Value = dcbLrecl
-      worksheet.Range("R" & row).Value = db2
-      worksheet.Range("S" & row).Value = reportID
-      worksheet.Range("T" & row).Value = reportDescription
-      worksheet.Range("U" & row).Value = SourceType
-      ' load up a list of executable programs to analyze
-      If ddSequence = 1 And ddConcatSeq = 0 And (SourceType = "COBOL" Or SourceType = "Easytrieve") Then
-        If ListOfExecs.IndexOf(pgmName & Delimiter & SourceType) = -1 Then
-          ListOfExecs.Add(pgmName & Delimiter & SourceType)
-        End If
-      End If
-      ' Stats / Metrics
-      'If ddSequence = 1 And ddConcatSeq = 0 And SourceType = "COBOL" And jobName.ToUpper <> "ONLINE" Then
-      '  If ListOfBatchCobolPrograms.IndexOf(pgmName) = -1 Then
-      '    ListOfBatchCobolPrograms.Add(pgmName)
-      '  End If
-      '  CntBatchCobolPrograms += 1
-      'End If
-      'If ddSequence = 1 And ddConcatSeq = 0 And SourceType = "Easytrieve" And jobName.ToUpper <> "ONLINE" Then
-      '  If ListOfBatchEasytrievePrograms.IndexOf(pgmName) = -1 Then
-      '    ListOfBatchEasytrievePrograms.Add(pgmName)
-      '  End If
-      '  CntBatchEasytrievePrograms += 1
-      'End If
-      'If ddSequence = 1 And ddConcatSeq = 0 And SourceType = "COBOL" And jobName.ToUpper = "ONLINE" Then
-      '  If ListOfOnlineCobolPrograms.IndexOf(pgmName) = -1 Then
-      '    ListOfOnlineCobolPrograms.Add(pgmName)
-      '  End If
-      '  CntOnlineCobolPrograms += 1
-      'End If
-      'If ddSequence = 1 And ddConcatSeq = 0 And SourceType = "Easytrieve" And jobName.ToUpper = "ONLINE" Then
-      '  If ListOfOnlineEasytrievePrograms.IndexOf(pgmName) = -1 Then
-      '    ListOfOnlineEasytrievePrograms.Add(pgmName)
-      '  End If
-      '  CntOnlineEasytrievePrograms += 1
-      'End If
-      'If ddSequence = 1 And ddConcatSeq = 0 And SourceType = "UTILITY" Then
-      '  If ListOfUtilityPrograms.IndexOf(pgmName) = -1 Then
-      '    ListOfUtilityPrograms.Add(pgmName)
-      '  End If
-      '  CntUtilityPrograms += 1
-      'End If
-      'If execSequence = 1 And ddSequence = 1 And jobName.ToUpper <> "ONLINE" And jobName.ToUpper <> "CALLPGMS" Then
-      '  If ListOfBatchJobs.IndexOf(jobName) = -1 Then
-      '    ListOfBatchJobs.Add(jobName)
-      '  End If
-      '  CntBatchJobs += 1
-      'End If
-      'If reportID.Trim.Length > 0 Then
-      '  If reportID <> "INTRDR" Then
-      '    If ListOfReports.IndexOf(reportID) = -1 Then
-      '      ListOfReports.Add(reportID)
-      '    End If
-      '    CntReports += 1
+      FilesRow += 1
+      row = LTrim(Str(FilesRow))
+      FilesWorksheet.Range("A" & row).Value = JobSourceName
+      FilesWorksheet.Range("B" & row).Value = jobName
+      FilesWorksheet.Range("C" & row).Value = procName
+      FilesWorksheet.Range("D" & row).Value = stepName
+      FilesWorksheet.Range("E" & row).Value = execName
+      FilesWorksheet.Range("F" & row).Value = pgmName
+      FilesWorksheet.Range("G" & row).Value = DDName
+      FilesWorksheet.Range("H" & row).Value = LTrim(Str(ddSequence))
+      FilesWorksheet.Range("I" & row).Value = LTrim(Str(ddConcatSeq))
+      FilesWorksheet.Range("J" & row).Value = dsn
+      FilesWorksheet.Range("K" & row).Value = startDisp
+      FilesWorksheet.Range("L" & row).Value = endDisp
+      FilesWorksheet.Range("M" & row).Value = abendDisp
+      FilesWorksheet.Range("N" & row).Value = dcbRecFM
+      FilesWorksheet.Range("O" & row).Value = dcbLrecl
+      FilesWorksheet.Range("P" & row).Value = db2
+      FilesWorksheet.Range("Q" & row).Value = reportID
+      '' load up a list of executable programs to analyze
+      'If ddSequence = 1 And ddConcatSeq = 0 And (SourceType = "COBOL" Or SourceType = "Easytrieve") Then
+      '  If ListOfExecs.IndexOf(pgmName & Delimiter & SourceType) = -1 Then
+      '    ListOfExecs.Add(pgmName & Delimiter & SourceType)
       '  End If
       'End If
-      'If dsn.Trim.Length > 0 And pgmName <> "CALLPGMS" Then
-      '  Dim dsnBase As String = dsn
-      '  Dim x As Integer = dsn.IndexOf("(")
-      '  If x > -1 Then
-      '    dsnBase = dsn.Substring(0, x)
-      '  End If
-      '  If dsn.IndexOf("SYSOUT=") = -1 And Array.IndexOf(ControlLibraries, dsnBase) = -1 Then
-      '    Select Case DDName
-      '      Case "STEPLIB", "SYSUDUMP", "SYSABOUT", "SYSDBOUT", "CEEDUMP", "LEMSGS",
-      '           "ABNLHELP", "ABNLSPRT", "ABNLDUMP", "ABNLSORT",
-      '           "DFSRESLB", "IMS", "IMSERROR", "IMSERR"
-      '      Case Else
-      '        If ListOfDataFiles.IndexOf(dsn) = -1 Then
-      '          ListOfDataFiles.Add(dsn)
-      '        End If
-      '        CntDataFiles += 1
-      '    End Select
-      '  End If
-      'End If
-
       '
       If cnt Mod 100 = 0 Then
-        lblProcessingWorksheet.Text = "Processing Programs: " & FileNameOnly & " : Rows = " & cnt
+        lblProcessingWorksheet.Text = "Processing Files: " & FileNameOnly & " : Rows = " & cnt
       End If
     Next
-    lblProcessingWorksheet.Text = "Processing Programs: " & FileNameOnly & " : Complete"
+    lblProcessingWorksheet.Text = "Processing Filess: " & FileNameOnly & " : Complete"
 
   End Sub
+
   Sub ProcessSourceFiles()
     Dim SourceRecordsCount As Integer = 0
     Dim execCnt As Integer = 0
@@ -4317,16 +4323,32 @@ Public Class Form1
     If ProgramsRow > 1 Then
       Dim row As Integer = LTrim(Str(ProgramsRow))
       ' Format the Sheet - first row bold the columns
-      rngRecordName = worksheet.Range("A1:U1")
-      rngRecordName.Font.Bold = True
+      rngPrograms = ProgramsWorksheet.Range("A1:G1")
+      rngPrograms.Font.Bold = True
       ' data area autofit all columns
-      rngRecordName = worksheet.Range("A1:U" & row)
-      'rngRecordName.AutoFilter()
+      rngPrograms = ProgramsWorksheet.Range("A1:G" & row)
       workbook.Worksheets("Programs").Range("A1").AutoFilter
-      rngRecordName.Columns.AutoFit()
+      rngPrograms.Columns.AutoFit()
+      rngPrograms.Rows.AutoFit()
       ' ignore error flag that numbers being loaded into a text field
       objExcel.ErrorCheckingOptions.NumberAsText = False
     End If
+
+    ' Format the Files sheet - first row bold the columns
+    If FilesRow > 1 Then
+      Dim row As Integer = LTrim(Str(FilesRow))
+      ' Format the Sheet - first row bold the columns
+      rngFiles = FilesWorksheet.Range("A1:Q1")
+      rngFiles.Font.Bold = True
+      ' data area autofit all columns
+      rngFiles = FilesWorksheet.Range("A1:Q" & row)
+      workbook.Worksheets("Files").Range("A1").AutoFilter
+      rngFiles.Columns.AutoFit()
+      rngFiles.Rows.AutoFit()
+      ' ignore error flag that numbers being loaded into a text field
+      objExcel.ErrorCheckingOptions.NumberAsText = False
+    End If
+
 
     ' Format the Records Sheet - first row bold the columns
     If RecordsRow > 0 Then
@@ -4337,6 +4359,7 @@ Public Class Form1
       rngRecordsName = RecordsWorksheet.Range("A1:O" & row)
       workbook.Worksheets("Records").Range("A1").AutoFilter
       rngRecordsName.Columns.AutoFit()
+      rngRecordsName.Rows.AutoFit()
       ' ignore error flag that numbers being loaded into a text field
       objExcel.ErrorCheckingOptions.NumberAsText = False
     End If
@@ -4350,6 +4373,7 @@ Public Class Form1
       rngFieldsName = FieldsWorksheet.Range("A1:O" & row)
       workbook.Worksheets("Fields").Range("A1").AutoFilter
       rngFieldsName.Columns.AutoFit()
+      rngFieldsName.Rows.AutoFit()
       ' ignore error flag that numbers being loaded into a text field
       objExcel.ErrorCheckingOptions.NumberAsText = False
     End If
