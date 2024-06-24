@@ -23,8 +23,13 @@ Public Class Form1
   ' - PlantUml for creating flowchart
   '
   '***Be sure to change ProgramVersion when making changes!!!
-  Dim ProgramVersion As String = "v1.2.1"
+  Dim ProgramVersion As String = "v1.3"
   'Change-History.
+  ' 2024/04/15 v1.3  hk Create Batch ADDILite feature
+  '                  - Optionally Create worksheet Tabs
+  '                  - fixed CALLS tab content
+  '                  - fixed execCICS tab content
+  '                  - fixed continuation of COBOL lines
   ' 2024/04/13 v1.2.1 hk Revised Programs tab and new Files Tab
   '                    - Added Libraries tab.
   ' 2024/04/10 v1.2  hk Create Jobs Tab
@@ -246,7 +251,8 @@ Public Class Form1
 
   Dim ListOfTables As New List(Of String)
   Dim ListOfTableNames As New List(Of String)         'array to hold table names
-
+  ' Easytrieve fields
+  Dim theProcName As String = ""
   ' COBOL fields
   Dim SourceType As String = ""
   'Dim CalledMember As String = ""
@@ -460,6 +466,9 @@ Public Class Form1
     Delimiter = txtDelimiter.Text
   End Sub
 
+  Sub BatchADDILite()
+
+  End Sub
   Private Sub btnADDILite_Click(sender As Object, e As EventArgs) Handles btnADDILite.Click
     Dim start_time As DateTime = Now
     Dim stop_time As DateTime
@@ -511,7 +520,7 @@ Public Class Form1
 
     ' Get the number of JOBS that will be processed
     NumberOfJobsToProcess = My.Computer.FileSystem.GetFiles(txtJCLJOBFolderName.Text).Count
-    lblJobFileCount.Text = "JCL Job files found:" & Str(NumberOfJobsToProcess)
+
 
 
     ' Count the Telon files to determine Batch and Online members
@@ -604,7 +613,7 @@ Public Class Form1
     End If
 
     ' Create the Summary tab (aka Datagathering form details)
-    CreateSummary()
+    CreateSummaryTab()
 
     ' Create, if any, all the in-stream data files as defined in the JOBS
     For Each JobFile In ListOfJobs
@@ -618,7 +627,7 @@ Public Class Form1
     For Each fi In aryFi
       ListofSourceFiles.Add(fi.Name.ToUpper)
     Next
-    lblSourceFilesFound.Text = "Source Files Found:" & Str(ListofSourceFiles.Count)
+
 
     ' Process All the jobs in the JCL Folder.
     '  An addtional job could be created if should there be call subroutines
@@ -639,13 +648,13 @@ Public Class Form1
 
     Call ProcessCallPgms(CallPgmsFileName)
 
-    Call CreateEXECSQLWorksheet()
-    Call CreateEXECCICSWorksheet()
-    Call CreateIMSWorksheet()
-    Call CreateCallsWorksheet()
+    Call CreateEXECSQLTab()
+    Call CreateEXECCICSTab()
+    Call CreateIMSTab()
+    Call CreateCallsTab()
     Call CreateIMSPSPNamesFile()
-    Call CreateScreenMapWorksheet()
-    Call CreateLibrariesWorksheet()
+    Call CreateScreenMapTab()
+    Call CreateLibrariesTab()
 
     'Call CreateStatsWorksheet()
 
@@ -795,22 +804,27 @@ Public Class Form1
               ScreenType = "CICS"
               MapName = srcWords(0)
               MbrLine = ""
+              literalsFoundCnt = 0
+              literalsFound = ""
               Continue For
             End If
           End If
         End If
         If ScreenType = "CICS" Then
-          If MbrLine.IndexOf("INITIAL='") > -1 Then
+          Dim InitStringPosition As Integer = MbrLine.IndexOf("INITIAL='")
+          If InitStringPosition > -1 Then
+            Dim InitStringValue As String = MbrLine.Substring(InitStringPosition)
             literalsFoundCnt += 1
             If literalsFoundCnt <= literalsFoundMax Then
-              Dim quoteWords As String() = MbrLine.Split("'")
-              literalsFound &= quoteWords(1).Trim & vbNewLine
+              Dim quoteWords As String() = InitStringValue.Split("'")
+              literalsFound &= quoteWords(1).Trim & " "
             End If
           End If
           If literalsFoundCnt > literalsFoundMax Or MbrLine = "END" Then
-            If literalsFound.Length > 2 Then
-              literalsFound = literalsFound.Substring(0, literalsFound.Length - 2)    'remove last vbNewLine
-            End If
+            literalsFound = literalsFound.Trim
+            'If literalsFound.Length > 2 Then
+            '  literalsFound = literalsFound.Substring(0, literalsFound.Length - 2)    'remove last vbNewLine
+            'End If
             ListofScreenMaps.Add(Path.GetFileName(foundFile) & Delimiter &
                                   ScreenType & Delimiter &
                                   MapName & Delimiter &
@@ -819,17 +833,28 @@ Public Class Form1
           End If
         End If
 
-        ' PC Screens (ScreenIO) 
-        If MbrLine.Length >= 72 Then
-          ' store map/panel name and/or screen type (Pop-Up, Window, Main, etc.)
-          If MbrLine.Substring(6, 4) = "*:- " Then
-            ScreenType = "SCREENIO"
-            If MbrLine.Substring(21, 12) = "Panel Name: " Then
-              PanelName = MbrLine.Substring(33, 11).Trim
+        ' PC Screens (ScreenIO)
+        If ScreenType = "" Then
+          If Mid(MbrLine, 1, 6) <> Space(6) Then
+            MbrLine = memberLines(index) & Space(80)
+          End If
+          If MbrLine.Length >= 70 Then
+            ' store map/panel name and/or screen type (Pop-Up, Window, Main, etc.)
+            If MbrLine.Substring(6, 4) = "*:- " Then
+              ScreenType = "SCREENIO"
+              If MbrLine.Substring(21, 12) = "Panel Name: " Then
+                PanelName = MbrLine.Substring(33, 11).Trim
+              End If
+              If MbrLine.Substring(45, 11) = "PanelType: " Then
+                PanelType = MbrLine.Substring(56, 12).Trim
+              End If
+              Continue For
             End If
-            If MbrLine.Substring(45, 11) = "PanelType: " Then
-              PanelType = MbrLine.Substring(56, 12).Trim
-            End If
+          End If
+        End If
+        If ScreenType = "SCREENIO" Then
+          If Mid(MbrLine, 1, 6) <> Space(6) Then
+            MbrLine = memberLines(index) & Space(80)
           End If
           ' Get any comments when line has '*:> '
           If MbrLine.Substring(6, 4) = "*:> " Then
@@ -841,12 +866,13 @@ Public Class Form1
               literalsFound = literalsFound.Substring(0, literalsFound.Length - 2)    'remove last vbNewLine
             End If
             ListofScreenMaps.Add(Path.GetFileName(foundFile) & Delimiter &
-                                  PanelType & Delimiter &
-                                  PanelName & Delimiter &
-                                  literalsFound)
+                                PanelType & Delimiter &
+                                PanelName & Delimiter &
+                                literalsFound)
             Exit For
           End If
         End If
+
         MbrLine = ""
       Next index
     Next
@@ -1151,7 +1177,6 @@ Public Class Form1
     ' Input: JOBS folder name (global variable)
     '        SOURCES folder name (global variable)
     ' Output: files written to the SOURCES folder name
-    '***here***
     FileNameOnly = Path.GetFileNameWithoutExtension(JobFile)
     FileNameWithExtension = Path.GetFileName(JobFile)
     Dim JCLLines As String() = File.ReadAllLines(JobFile)
@@ -1549,9 +1574,9 @@ Public Class Form1
 
     Call CreateJCLPuml()
 
-    Call CreateJobWorksheet()
+    Call CreateJobsTab()
 
-    Call CreateJobComments()
+    Call CreateJobCommentsTab()
 
     Call CreateProgramsTab()
     Call CreateFilesTab()
@@ -1575,6 +1600,8 @@ Public Class Form1
     'Each statement is expected to have either JOB, PROC, EXEC, DD, PEND, SET, OUTPUT, IF, ENDIF, etc.
     'Enforcement of JCL syntax is not done here except that there must be a space between
     ' Label, Control and Parmeters. There may not be a label, so adjustments are made
+    'get previous jLabel by looking at last entry of the listofdds array
+
     Dim jLabelPrev As String = jLabel
 
     Dim jclWords As String() = statement.Split(Delimiter)
@@ -1650,6 +1677,11 @@ Public Class Form1
       Exit Sub
     End If
 
+    If stepName = "" Or stepName = "*" Then
+      stepName = pgmName
+    End If
+
+
     ' At this time we need to check if its an Easytrieve load-and-go program (EZTPA00)
     '  if so, we need to substitue the pgmName with the actual program from the DD SYSIN statement
     '  from a PDS member name of the DSN, 
@@ -1663,7 +1695,7 @@ Public Class Form1
       End If
     End If
 
-    ' Is this an IMS program? If so, we need to get the real program name.
+    ' If this NOT an IMS program? Get the program name.
     If pgmName <> "DFSRRC00" Then
       execSequence += 1
       If NeedSourceType Then
@@ -1697,6 +1729,14 @@ Public Class Form1
 
   Sub ProcessDD(ByRef ListOfSymbolics As List(Of String))
     ' Process the DD statement
+
+    ' get the last jLabel if the previous was a comment line
+    If jLabel = "*" Then
+      If ListOfDDs.Count > 0 Then
+        Dim lastDDEntries As String() = ListOfDDs(ListOfDDs.Count - 1).Split(Delimiter)
+        jLabel = lastDDEntries(7)
+      End If
+    End If
 
     Dim db2 As String = ""
     If jLabel = "CAFIN" Then
@@ -2008,51 +2048,49 @@ Public Class Form1
   End Sub
   Function DetermineStartDisp(ByRef fileDisp As String()) As String
     ' determine start disp
-    DetermineStartDisp = ""
     If fileDisp Is Nothing Then
-      DetermineStartDisp = "OUTPUT"
-      Exit Function
+      Return "OUTPUT"
     End If
     If fileDisp.Count >= 1 Then
       If fileDisp(0).Length = 0 Then
-        DetermineStartDisp = "OUTPUT"
+        Return "OUTPUT"
       Else
         Select Case fileDisp(0)
           Case "SHR"
-            DetermineStartDisp = "INPUT"
+            Return "INPUT"
           Case "MOD", "NEW"
-            DetermineStartDisp = "OUTPUT"
+            Return "OUTPUT"
           Case Else
-            DetermineStartDisp = "INPUT"
+            Return "INPUT"
         End Select
       End If
     Else
-      DetermineStartDisp = "INPUT"
+      Return "INPUT"
     End If
-
+    Return ""
   End Function
   Function DetermineEndDisp(ByRef fileDisp As String()) As String
-    DetermineEndDisp = ""
     If fileDisp Is Nothing Then
-      DetermineEndDisp = "KEEP"
+      Return "KEEP"
       Exit Function
     End If
     If fileDisp.Count >= 2 Then
       If fileDisp(1).Length = 0 Then
-        DetermineEndDisp = "KEEP"
+        Return "KEEP"
       Else
         Select Case fileDisp(1)
           Case "KEEP"
-            DetermineEndDisp = "KEEP"
+            Return "KEEP"
           Case "DELETE"
-            DetermineEndDisp = "DELETE"
+            Return "DELETE"
           Case "CATLG"
-            DetermineEndDisp = "KEEP"
+            Return "KEEP"
         End Select
       End If
     Else
-      DetermineEndDisp = "KEEP"
+      Return "KEEP"
     End If
+    Return ""
   End Function
   Function DetermineAbendDisp(ByRef fileDisp As String()) As String
     DetermineAbendDisp = ""
@@ -2078,7 +2116,8 @@ Public Class Form1
     End If
   End Function
 
-  Sub CreateSummary()
+  Sub CreateSummaryTab()
+
     workbook = objExcel.Workbooks.Add
     SummaryWorksheet = workbook.Sheets.Item(1)
     SummaryWorksheet.Name = "Summary"
@@ -2102,9 +2141,12 @@ Public Class Form1
 
 
   End Sub
-  Sub CreateJobWorksheet()
+  Sub CreateJobsTab()
     ' Build the Jobs Worksheet
     ' Given a set of variables write 1 row on the JOB tab
+    If Not cbJOBS.Checked Then
+      Exit Sub
+    End If
 
     If JobRow = 0 Then
       JobsWorksheet = workbook.Sheets.Add(After:=workbook.Worksheets(workbook.Worksheets.Count))
@@ -2150,11 +2192,15 @@ Public Class Form1
     JobsWorksheet.Range("O" & row).Value = JobTyprun
 
   End Sub
-  Sub CreateJobComments()
+  Sub CreateJobCommentsTab()
     ' Build the JobComments Worksheet.
     ' Process through the JclStmt array. Look for an 'EXEC' command and then process backwards
     '  to find the first of the comments. Then string (vbLF) comments together and write
     '  an entry for that 'EXEC'
+    If Not cbJobComments.Checked Then
+      Exit Sub
+    End If
+
     lblProcessingWorksheet.Text = "Processing Job Comments: " & FileNameOnly
     If JobCommentsRow = 0 Then
       JobCommentsWorksheet = workbook.Sheets.Add(After:=workbook.Worksheets(workbook.Worksheets.Count))
@@ -2209,8 +2255,11 @@ Public Class Form1
     lblProcessingWorksheet.Text = "Processing Job Comments: " & FileNameOnly & " : Complete"
   End Sub
   Sub CreateProgramsTab()
-
     ' Build the Programs worksheet. Programs sheet is a list of all JCL Jobs with programs.
+    If Not cbPrograms.Checked Then
+      Exit Sub
+    End If
+
     lblProcessingWorksheet.Text = "Processing Programs: " & FileNameOnly & " : Rows = " & ListOfDDs.Count
     If ProgramsRow = 0 Then
       ProgramsWorksheet = workbook.Sheets.Add(After:=workbook.Worksheets(workbook.Worksheets.Count))
@@ -2250,7 +2299,7 @@ Public Class Form1
       ddConcatSeq = Val(csvRecord(9))
       SourceType = csvRecord(19)
       execName = csvRecord(20)
-      If ddSequence = 1 And ddConcatSeq = 0 And (SourceType = "COBOL" Or SourceType = "Easytrieve") Then
+      If ddSequence = 1 And ddConcatSeq = 0 Then
         ProgramsRow += 1
         Dim row As String = LTrim(Str(ProgramsRow))
         ProgramsWorksheet.Range("A" & row).Value = JobSourceName
@@ -2261,11 +2310,11 @@ Public Class Form1
         ProgramsWorksheet.Range("F" & row).Value = pgmName
         ProgramsWorksheet.Range("G" & row).Value = SourceType
         ' load up a list of executable programs to analyze
-        If SourceType = "COBOL" Or SourceType = "Easytrieve" Then
-          If ListOfExecs.IndexOf(pgmName & Delimiter & SourceType) = -1 Then
-            ListOfExecs.Add(pgmName & Delimiter & SourceType)
-          End If
+        'If SourceType = "COBOL" Or SourceType = "Easytrieve" Or SourceType = "Assembler" Then
+        If ListOfExecs.IndexOf(pgmName & Delimiter & SourceType) = -1 Then
+          ListOfExecs.Add(pgmName & Delimiter & SourceType)
         End If
+        'End If
       End If
       '
       If cnt Mod 100 = 0 Then
@@ -2276,8 +2325,11 @@ Public Class Form1
 
   End Sub
   Sub CreateFilesTab()
-
     ' Build the Files Tab. This is a list of all Files (DD) in the JCL Jobs.
+    If Not cbFiles.Checked Then
+      Exit Sub
+    End If
+
     lblProcessingWorksheet.Text = "Processing Files: " & FileNameOnly & " : Rows = " & ListOfDDs.Count
     If FilesRow = 0 Then
       FilesWorksheet = workbook.Sheets.Add(After:=workbook.Worksheets(workbook.Worksheets.Count))
@@ -2469,7 +2521,7 @@ Public Class Form1
 
     Next
     If Not cbScanModeOnly.Checked Then
-      Call CreateCommentsWorksheet()
+      Call CreateCommentsTab()
     End If
 
     lblProcessingSource.Text = "Processing Sources: complete"
@@ -2590,7 +2642,7 @@ Public Class Form1
     Division = "PRE IDENT"
     For index As Integer = 0 To CobolLines.Count - 1
       ' drop blank/empty lines
-      If CobolLines(index).Trim.Length = 0 Then
+      If CobolLines(index).Trim.Length <= 6 Then
         Continue For
       End If
       ' determine which Division we are in
@@ -2709,11 +2761,14 @@ Public Class Form1
         Dim CopyType As String = ""
         Select Case True
           Case IDirective(0) = "COPY"
-            CopybookName = Trim(IDirective(1).Replace(QUOTE, "").Replace(".", " "))
-            If CopybookName.Substring(0, 1) = "\" Then
-              CopybookName.Remove(0, 1)
+            If IDirective.Count >= 2 Then
+              CopybookName = Trim(IDirective(1).Replace(QUOTE, "").Replace(".", " "))
+              If CopybookName.Substring(0, 1) = "\" Then
+                CopybookName.Remove(0, 1)
+              End If
+              CopyType = IDirective(0)
             End If
-            CopyType = IDirective(0)
+
           Case IDirective(0) = "++INCLUDE"
             CopybookName = Trim(IDirective(1).Replace(".", " "))
             CopyType = IDirective(0)
@@ -2826,7 +2881,7 @@ Public Class Form1
     ' and replace is done.
     ' This is also where we concatenate the lines, as needed, into a single statement.
     '
-    Dim hlkcounter As Integer = 0
+    Dim hlkcounter As Integer = -1
     Division = ""
     SrcStmt.Clear()
 
@@ -2853,6 +2908,15 @@ Public Class Form1
       End If
       If Microsoft.VisualBasic.Right(RTrim(AreaAandB), 1) = "." Then
         PeriodIsPresent = True
+        ' special adjustment: should next line be a continuation this line
+        '  cannot be end of sentence.
+        If hlkcounter < CobolLines.Count - 1 Then
+          If CobolLines(hlkcounter + 1).Length >= 7 Then
+            If CobolLines(hlkcounter + 1).Substring(6, 1) = "-" Then
+              PeriodIsPresent = False
+            End If
+          End If
+        End If
       Else
         PeriodIsPresent = False
       End If
@@ -2875,7 +2939,7 @@ Public Class Form1
       End If
 
       If IndicatorArea = "-" Then
-        cStatement &= AreaB
+        cStatement &= AreaAandB.Trim.Substring(1)
         Continue For
       End If
 
@@ -2907,7 +2971,7 @@ Public Class Form1
     pgm.ProgramId = ""
     pgm.SourceId = exec
 
-    Dim srcWords As New List(Of String)
+    '**here*** how does programid get populated???
 
     Select Case SourceType
       Case "COBOL"
@@ -2943,10 +3007,17 @@ Public Class Form1
             Case SrcStmt(stmtIndex).IndexOf("PROGRAM-ID.") > -1
               Dim tmppgmid As String = SrcStmt(stmtIndex).Trim
               pgm.ProgramId = tmppgmid.Substring(11).Replace(".", "").Replace("'", "").Trim
+              If pgm.ProgramId.Length = 0 Then
+                ' since Program-id's value is not on same line, presume it is on next line
+                '   else the source is invalid syntax.
+                stmtIndex += 1
+                pgm.ProgramId = SrcStmt(stmtIndex).Replace(".", "").Replace("'", "").Trim
+              End If
           End Select
           If pgm.ProcedureDivision > -1 Then
+            ' if there is a CALL verb anywhere on the line, analyze further
             If SrcStmt(stmtIndex).IndexOf(" CALL ") > -1 Then
-              Call AddToListOfCallPgms(SrcStmt(stmtIndex), srcWords)
+              Call AddToListOfCallPgms(SrcStmt(stmtIndex))
             End If
           End If
         Next
@@ -2956,6 +3027,7 @@ Public Class Form1
         End If
 
       Case "Easytrieve"
+        Dim srcWords As New List(Of String)
         pgm.EndProgram = SrcStmt.Count - 1
         pgm.IdentificationDivision = 0
         'the first one will be the "Division"
@@ -2979,23 +3051,76 @@ Public Class Form1
               End If
           End Select
         Next
+        If pgm.EnvironmentDivision = -1 Then
+          pgm.EnvironmentDivision = pgm.IdentificationDivision
+        End If
         listOfPrograms.Add(pgm)
     End Select
 
-    GetListOfPrograms = listOfPrograms
+    Return listOfPrograms
   End Function
-  Sub AddToListOfCallPgms(ByRef statement As String, ByRef srcWords As List(Of String))
+  Sub AddToListOfCallPgms(ByRef statement As String)
+    ' Search for the verb CALL and determine what program it is calling.
+    ' Also Identify as Static or Dynamic
+    ' Input:
+    '   COBOL statement string with all of its phrases
+    ' Output is an entry added to the ListOfCallPgms array
+    '   
+    'Dim srcWords As New List(Of String)
+
     Dim CalledFileName As String = ""
     Dim CalledType As String = ""
     Dim CalledEntry As String = ""
     Dim CalledMember As String = ""
 
-    Call GetSourceWords(statement, srcWords)
-    For x As Integer = 0 To srcWords.Count - 1
-      If srcWords(x) = "CALL" Then
-        CalledEntry = ""
-        CalledMember = srcWords(x + 1)
-        If Mid(CalledMember, 1, 1) <> "'" Then         'skip dynamic called routines
+    Call GetSourceWords(statement, cWord)
+
+    For x As Integer = 0 To cWord.Count - 1
+      If cWord(x) <> "CALL" Then
+        x = IndexToNextVerb(x)
+        If x = -1 Then
+          Exit For
+        Else
+          Continue For
+        End If
+      End If
+
+      ' What type of Call? Static or Dynamic
+      'dynamic called routines indicated by lack of quote
+      CalledEntry = ""
+      CalledMember = cWord(x + 1)
+      Select Case Mid(CalledMember, 1, 1)
+        Case "'", QUOTE
+          'Static Call
+          CalledMember = CalledMember.Replace("'", "").Replace(QUOTE, "").ToUpper.Trim
+          CalledType = "Static"
+          ' if a utility, ie ABEND do not add to list
+          If Array.IndexOf(Utilities, CalledMember) > -1 Then
+            CalledEntry = CalledMember & Delimiter &
+                "Utility" & Delimiter &
+                pgm.ProgramId & Delimiter &
+                CalledType & Delimiter &
+                pgm.SourceId
+            If ListOfCallPgms.IndexOf(CalledEntry) = -1 Then
+              ListOfCallPgms.Add(CalledEntry)
+            End If
+          Else
+            ' Get source type of Called Routine, first remove any extension and uppercase it
+            Dim PartsOfCalledMember As String() = CalledMember.Split(".")
+            CalledMember = PartsOfCalledMember(0).ToUpper
+            Dim CalledSourceType As String = GetSourceType(CalledMember)
+            CalledEntry = CalledMember & Delimiter &
+                CalledSourceType & Delimiter &
+                pgm.ProgramId & Delimiter &
+                CalledType & Delimiter &
+                pgm.SourceId
+            If ListOfCallPgms.IndexOf(CalledEntry) = -1 Then
+              ListOfCallPgms.Add(CalledEntry)
+            End If
+          End If
+
+        Case Else
+          'Dynamic Call
           CalledEntry = CalledMember & Delimiter &
             "n/a" & Delimiter &
             pgm.ProgramId & Delimiter &
@@ -3004,39 +3129,11 @@ Public Class Form1
           If ListOfCallPgms.IndexOf(CalledEntry) = -1 Then
             ListOfCallPgms.Add(CalledEntry)
           End If
-          Continue For
-        End If
 
-        'Static Call
-        CalledMember = CalledMember.Replace("'", "").ToUpper.Trim
-        CalledType = "Static"
-        ' if a utility, ie ABEND do not add to list
-        If Array.IndexOf(Utilities, CalledMember) > -1 Then
-          CalledEntry = CalledMember & Delimiter &
-                "Utility" & Delimiter &
-                pgm.ProgramId & Delimiter &
-                CalledType & Delimiter &
-                pgm.SourceId
-          If ListOfCallPgms.IndexOf(CalledEntry) = -1 Then
-            ListOfCallPgms.Add(CalledEntry)
-          End If
-          Continue For
-        End If
-
-        ' Get source type of Called Routine, first remove any extension and uppercase it
-        Dim PartsOfCalledMember As String() = CalledMember.Split(".")
-        CalledMember = PartsOfCalledMember(0).ToUpper
-        Dim CalledSourceType As String = GetSourceType(CalledMember)
-
-        CalledEntry = CalledMember & Delimiter &
-              CalledSourceType & Delimiter &
-              pgm.ProgramId & Delimiter &
-              CalledType & Delimiter &
-              pgm.SourceId
-
-        If ListOfCallPgms.IndexOf(CalledEntry) = -1 Then
-          ListOfCallPgms.Add(CalledEntry)
-        End If
+      End Select
+      x = IndexToNextVerb(x)
+      If x = -1 Then
+        Exit For
       End If
     Next
   End Sub
@@ -3582,6 +3679,7 @@ Public Class Form1
     Dim ExecCICS As String = ""
     Dim MapName As String = ""
     Dim execCnt As Integer = 0
+    Dim NotFound As String = ""
     For Each pgm In listOfPrograms
       Select Case SourceType
         Case "COBOL"
@@ -3591,7 +3689,7 @@ Public Class Form1
               Continue For
             End If
 
-            Call GetSourceWords(SrcStmt(stmtIndex), cWord)
+            Call GetSourceWords(SrcStmt(stmtIndex).Replace("( ", "(").Replace(" (", "(").Replace(" )", ")"), cWord)
 
             For x = 0 To cWord.Count - 1
               If cWord(x) = "END-EXEC" Then
@@ -3600,9 +3698,10 @@ Public Class Form1
 
               If (x + 2) < cWord.Count - 1 Then
                 If cWord(x) = "EXEC" And cWord(x + 1) = "CICS" And
-                  (cWord(x + 2) = "RECEIVE" Or cWord(x + 2) = "SEND") Then
+                  (cWord(x + 2) = "RECEIVE" Or cWord(x + 2) = "SEND" Or cWord(x + 2) = "XCTL" Or cWord(x + 2) = "LINK") Then
                   ExecCICS = cWord(x + 2)
                   MapName = ""
+                  NotFound = ""
                   For y = x + 2 To cWord.Count - 1
                     If cWord(y) = "END-EXEC" Then
                       Exit For
@@ -3611,9 +3710,33 @@ Public Class Form1
                       MapName = cWord(y).Replace("MAP('", "").Replace("')", "").Trim
                       Exit For
                     End If
+                    If cWord(y).IndexOf("PROGRAM(") > -1 Then
+                      'Is this a literal or variable name. Literal will have a quote mark
+                      If cWord(y).IndexOf("'") > -1 Then
+                        MapName = cWord(y).Replace("PROGRAM('", "").Replace("')", "").Trim
+                        If SourceExists(MapName).Length = 0 Then
+                          NotFound = "NotFound"
+                        End If
+                      Else
+                        ' search for variable name and get the VALUE clause, if any
+                        Dim VariableName As String = cWord(y).Replace("PROGRAM(", "").Replace(")", "").Trim
+                        MapName = GetVariableNameValue(VariableName)
+                        Select Case MapName
+                          Case "NOTFOUND", "NOVALUE"
+                            MapName = VariableName & "=" & MapName
+                            NotFound = "n/a"
+                          Case Else
+                            MapName = MapName.Replace("'", "")
+                            If SourceExists(MapName).Length = 0 Then
+                              NotFound = "NotFound"
+                            End If
+                        End Select
+                      End If
+                      Exit For
+                    End If
                   Next y
                   If MapName.Length > 0 Then
-                    Call AddToListOfCICSMapNames(execCnt, pgm, ExecCICS, MapName)
+                    Call AddToListOfCICSMapNames(execCnt, pgm, ExecCICS, MapName, NotFound)
                   End If
                   x += 2
                   Continue For
@@ -3626,15 +3749,50 @@ Public Class Form1
 
 
   End Sub
-  Sub AddToListOfCICSMapNames(ByRef execCnt As Integer, ByRef pgm As ProgramInfo, ByRef ExecCICS As String, ByRef MapName As String)
+  Sub AddToListOfCICSMapNames(ByRef execCnt As Integer, ByRef pgm As ProgramInfo,
+                              ByRef ExecCICS As String, ByRef MapName As String, ByRef NotFound As String)
     execCnt += 1
     ListOfCICSMapNames.Add(FileNameOnly & Delimiter &
                       pgm.SourceId & Delimiter &
                       pgm.ProgramId & Delimiter &
                       LTrim(Str(execCnt)) & Delimiter &
                       ExecCICS & Delimiter &
-                      MapName)
+                      MapName & Delimiter &
+                      NotFound)
   End Sub
+  Function GetVariableNameValue(ByRef VariableName As String) As String
+    ' search for variable name and get the VALUE clause, if any
+    ' if no VALUE clause found; return "NOVALUE"
+    ' else return "<VALUE CLAUSE>"
+    ' if variableName is not found return "NOTFOUND"
+    ' There is a special adjustment for syntax of "VALUE IS"
+    For x As Integer = pgm.DataDivision To pgm.ProcedureDivision - 1
+      If SrcStmt(x).IndexOf(VariableName) > -1 Then
+        If SrcStmt(x).IndexOf("VALUE") > -1 Then
+          Dim vWord As New List(Of String)
+          Call GetSourceWords(SrcStmt(x), vWord)
+          For y As Integer = 0 To vWord.Count - 1
+            If vWord(y) = "VALUE" Then
+              If vWord(y + 1) = "IS" Then
+                If vWord(y + 2) = "SPACES" Or vWord(y + 2) = "SPACE" Then
+                  Return "NOVALUE"
+                End If
+                Return vWord(y + 2)
+              Else
+                If vWord(y + 1) = "SPACES" Or vWord(y + 1) = "SPACE" Then
+                  Return "NOVALUE"
+                End If
+                Return vWord(y + 1)
+              End If
+            End If
+          Next
+        Else
+          Return "NOVALUE"
+        End If
+      End If
+    Next
+    Return "NOTFOUND"
+  End Function
   Function SourceExists(ByRef SourceFileName As String) As String
     'this will return FileName, FileName.cob, or FileName.cbl if exists in the Sources Directory
     ' Empty return means not found
@@ -3687,15 +3845,19 @@ Public Class Form1
         Return "COBOL"
       End If
       ' Easytrieve
-      If CobolLines(index).Length >= 6 Then
-        Select Case CobolLines(index).ToUpper.Substring(0, 4)
-          Case "PARM", "FILE", "SORT", "JOB "
-            Return "Easytrieve"
-        End Select
-        If CobolLines(index).Substring(0, 1) = "%" Then
-          Return "Easytrieve"
-        End If
+      If CobolLines(index).Trim.StartsWith("PARM") Or
+         CobolLines(index).Trim.StartsWith("FILE") Or
+         CobolLines(index).Trim.StartsWith("SORT") Or
+         CobolLines(index).Trim.StartsWith("JOB") Or
+         CobolLines(index).Trim.StartsWith("%") Then
+        Return "Easytrieve"
       End If
+      'If CobolLines(index).Length >= 4 Then
+      '  Select Case CobolLines(index).ToUpper.Substring(0, 4)
+      '    Case "PARM", "FILE", "SORT", "JOB "
+      '      Return "Easytrieve"
+      '  End Select
+      'End If
       ' Mainframe Assembler
       If (CobolLines(index).ToUpper.IndexOf(" CSECT") > -1) Or
           (CobolLines(index).IndexOf(" AMODE") > -1) Or
@@ -3728,13 +3890,21 @@ Public Class Form1
   End Function
   Sub IncludeCopyMember(ByVal CopyMember As String,
                         ByRef swTemp As StreamWriter)
-
+    ' Copy member found?
     Dim FoundCopyMember As String = SourceExists(CopyMember)
     If FoundCopyMember.Length = 0 Then
       swTemp.WriteLine(Space(6) & "*Copy Member not found:" & CopyMember)
       LogFile.WriteLine(Date.Now & ",Copy Member not found," & CopyMember)
       Exit Sub
     End If
+    ' is the file empty?
+    Dim mysize As Long = FileLen(txtSourceFolderName.Text & "\" & FoundCopyMember)
+    If mysize = 0 Then
+      swTemp.WriteLine(Space(6) & "*Copy Member Empty:" & CopyMember)
+      LogFile.WriteLine(Date.Now & ",Copy Member Empty," & CopyMember)
+      Exit Sub
+    End If
+
     Dim IncludeLines As String() = File.ReadAllLines(txtSourceFolderName.Text & "\" & FoundCopyMember)
 
     ' If missing first 6 bytes, add the six bytes to the front of every line.
@@ -3831,7 +4001,7 @@ Public Class Form1
     Call CreatePumlEasytrieve(exec)
 
     ' Create a Records/Fields spreadsheet
-    Call CreateRecordFile()
+    Call CollectRecordsAndFieldsInfo()
 
     ' Call CreateComponentsFile()
 
@@ -3845,10 +4015,11 @@ Public Class Form1
     WriteOutputCOBOL = 0
 
     ' Create a Plantuml file, step by step, based on the Procedure division.
-    Call CreatePumlCOBOL(exec)
+    'Call CreatePumlCOBOL(exec)
+    Call CreateCobolFlowchart(SrcStmt, exec, txtOutputFoldername.Text)
 
     ' Create a Records/Fields spreadsheet
-    Call CreateRecordFile()
+    Call CollectRecordsAndFieldsInfo()
 
     ' Create the Business Rules
     'Call CreateBRCOBOL(exec)
@@ -3948,9 +4119,9 @@ Public Class Form1
         reccnt += 1
         Continue For
       End If
-
       For continuedIndex As Integer = index + 1 To EztLinesLoaded.Length - 1
-        statement &= Trim(Microsoft.VisualBasic.Left(EztLinesLoaded(continuedIndex) & Space(72), 72))
+        statement = statement.Substring(0, statement.Length - 2).TrimEnd  'remove the ' +' continuation bytes
+        statement &= " " & Trim(Microsoft.VisualBasic.Left(EztLinesLoaded(continuedIndex) & Space(72), 72))
         If statement.EndsWith(" +") <> True Then
           swTemp.WriteLine(statement.Replace(" +", " ").Trim)
           reccnt += 1
@@ -4031,9 +4202,8 @@ Public Class Form1
 
     LoadEasytrieveStatementsToArray = reccnt
   End Function
-  Sub CreateRecordFile()
-    ' This creates the tabs Records & Fields for the xlxs file which will
-    ' hold all things about DATA.
+  Sub CollectRecordsAndFieldsInfo()
+    ' This collects the information about Records & Fields
     ' This routine supports both COBOL and Easytrieve syntax
     ' 
     Dim srcWords As New List(Of String)
@@ -4142,9 +4312,19 @@ Public Class Form1
       Next file
     Next pgm
 
+    Call CreateRecordsTab()
+    Call CreateFieldsTab()
+
+
+  End Sub
+  Sub CreateRecordsTab()
     '
     ' Create the Excel Records sheet.
     '
+    If Not cbRecords.Checked Then
+      Exit Sub
+    End If
+
     lblProcessingWorksheet.Text = "Processing Records: " & FileNameOnly & " : Rows = " & ListOfRecords.Count
     If RecordsRow = 0 Then
       RecordsWorksheet = workbook.Sheets.Add(After:=workbook.Worksheets(workbook.Worksheets.Count))
@@ -4208,9 +4388,20 @@ Public Class Form1
 
     End If
     lblProcessingWorksheet.Text = "Processing Records: " & FileNameOnly & " : Complete"
+
+  End Sub
+  Sub CreateFieldsTab()
     '
     ' Create the Fields worksheet
     '
+    If Not cbFields.Checked Then
+      Exit Sub
+    End If
+
+    Dim DelimText As String()
+    Dim row As Integer = LTrim(Str(RecordsRow))
+    Dim cnt As Integer = 0
+
     lblProcessingWorksheet.Text = "Processing Fields: " & FileNameOnly & " : Rows = " & ListOfFields.Count
 
     If FieldsRow = 0 Then
@@ -4411,12 +4602,13 @@ Public Class Form1
     If EXECCICSRow > 0 Then
       Dim row As Integer = LTrim(Str(EXECCICSRow))
       ' Format the Sheet - first row bold the columns
-      rngEXECCICS = EXECCICSWorksheet.Range("A1:F1")
+      rngEXECCICS = EXECCICSWorksheet.Range("A1:G1")
       rngEXECCICS.Font.Bold = True
       ' data area autofit all columns
-      rngEXECCICS = EXECCICSWorksheet.Range("A1:F" & row)
+      rngEXECCICS = EXECCICSWorksheet.Range("A1:G" & row)
       workbook.Worksheets("ExecCICS").Range("A1").AutoFilter
       rngEXECCICS.Columns.AutoFit()
+      rngEXECCICS.Rows.AutoFit()
       rngEXECCICS.VerticalAlignment = Excel.XlVAlign.xlVAlignTop
       ' ignore error flag that numbers being loaded into a text field
       objExcel.ErrorCheckingOptions.NumberAsText = False
@@ -4445,6 +4637,7 @@ Public Class Form1
       rngCalls = CallsWorksheet.Range("A1:E" & row)
       workbook.Worksheets("CALLS").Range("A1").AutoFilter
       rngCalls.Columns.AutoFit()
+      rngCalls.Rows.AutoFit()
       rngCalls.VerticalAlignment = Excel.XlVAlign.xlVAlignTop
       ' ignore error flag that numbers being loaded into a text field
       objExcel.ErrorCheckingOptions.NumberAsText = False
@@ -4498,8 +4691,12 @@ Public Class Form1
     SummaryWorksheet.Activate()
 
   End Sub
-  Sub CreateCommentsWorksheet()
+  Sub CreateCommentsTab()
     '* Create the Comments worksheet from the listofcomments array
+    If Not cbComments.Checked Then
+      Exit Sub
+    End If
+
     lblProcessingWorksheet.Text = "Processing Comments: " & FileNameOnly & " : Rows = " & ListOfComments.Count
 
     Dim cnt As Integer = 0
@@ -4551,8 +4748,12 @@ Public Class Form1
     Next
     lblProcessingWorksheet.Text = "Processing Comments: " & FileNameOnly & " : Complete"
   End Sub
-  Sub CreateEXECSQLWorksheet()
+  Sub CreateEXECSQLTab()
     '* Create the ExecSQL worksheet from the listofexecsql array
+    If Not cbexecSQL.Checked Then
+      Exit Sub
+    End If
+
     lblProcessingWorksheet.Text = "Processing ExecSQL: " & FileNameOnly & " : Rows = " & ListOfEXECSQL.Count
 
     Dim cnt As Integer = 0
@@ -4608,8 +4809,12 @@ Public Class Form1
     Next
     lblProcessingWorksheet.Text = "Processing ExecSQL: " & FileNameOnly & " : Complete"
   End Sub
-  Sub CreateEXECCICSWorksheet()
+  Sub CreateEXECCICSTab()
     '* Create the ExecCICS worksheet from the listofCICSMapNames array
+    If Not cbexecCICS.Checked Then
+      Exit Sub
+    End If
+
     lblProcessingWorksheet.Text = "Processing ExecCICS: " & FileNameOnly & " : Rows = " & ListOfCICSMapNames.Count
 
     Dim cnt As Integer = 0
@@ -4625,7 +4830,8 @@ Public Class Form1
       EXECCICSWorksheet.Range("C1").Value = "ProgramId"
       EXECCICSWorksheet.Range("D1").Value = "ExecSeq"
       EXECCICSWorksheet.Range("E1").Value = "ExecCICS"
-      EXECCICSWorksheet.Range("F1").Value = "MapName"
+      EXECCICSWorksheet.Range("F1").Value = "Map/Program"
+      EXECCICSWorksheet.Range("G1").Value = "Program Found"
       EXECCICSRow = 1
       EXECCICSWorksheet.Activate()
       EXECCICSWorksheet.Application.ActiveWindow.SplitRow = 1
@@ -4643,6 +4849,7 @@ Public Class Form1
       EXECCICSWorksheet.Range("D" & row).Value = ExecCICSColumns(3)       'ExecSeq
       EXECCICSWorksheet.Range("E" & row).Value = ExecCICSColumns(4)       'ExecCICS
       EXECCICSWorksheet.Range("F" & row).Value = ExecCICSColumns(5)       'MapName
+      EXECCICSWorksheet.Range("G" & row).Value = ExecCICSColumns(6)       'NotFound
 
       If cnt Mod 100 = 0 Then
         lblProcessingWorksheet.Text = "Processing ExecCICS: " & FileNameOnly &
@@ -4653,7 +4860,7 @@ Public Class Form1
     lblProcessingWorksheet.Text = "Processing ExecCICS: " & FileNameOnly & " : Complete"
   End Sub
 
-  Sub CreateIMSWorksheet()
+  Sub CreateIMSTab()
     ' Create the IMS worksheet tab.
     ' This worksheet will hold PSP/Program and DBD Name(s)
 
@@ -4666,6 +4873,9 @@ Public Class Form1
     '    We only look for the literal 'DBDNAME='. Note this does NOT mean all these DBDNames are actually
     '    used. These are what matched a TELON naming pattern (ie, P2BPBU*).
     '
+    If Not cbIMS.Checked Then
+      Exit Sub
+    End If
 
     If IMSRow = 0 Then
       IMSWorksheet = workbook.Sheets.Add(After:=workbook.Worksheets(workbook.Worksheets.Count))
@@ -4697,11 +4907,14 @@ Public Class Form1
     lblProcessingWorksheet.Text = "Processing IMS worksheet for DBDNames Complete"
 
   End Sub
-  Sub CreateCallsWorksheet()
+  Sub CreateCallsTab()
     ' Create the CALLs worksheet tab.
     ' This worksheet will hold program CALLS of both Static and Dynamic calls.
     ' The input to this routine is the ListOfCallPgms array
     '
+    If Not cbCalls.Checked Then
+      Exit Sub
+    End If
 
     If CallsRow = 0 Then
       CallsWorksheet = workbook.Sheets.Add(After:=workbook.Worksheets(workbook.Worksheets.Count))
@@ -4709,8 +4922,8 @@ Public Class Form1
       ' Write the Column Headers row
       CallsWorksheet.Range("A1").Value = "Source-id"
       CallsWorksheet.Range("B1").Value = "Program-id"
-      CallsWorksheet.Range("C1").Value = "Source Type"
-      CallsWorksheet.Range("D1").Value = "Module"
+      CallsWorksheet.Range("C1").Value = "Module"
+      CallsWorksheet.Range("D1").Value = "Source Type"
       CallsWorksheet.Range("E1").Value = "Call Type"
       CallsRow = 1
       CallsWorksheet.Activate()
@@ -4727,16 +4940,19 @@ Public Class Form1
       Dim row As String = LTrim(Str(CallsRow))
       CallsWorksheet.Range("A" & row).Value = CallsColumns(4)       'source-id
       CallsWorksheet.Range("B" & row).Value = CallsColumns(2)       'program-id
-      CallsWorksheet.Range("C" & row).Value = CallsColumns(1)       'Source Type
-      CallsWorksheet.Range("D" & row).Value = CallsColumns(0)       'Module
+      CallsWorksheet.Range("C" & row).Value = CallsColumns(0)       'Module
+      CallsWorksheet.Range("D" & row).Value = CallsColumns(1)       'Source Type
       CallsWorksheet.Range("E" & row).Value = CallsColumns(3)       'Call type
     Next
 
     lblProcessingWorksheet.Text = "Processing CALLS worksheet Complete"
 
   End Sub
-  Sub CreateScreenMapWorksheet()
+  Sub CreateScreenMapTab()
     '* Create the Screen Map worksheet from the listofScreenMaps array
+    If Not cbScreenMaps.Checked Then
+      Exit Sub
+    End If
 
     lblProcessingWorksheet.Text = "Processing ScreenMaps: " & FileNameOnly & " : Rows = " & ListofScreenMaps.Count
 
@@ -4768,7 +4984,8 @@ Public Class Form1
         ScreenMapWorksheet.Range("A" & row).Value = ScreenMapColumns(0)       'MapSource
         ScreenMapWorksheet.Range("B" & row).Value = ScreenMapColumns(1)       'IMS/CICS/PanelType
         ScreenMapWorksheet.Range("C" & row).Value = ScreenMapColumns(2)       'FMTName/DFHMSD/PanelName
-        ScreenMapWorksheet.Range("D" & row).Value = ScreenMapColumns(3)       'Literals or Comments
+        'ScreenMapWorksheet.Range("D" & row).Value = ScreenMapColumns(3)       'Literals or Comments
+        ScreenMapWorksheet.Range("D" & row).Value = AddNewLineAboutEveryNthCharacters(ScreenMapColumns(3), vbNewLine, 45)
       End If
       If cnt Mod 100 = 0 Then
         lblProcessingWorksheet.Text = "Processing ScreenMaps: " & FileNameOnly &
@@ -4779,7 +4996,12 @@ Public Class Form1
     lblProcessingWorksheet.Text = "Processing ScreenMaps: " & FileNameOnly & " : Complete"
 
   End Sub
-  Sub CreateLibrariesWorksheet()
+  Sub CreateLibrariesTab()
+    ' This will create the Libraries tab worksheet based on the ListOfLibraries array sorted
+    If Not cbLibraries.Checked Then
+      Exit Sub
+    End If
+
     Dim row As Integer = 0
     If LibrariesRow = 0 Then
       LibrariesWorksheet = workbook.Sheets.Add(After:=workbook.Worksheets(workbook.Worksheets.Count))
@@ -4970,167 +5192,167 @@ Public Class Form1
 
     PSPFile.Close()
   End Sub
-  Sub CreatePumlCOBOL(ByRef exec As String)
-    ' create the flowchart (puml) file for COBOL
+  'Sub CreatePumlCOBOL(ByRef exec As String)
+  '  ' create the flowchart (puml) file for COBOL
 
-    Dim EndCondIndex As Integer = -1
-    Dim StartCondIndex As Integer = -1
-    Dim ParagraphStarted As Boolean = False
-    Dim condStatement As String = ""
-    Dim condStatementCR As String = ""
-    Dim imperativeStatement As String = ""
-    Dim imperativeStatementCR As String = ""
-    Dim statement As String = ""
-    Dim vwordIndex As Integer = -1
-    WithinReadConditionStatement = False
-    WithinReadStatement = False
-    'WithinPerformWithEndPerformStatement = False
-    Dim WithinQuotes As Boolean = False
-    Dim IfCnt As Integer = 0
-    pumlLineCnt = pumlMaxLineCnt + 1
-    pumlPageCnt = 0
+  '  Dim EndCondIndex As Integer = -1
+  '  Dim StartCondIndex As Integer = -1
+  '  Dim ParagraphStarted As Boolean = False
+  '  Dim condStatement As String = ""
+  '  Dim condStatementCR As String = ""
+  '  Dim imperativeStatement As String = ""
+  '  Dim imperativeStatementCR As String = ""
+  '  Dim statement As String = ""
+  '  Dim vwordIndex As Integer = -1
+  '  WithinReadConditionStatement = False
+  '  WithinReadStatement = False
+  '  'WithinPerformWithEndPerformStatement = False
+  '  Dim WithinQuotes As Boolean = False
+  '  Dim IfCnt As Integer = 0
+  '  pumlLineCnt = pumlMaxLineCnt + 1
+  '  pumlPageCnt = 0
 
-    PumlPageBreak(exec)
+  '  PumlPageBreak(exec)
 
-    For Each pgm In listOfPrograms
-      pgmName = pgm.ProgramId
+  '  For Each pgm In listOfPrograms
+  '    pgmName = pgm.ProgramId
 
-      For index As Integer = pgm.ProcedureDivision + 1 To pgm.EndProgram
-        If SrcStmt(index).Substring(0, 1) = "*" Then
-          Continue For
-        End If
+  '    For index As Integer = pgm.ProcedureDivision + 1 To pgm.EndProgram
+  '      If SrcStmt(index).Substring(0, 1) = "*" Then
+  '        Continue For
+  '      End If
 
-        ' break the statement into words
-        Call GetSourceWords(SrcStmt(index).Trim, cWord)
+  '      ' break the statement into words
+  '      Call GetSourceWords(SrcStmt(index).Trim, cWord)
 
-        ' Paragraph names; if there is only 1 word and is NOT a Verb it must be paragraph name.
-        If cWord.Count = 1 Then
-          If VerbNames.IndexOf(cWord(0)) = -1 Then
-            Call ProcessPumlParagraph(ParagraphStarted, SrcStmt(index), exec)
-            IfCnt = 0
-            WithinIF = False
-            Continue For
-          End If
-        End If
+  '      ' Paragraph names; if there is only 1 word and is NOT a Verb it must be paragraph name.
+  '      If cWord.Count = 1 Then
+  '        If VerbNames.IndexOf(cWord(0)) = -1 Then
+  '          Call ProcessPumlParagraph(ParagraphStarted, SrcStmt(index), exec)
+  '          IfCnt = 0
+  '          WithinIF = False
+  '          Continue For
+  '        End If
+  '      End If
 
-        WithinQuotes = False
-        WithinPerformCnt = 0
+  '      WithinQuotes = False
+  '      WithinPerformCnt = 0
 
 
-        ' Process every VERB word in this statement 
-        ' Every verb should be a plum object created.
+  '      ' Process every VERB word in this statement 
+  '      ' Every verb should be a plum object created.
 
-        IndentLevel = 1
-        IFLevelIndex.Clear()
+  '      IndentLevel = 1
+  '      IFLevelIndex.Clear()
 
-        For wordIndex = 0 To cWord.Count - 1
-          Select Case cWord(wordIndex)
-            Case "IF"
-              'IFLevelIndex.Add(wordIndex)
-              Call ProcessPumlIF(wordIndex, IfCnt)
-            Case "ELSE"
-              Call ProcessPumlELSE(wordIndex, IfCnt)
-            Case "END-IF"
-              IfCnt -= 1
-              IndentLevel -= 1
-              pumlLineCnt += 1
-              pumlFile.WriteLine(Indent() & "endif")
-              If IfCnt <= 0 Then
-                WithinIF = False
-              End If
-            Case "EVALUATE"
-              Call ProcessPumlEVALUATE(wordIndex)
-            Case "WHEN"
-              Call ProcessPumlWHEN(wordIndex)
-            Case "END-EVALUATE"
-              Call ProcessPumlENDEVALUATE(wordIndex)
-            Case "PERFORM"
-              Call ProcessPumlPERFORM(wordIndex)
-            Case "END-PERFORM"
-              Call ProcessPumlENDPERFORM()
-            Case "COMPUTE"
-              Call ProcessPumlCOMPUTE(wordIndex)
-            Case "SEARCH"
-              Call ProcessPumlSEARCH(wordIndex)
-            Case "READ"
-              Call ProcessPumlREAD(wordIndex)
-            Case "AT", "END", "NOT"
-              ProcessPumlReadCondition(wordIndex)
-            Case "END-READ"
-              ProcessPumlENDREAD(wordIndex)
-            Case "GO"
-              Call ProcessPumlGOTO(wordIndex)
-              If WithinIF Then
-                ' if next word is available, if NOT an end-if then write the end-if 
-                '   if there is an ELSE just leave it alone
-                '   otherwise just write the end-if
-                If wordIndex + 1 > cWord.Count - 1 Then
-                  Continue For
-                End If
-                If cWord(wordIndex + 1) = "ELSE" Then
-                  Continue For
-                End If
-                If cWord(wordIndex + 1) <> "END-IF" Then
-                  IndentLevel -= 1
-                  pumlLineCnt += 1
-                  pumlFile.WriteLine(Indent() & "endif")
-                  IfCnt -= 1
-                  If IfCnt <= 0 Then
-                    WithinIF = False
-                  End If
-                  Continue For
-                End If
-              End If
-            Case "EXEC"
-              ProcessPumlEXEC(wordIndex)
-            Case "DISPLAY"
-              ProcessPumlDisplay(wordIndex)
+  '      For wordIndex = 0 To cWord.Count - 1
+  '        Select Case cWord(wordIndex)
+  '          Case "IF"
+  '            'IFLevelIndex.Add(wordIndex)
+  '            Call ProcessPumlIF(wordIndex, IfCnt)
+  '          Case "ELSE"
+  '            Call ProcessPumlELSE(wordIndex)
+  '          Case "END-IF", "END-IF."
+  '            IfCnt -= 1
+  '            IndentLevel -= 1
+  '            pumlLineCnt += 1
+  '            pumlFile.WriteLine(Indent() & "endif")
+  '            If IfCnt <= 0 Then
+  '              WithinIF = False
+  '            End If
+  '          Case "EVALUATE"
+  '            Call ProcessPumlCase(wordIndex)
+  '          Case "WHEN"
+  '            Call ProcessPumlWHEN(wordIndex)
+  '          Case "END-EVALUATE"
+  '            Call ProcessPumlENDEVALUATE(wordIndex)
+  '          Case "PERFORM"
+  '            Call ProcessPumlPERFORM(wordIndex)
+  '          Case "END-PERFORM"
+  '            Call ProcessPumlENDPERFORM()
+  '          Case "COMPUTE"
+  '            Call ProcessPumlCOMPUTE(wordIndex)
+  '          Case "SEARCH"
+  '            Call ProcessPumlSEARCH(wordIndex)
+  '          Case "READ"
+  '            Call ProcessPumlREAD(wordIndex)
+  '          Case "AT", "END", "NOT"
+  '            ProcessPumlReadCondition(wordIndex)
+  '          Case "END-READ"
+  '            ProcessPumlENDREAD(wordIndex)
+  '          Case "GO"
+  '            Call ProcessPumlGOTO(wordIndex)
+  '            If WithinIF Then
+  '              ' if next word is available, if NOT an end-if then write the end-if 
+  '              '   if there is an ELSE just leave it alone
+  '              '   otherwise just write the end-if
+  '              If wordIndex + 1 > cWord.Count - 1 Then
+  '                Continue For
+  '              End If
+  '              If cWord(wordIndex + 1) = "ELSE" Then
+  '                Continue For
+  '              End If
+  '              If cWord(wordIndex + 1) <> "END-IF" Then
+  '                IndentLevel -= 1
+  '                pumlLineCnt += 1
+  '                pumlFile.WriteLine(Indent() & "endif")
+  '                IfCnt -= 1
+  '                If IfCnt <= 0 Then
+  '                  WithinIF = False
+  '                End If
+  '                Continue For
+  '              End If
+  '            End If
+  '          Case "EXEC"
+  '            ProcessPumlEXEC(wordIndex)
+  '          Case "DISPLAY"
+  '            ProcessPumlDisplay(wordIndex)
 
-            Case Else
-              Dim EndIndex As Integer = 0
-              Dim MiscStatement As String = ""
-              Call GetStatement(wordIndex, EndIndex, MiscStatement)
-              pumlLineCnt += 1
-              pumlFile.WriteLine(Indent() & ":" & MiscStatement.Trim & ";")
-              wordIndex = EndIndex
-          End Select
-        Next wordIndex
+  '          Case Else
+  '            Dim EndIndex As Integer = 0
+  '            Dim MiscStatement As String = ""
+  '            Call GetStatement(wordIndex, EndIndex, MiscStatement)
+  '            pumlLineCnt += 1
+  '            pumlFile.WriteLine(Indent() & ":" & MiscStatement.Trim & ";")
+  '            wordIndex = EndIndex
+  '        End Select
+  '      Next wordIndex
 
-        If WithinReadStatement And WithinReadConditionStatement Then
-          IndentLevel -= 1
-          pumlLineCnt += 1
-          pumlFile.WriteLine(Indent() & "endif")
-        End If
-        If WithinIF Or IfCnt > 0 Then
-          For x As Integer = 1 To IfCnt
-            IndentLevel -= 1
-            pumlLineCnt += 1
-            pumlFile.WriteLine(Indent() & "endif")
-          Next
-        End If
-        WithinReadConditionStatement = False
-        WithinReadStatement = False
-        WithinIF = False
-        IfCnt = 0
-        Do Until WithinPerformCnt = 0
-          Call ProcessPumlENDPERFORM()
-        Loop
+  '      If WithinReadStatement And WithinReadConditionStatement Then
+  '        IndentLevel -= 1
+  '        pumlLineCnt += 1
+  '        pumlFile.WriteLine(Indent() & "endif")
+  '      End If
+  '      If WithinIF Or IfCnt > 0 Then
+  '        For x As Integer = 1 To IfCnt
+  '          IndentLevel -= 1
+  '          pumlLineCnt += 1
+  '          pumlFile.WriteLine(Indent() & "endif")
+  '        Next
+  '      End If
+  '      WithinReadConditionStatement = False
+  '      WithinReadStatement = False
+  '      WithinIF = False
+  '      IfCnt = 0
+  '      Do Until WithinPerformCnt = 0
+  '        Call ProcessPumlENDPERFORM()
+  '      Loop
 
-      Next index
+  '    Next index
 
-      If ParagraphStarted = True Then
-        pumlLineCnt += 1
-        pumlFile.WriteLine("end")
-        ParagraphStarted = False
-      End If
+  '    If ParagraphStarted = True Then
+  '      pumlLineCnt += 1
+  '      pumlFile.WriteLine("end")
+  '      ParagraphStarted = False
+  '    End If
 
-    Next
+  '  Next
 
-    pumlLineCnt += 1
-    pumlFile.WriteLine("@enduml")
+  '  pumlLineCnt += 1
+  '  pumlFile.WriteLine("@enduml")
 
-    pumlFile.Close()
-  End Sub
+  '  pumlFile.Close()
+  'End Sub
 
   Sub PumlPageBreak(ByRef exec As String)
     pumlPageCnt += 1
@@ -5202,9 +5424,25 @@ Public Class Form1
             Continue For
           End If
         End If
+        If SrcStmt(index).Length >= 2 Then
+          If SrcStmt(index).Substring(0, 2) = "//" Then   'Inline JCL statement
+            Continue For
+          End If
+          If SrcStmt(index).Substring(0, 2) = "/*" Then
+            Continue For
+          End If
+        End If
 
         ' break the statement in words
         Call GetSourceWords(SrcStmt(index).Trim, cWord)
+
+        If cWord.Count = 1 Then
+          'potential one word proc name
+          If SrcStmt(index).Trim.EndsWith(".") Then
+            cWord(0) &= "."
+          End If
+        End If
+
 
         ' Process every VERB word in this statement 
         ' Every verb should/could be a plum object created.
@@ -5213,102 +5451,125 @@ Public Class Form1
         'IFLevelIndex.Clear()
 
         For wordIndex = 0 To cWord.Count - 1
-          Select Case cWord(wordIndex)
-            Case "JOB"
-              Call ProcessPumlParagraphEasytrieve(ParagraphStarted, cWord(wordIndex))
-            Case "INPUT"
-              Call ProcessPumlInput(wordIndex)
-            Case "SORT"
-              Call ProcessPumlSortEasytrieve(wordIndex)
-            Case "START"
-              Call ProcessPumlStart(wordIndex)
-            Case "FINISH"
-              Call ProcessPumlStart(wordIndex)
+            Select Case cWord(wordIndex)
+              Case "JOB"
+                Call ProcessPumlParagraphEasytrieve(ParagraphStarted)
+                Exit For
+            'Case "INPUT"
+            '  Call ProcessPumlInput(wordIndex)
+              Case "SORT"
+                Call ProcessPumlSortEasytrieve(wordIndex)
+            'Case "START"
+            '  Call ProcessPumlStart(wordIndex)
+            'Case "FINISH"
+            '  Call ProcessPumlStart(wordIndex)
+            Case "SELECT"
+              Call ProcessPumlSelectEasytrieve(wordIndex)
             Case "IF"
               IFLevelIndex.Add(wordIndex)
               Call ProcessPumlIFEasytrieve(wordIndex)
-            Case "ELSE"
-              Call ProcessPumlELSE(wordIndex, ifcnt)
-            Case "END-IF"
+
+            Case "ELSE", "OTHERWISE"
+                Call ProcessPumlELSE(wordIndex)
+            Case "END-IF", "END-IF."
               IndentLevel -= 1
-              pumlLineCnt += 1
-              pumlFile.WriteLine(Indent() & "endif")
+                pumlLineCnt += 1
+                pumlFile.WriteLine(Indent() & "endif")
             Case "CASE"
-              Call ProcessPumlEVALUATE(wordIndex)
+              Call ProcessPumlCase(wordIndex)
+            Case "END-CASE", "END-CASE."
+              IndentLevel -= 1
+                pumlLineCnt += 2
+                pumlFile.WriteLine(Indent() & "endif")
+                IndentLevel -= 1
+                pumlFile.WriteLine(Indent() & ":END-CASE;")
             Case "WHEN"
               Call ProcessPumlWHEN(wordIndex)
             Case "END-EVALUATE"
               Call ProcessPumlENDEVALUATE(wordIndex)
-            'Case "PERFORM"
-            '  Call ProcessPumlPERFORM(wordIndex)
+            Case "PERFORM"
+              Call ProcessPumlPerformEasytrieve(wordIndex)
             'Case "END-PERFORM"
             '  Call ProcessPumlENDPERFORM(wordIndex)
-            Case "DO"
-              Call ProcessPumlDO(wordIndex)
-            Case "END-DO"
+              Case "DO"
+                Call ProcessPumlDO(wordIndex)
+            Case "END-DO", "END-DO."
               Call ProcessPumlENDDO(wordIndex)
-            Case "COMPUTE"
-              Call ProcessPumlCOMPUTE(wordIndex)
+              Case "COMPUTE"
+                Call ProcessPumlCOMPUTE(wordIndex)
             'Case "READ"
             '  Call ProcessPumlREAD(wordIndex)
-            Case "GET"
-              Call ProcessPumlGET(wordIndex)
+              Case "GET"
+                Call ProcessPumlGET(wordIndex)
             'Case "AT", "END", "NOT"
             '  ProcessPumlReadCondition(wordIndex)
             'Case "END-READ"
             '  ProcessPumlENDREAD(wordIndex)
-            Case "GO"
-              Call ProcessPumlGOTO(wordIndex)
-            Case "EXEC"
-              ProcessPumlEXEC(wordIndex)
-            Case "STOP", "END-PROC"
-              pumlLineCnt += 2
-              pumlFile.WriteLine("end")
-              pumlFile.WriteLine("")
-              ParagraphStarted = False
-            Case "REPORT"
-              If wordIndex + 1 < cWord.Count - 1 Then
-                Call ProcessPumlParagraphEasytrieve(ParagraphStarted, cWord(wordIndex + 1))
-              Else
-                Call ProcessPumlParagraphEasytrieve(ParagraphStarted, "REPORT")
-              End If
-              wordIndex = cWord.Count - 1
-            Case "SEQUENCE"
-              wordIndex = cWord.Count - 1
-            Case "CONTROL"
-              wordIndex = cWord.Count - 1
-            Case "TITLE"
-              If cWord.Count >= 5 Then
-                If cWord(1) = "1" Or cWord(1) = "2" Then
+              Case "GO"
+                Call ProcessPumlGOTO(wordIndex)
+              Case "EXEC", "DLI"
+                ProcessPumlEXEC(wordIndex)
+              Case "END-PROC", "END-PROC."
+                IndentLevel = 1
+                pumlLineCnt += 3
+                pumlFile.WriteLine("end")
+                pumlFile.WriteLine("}")
+                pumlFile.WriteLine("")
+                ParagraphStarted = False
+            'Case "STOP"
+            '  pumlLineCnt += 2
+            '  pumlFile.WriteLine(Indent() & "stop")
+            '  ParagraphStarted = False
+              Case "REPORT"
+                Call ProcessPumlParagraphEasytrieve(ParagraphStarted)
+                Exit For
+              Case "PROC"
+                Call ProcessPumlParagraphEasytrieve(ParagraphStarted)
+                Exit For
+              Case "SEQUENCE"
+                wordIndex = cWord.Count - 1
+              Case "CONTROL"
+                wordIndex = cWord.Count - 1
+              Case "TITLE"
+                If cWord.Count >= 5 Then
+                  If cWord(1) = "1" Or cWord(1) = "2" Then
+                    pumlLineCnt += 1
+                    pumlFile.WriteLine(Indent() & ":" & cWord(4).Replace("'", "").Replace("*", "").Trim & ";")
+                  End If
+                End If
+                wordIndex = cWord.Count - 1
+              Case "LINE"
+                wordIndex = cWord.Count - 1
+              Case Else
+                If cWord(wordIndex).IndexOf(".") > -1 Then
+                  If cWord.Count > 1 Then
+                    If cWord(wordIndex + 1) = "PROC" Then
+                      theProcName = cWord(wordIndex)
+                      Continue For
+                    End If
+                  Else
+                    ' a paragraph name but the PROC word is not on same line; store the paragraph name
+                    '  for when we eventually get that proc name
+                    theProcName = cWord(wordIndex)
+                    'ParagraphStarted = True
+                  End If
+                Else
+                  Dim EndIndex As Integer = 0
+                  Dim MiscStatement As String = ""
+                  Call GetStatement(wordIndex, EndIndex, MiscStatement)
                   pumlLineCnt += 1
-                  pumlFile.WriteLine(Indent() & ":" & cWord(4).Replace("'", "").Replace("*", "").Trim & ";")
+                  pumlFile.WriteLine(Indent() & ":" & MiscStatement.Trim & ";")
+                  wordIndex = EndIndex
                 End If
-              End If
-              wordIndex = cWord.Count - 1
-            Case "LINE"
-              wordIndex = cWord.Count - 1
-            Case Else
-              If cWord(wordIndex).IndexOf(".") > -1 Then
-                ' handle performed paragraph name
-                If wordIndex < cWord.Count - 1 Then
-                  Call ProcessPumlParagraphEasytrieve(ParagraphStarted, cWord(wordIndex))
-                  wordIndex += 1
-                End If
-              Else
-                Dim EndIndex As Integer = 0
-                Dim MiscStatement As String = ""
-                Call GetStatement(wordIndex, EndIndex, MiscStatement)
-                pumlLineCnt += 1
-                pumlFile.WriteLine(Indent() & ":" & MiscStatement.Trim & ";")
-                wordIndex = EndIndex
-              End If
-          End Select
-        Next wordIndex
-      Next index
+            End Select
+          Next wordIndex
+        Next index
 
-      If ParagraphStarted = True Then
-        pumlLineCnt += 1
+        If ParagraphStarted = True Then
+        IndentLevel = 1
+        pumlLineCnt += 2
         pumlFile.WriteLine("end")
+        pumlFile.WriteLine("}")
         ParagraphStarted = False
       End If
 
@@ -5319,138 +5580,6 @@ Public Class Form1
     pumlFile.Close()
   End Sub
 
-  Sub CreateBRCOBOL(ByRef exec As String)
-    ' create the Business Rules file for COBOL
-
-    Dim EndCondIndex As Integer = -1
-    Dim StartCondIndex As Integer = -1
-    Dim IFStarted As Boolean = False
-    Dim ELSEStarted As Boolean = False
-    Dim condStatement As String = ""
-    Dim condStatementCR As String = ""
-    Dim imperativeStatementTrue As String = ""
-    Dim imperativeStatementFalse = ""
-    Dim imperativeStatementCR As String = ""
-    Dim statement As String = ""
-    Dim IfStatement As String = ""
-    Dim IFLevel As Integer = 0
-    Dim vwordIndex As Integer = -1
-    Dim RuleNumber As Integer = 0
-    Dim wordIndex As Integer = -1
-
-    ' Open the output file BR
-    Dim BRFileName = txtOutputFoldername.Text & "\" & exec & "_BR.csv"
-
-    ' Open and write at least one time. Not worrying (try/catch) about subsequent writes
-    Try
-      swBRFile = My.Computer.FileSystem.OpenTextFileWriter(BRFileName, False)
-    Catch ex As Exception
-      MessageBox.Show(ex.Message, "Error opening BRFile COBOL")
-      Exit Sub
-    End Try
-
-    ' Write the top of file (row 1 header)
-    swBRFile.WriteLine("Source" & Delimiter &
-                       "Program" & Delimiter &
-                       "Rule#" & Delimiter &
-                       "Level" & Delimiter &
-                       "Condition" & Delimiter &
-                       "Then when true" & Delimiter &
-                       "Else when false")
-
-    For Each pgm In listOfPrograms
-      pgmName = pgm.ProgramId
-
-      For index As Integer = pgm.ProcedureDivision + 1 To pgm.EndProgram
-        ' ignore comments
-        If SrcStmt(index).Substring(0, 1) = "*" Then
-          Continue For
-        End If
-        ' ignore paragraphs
-        If SrcStmt(index).Length >= 1 Then
-          If SrcStmt(index).Substring(0, 1) <> Space(1) Then
-            Continue For
-          End If
-        End If
-
-        ' break the statement in words
-        Call GetSourceWords(SrcStmt(index).Trim, cWord)
-
-        ' Process every VERB word in this statement 
-        ' Every IF / Evaluate verb should be a Business Rule created.
-
-        BRLevel = 1
-        IFLevel = 0
-        IFStarted = False
-        ELSEStarted = False
-        imperativeStatementTrue = ""
-        imperativeStatementFalse = ""
-        For wordIndex = 0 To cWord.Count - 1
-          Select Case cWord(wordIndex)
-            Case "IF"
-              IFLevel += 1
-              RuleNumber += 1
-              BRLevel += 1
-              IFStarted = True
-              imperativeStatementTrue = ""
-              Dim EndIndex As Integer = 0
-              'to next cobol verb and next index
-              Call GetStatement(wordIndex, EndIndex, IfStatement)
-              wordIndex = EndIndex
-
-            Case "ELSE"
-              imperativeStatementFalse = ""
-              ELSEStarted = True
-
-            Case "END-IF"
-              IFLevel -= 1
-              IFStarted = False
-              ELSEStarted = False
-              swBRFile.WriteLine(FileNameOnly & Delimiter &
-                                 pgm.ProgramId & Delimiter &
-                                 LTrim(Str(index)) & Delimiter &
-                                 LTrim(Str(wordIndex)) & Delimiter &
-                                 IfStatement & Delimiter &
-                                 imperativeStatementTrue & Delimiter &
-                                 imperativeStatementFalse)
-              imperativeStatementTrue = ""
-              imperativeStatementFalse = ""
-              BRLevel = 1
-
-            Case Else
-              If IFStarted Then
-                Dim EndIndex As Integer = 0
-                Dim MiscStatement As String = ""
-                Call GetStatement(wordIndex, EndIndex, MiscStatement)
-                If ELSEStarted Then
-                  imperativeStatementFalse &= MiscStatement & " "
-                Else
-                  imperativeStatementTrue &= MiscStatement & " "
-                End If
-                wordIndex = EndIndex
-              End If
-          End Select
-        Next wordIndex
-        If IFStarted = True Then
-          IFStarted = False
-          ELSEStarted = False
-          IFLevel = -1
-          swBRFile.WriteLine(FileNameOnly & Delimiter &
-                                 pgm.ProgramId & Delimiter &
-                                 LTrim(Str(index)) & Delimiter &
-                                 LTrim(Str(wordIndex)) & Delimiter &
-                                 IfStatement & Delimiter &
-                                 imperativeStatementTrue & Delimiter &
-                                 imperativeStatementFalse)
-        End If
-
-      Next index
-
-
-    Next pgm
-
-    swBRFile.Close()
-  End Sub
 
   Function GetListOfFiles() As List(Of String)
     ' Scan through the stmt array looking for all data "FILES"
@@ -5463,16 +5592,16 @@ Public Class Form1
     Dim srcWords As New List(Of String)
     Dim VaryingName As String = ""
     ListOfFiles.Clear()
-    For stmtIndex As Integer = pgm.EnvironmentDivision + 1 To pgm.ProcedureDivision - 1
-      statement = SrcStmt(stmtIndex)
-      If statement.Length >= 1 Then
-        If statement.Substring(0, 1) = "*" Then
-          Continue For
-        End If
-      End If
-      Call GetSourceWords(statement, srcWords)
-      Select Case SourceType
-        Case "COBOL"
+    Select Case SourceType
+      Case "COBOL"
+        For stmtIndex As Integer = pgm.EnvironmentDivision + 1 To pgm.ProcedureDivision - 1
+          statement = SrcStmt(stmtIndex)
+          If statement.Length >= 1 Then
+            If statement.Substring(0, 1) = "*" Then
+              Continue For
+            End If
+          End If
+          Call GetSourceWords(statement, srcWords)
           If srcWords(0) = "SELECT" Then
             Dim file_name_1 As String = ""
             If srcWords(1).Equals("OPTIONAL") Then
@@ -5524,7 +5653,17 @@ Public Class Form1
                             LTrim(Str(stmtIndex)))
             End If
           End If
-        Case "Easytrieve"
+        Next
+
+      Case "Easytrieve"
+        For stmtIndex As Integer = pgm.EnvironmentDivision To pgm.ProcedureDivision - 1
+          statement = SrcStmt(stmtIndex)
+          If statement.Length >= 1 Then
+            If statement.Substring(0, 1) = "*" Then
+              Continue For
+            End If
+          End If
+          Call GetSourceWords(statement, srcWords)
           If srcWords(0) = "FILE" Then
             FDFileName = srcWords(1)
             DDName = srcWords(1)
@@ -5553,9 +5692,10 @@ Public Class Form1
             End If
           End If
 
-      End Select
-    Next
-    GetListOfFiles = ListOfFiles
+        Next
+
+    End Select
+    Return ListOfFiles
   End Function
   Function GetVariablesValue(ByRef VaryingName As String) As String
     'search through the Data Division for given VaryingName and grab its compile time value
@@ -6125,17 +6265,96 @@ Public Class Form1
     pumlLineCnt += 2
     ParagraphStarted = True
   End Sub
-  Sub ProcessPumlParagraphEasytrieve(ByRef ParagraphStarted As Boolean, ByRef statement As String)
-    'If ParagraphStarted = True Then
-    '  pumlFile.WriteLine("end")
-    '  pumlFile.WriteLine("")
-    'End If
-    pumlLineCnt += 2
-    pumlFile.WriteLine("start")
-    pumlFile.WriteLine(":**" & statement.Trim & "**;")
-    ParagraphStarted = True
-    IndentLevel = 1
-    IFLevelIndex.Clear()
+  Sub ProcessPumlParagraphEasytrieve(ByRef ParagraphStarted As Boolean)
+    For index As Integer = 0 To cWord.Count - 1
+      Select Case cWord(index)
+        Case "JOB"
+          If ParagraphStarted Then
+            pumlLineCnt += 2
+            IndentLevel = 1
+            pumlFile.WriteLine("end")
+            pumlFile.WriteLine("}")
+            ParagraphStarted = False
+          End If
+          pumlLineCnt += 2
+          pumlFile.WriteLine("partition **" & cWord(index) & "** {")
+          pumlFile.WriteLine("start")
+          ParagraphStarted = True
+          IndentLevel = 1
+          IFLevelIndex.Clear()
+        Case "INPUT"
+          If cWord(index + 1) <> "NULL" Then
+            WithinReadStatement = True
+            Dim StartIndex = index
+            Dim EndIndex As Integer = StartIndex + 1
+            Dim TogetherWords As String = StringTogetherWords(StartIndex, EndIndex)
+            Dim ReadStatement As String = AddNewLineAboutEveryNthCharacters(TogetherWords, ESCAPENEWLINE, 30)
+            pumlLineCnt += 1
+            pumlFile.WriteLine(Indent() & ":" & ReadStatement.Trim & "/")
+          End If
+          index += 1
+        Case "START", "FINISH"
+          Dim StartIndex = index + 1
+          Dim EndIndex As Integer = StartIndex
+          Dim TogetherWords As String = StringTogetherWords(StartIndex, EndIndex)
+          Dim ReadStatement As String = AddNewLineAboutEveryNthCharacters(TogetherWords, ESCAPENEWLINE, 30)
+          pumlLineCnt += 1
+          pumlFile.WriteLine(Indent() & ":PERFORM " & ReadStatement.Trim & "|")
+          index += 1
+        Case "REPORT"
+          If ParagraphStarted Then
+            IndentLevel = 1
+            pumlLineCnt += 2
+            pumlFile.WriteLine("end")
+            pumlFile.WriteLine("}")
+            ParagraphStarted = False
+          End If
+          pumlLineCnt += 2
+          Dim theDD As String = ""
+          If cWord.Count = 1 Then
+            theDD = "SYSPRINT"
+          Else
+            theDD = cWord(index + 1)
+          End If
+          pumlFile.WriteLine("partition **" & cWord(index) & " " & theDD & "** {")
+          pumlFile.WriteLine("start")
+          ParagraphStarted = True
+          IndentLevel = 1
+          IFLevelIndex.Clear()
+          Exit For
+        Case "PROC"
+          If ParagraphStarted Then
+            pumlLineCnt += 2
+            IndentLevel = 1
+            pumlFile.WriteLine("end")
+            pumlFile.WriteLine("}")
+            ParagraphStarted = False
+          End If
+          If index > 0 Then     'proc name is on same line as PROC statement us it.
+            theProcName = cWord(index - 1).Replace(".", "")
+          Else
+            If theProcName.Length = 0 Then
+              theProcName = "ProcNameUndefine"
+            End If
+          End If
+          theProcName = theProcName.Replace(".", "")
+          pumlLineCnt += 2
+          pumlFile.WriteLine("partition **" & theProcName & "** {")
+          pumlFile.WriteLine("start")
+          ParagraphStarted = True
+          IndentLevel = 1
+          IFLevelIndex.Clear()
+          theProcName = ""
+      End Select
+    Next
+  End Sub
+  Sub ProcessPumlPerformEasytrieve(ByRef WordIndex As Integer)
+    Dim EndIndex As Integer = 0
+    Dim MiscStatement As String = ""
+    Call GetStatement(WordIndex, EndIndex, MiscStatement)
+    pumlLineCnt += 1
+    pumlFile.WriteLine(Indent() & ":" & MiscStatement.Trim & "|")
+    WordIndex = EndIndex
   End Sub
   Sub ProcessPumlSortEasytrieve(ByRef WordIndex As Integer)
     ' note that cWord is global
@@ -6182,54 +6401,28 @@ Public Class Form1
     WordIndex = EndIndex
   End Sub
 
-  Sub ProcessPumlELSE(ByRef WordIndex As Integer, ByRef ifCnt As Integer)
-    ' Does current 'ELSE' belong to my 'IF' or another 'IF'???
-    ' cWord is global
-    ' IndentLevel is global
-    'hoping/presuming a well-formed if/else/end-if
-
-    'Look to see if this ELSE has an IF before I hit another ELSE...
-    For x = WordIndex - 1 To 0 Step -1
-      If cWord(x) = "ELSE" Then
-        'malformed? so add an END-IF
-        pumlLineCnt += 2
-        pumlFile.WriteLine("floating note left: Malformed")
-        IndentLevel -= 1
-        pumlFile.WriteLine(Indent() & "endif")
-        ifCnt -= 1
-        If ifCnt <= 0 Then
-          WithinIF = False
-          ifCnt = 0
-        End If
-        Exit Sub
-      End If
-      If cWord(x) = "IF" Then
-        Exit For
-      End If
-      If cWord(x) = "END-IF" Then
-        Exit For
-      End If
-    Next
-    '
+  Sub ProcessPumlSelectEasytrieve(ByRef WordIndex As Integer)
+    Dim EndIndex As Integer = cWord.Count - 1
+    Dim MiscStatement As String = StringTogetherWords(WordIndex, EndIndex)
+    MiscStatement = AddNewLineAboutEveryNthCharacters(MiscStatement, ESCAPENEWLINE, 30)
+    pumlLineCnt += 1
+    pumlFile.WriteLine(Indent() & ":" & MiscStatement.Trim & ";")
+    WordIndex = EndIndex
+  End Sub
+  Sub ProcessPumlELSE(ByRef WordIndex As Integer)
     IndentLevel -= 1
     pumlLineCnt += 1
     pumlFile.WriteLine(Indent() & "else (no)")
     IndentLevel += 1
 
   End Sub
-  Sub ProcessPumlEVALUATE(ByRef wordIndex As Integer)
+  Sub ProcessPumlCase(ByRef wordIndex As Integer)
     'TODO: need to fix embedded Evaluates
     ' find the end of 'EVALUATE' / 'CASE' statement which should be at the first 'WHEN' clause
     'cWord is global
     'IndentLevel is global
     Dim Statement As String = ""
-    Dim EndIndex As Integer = wordIndex + 1
-    For EndIndex = EndIndex To cWord.Count - 1
-      If cWord(EndIndex) = "WHEN" Then
-        Exit For
-      End If
-    Next
-    EndIndex -= 1
+    Dim EndIndex As Integer = cWord.Count - 1
     Call GetStatement(wordIndex, EndIndex, Statement)
     pumlLineCnt += 1
     pumlFile.WriteLine(Indent() & ":" & Statement.Trim & ";")
@@ -6530,15 +6723,15 @@ Public Class Form1
     WordIndex = EndIndex
   End Sub
 
-  Sub ProcessPumlStart(ByRef WordIndex As Integer)
-    ' The end of 'PERFORM' statement is the next word
-    Dim EndIndex As Integer = WordIndex + 1
-    Dim Statement As String = ""
-    Call GetStatement(WordIndex, EndIndex, Statement)
-    pumlLineCnt += 1
-    pumlFile.WriteLine(Indent() & ":" & Statement.Trim & "|")
-    WordIndex = EndIndex
-  End Sub
+  'Sub ProcessPumlStart(ByRef WordIndex As Integer)
+  '  ' The end of 'PERFORM' statement is the next word
+  '  Dim EndIndex As Integer = WordIndex + 1
+  '  Dim Statement As String = ""
+  '  Call GetStatement(WordIndex, EndIndex, Statement)
+  '  pumlLineCnt += 1
+  '  pumlFile.WriteLine(Indent() & ":" & Statement.Trim & "|")
+  '  WordIndex = EndIndex
+  'End Sub
   Sub ProcessPumlENDPERFORM()
     IndentLevel -= 1
     If WithinPerformCnt > 0 Then
@@ -6561,7 +6754,7 @@ Public Class Form1
     Dim EXECStatement As String = ""
     Call GetStatement(WordIndex, EndIndex, EXECStatement)
     pumlLineCnt += 1
-    pumlFile.WriteLine(Indent() & ":" & EXECStatement.Trim & "}")
+    pumlFile.WriteLine(Indent() & ":" & EXECStatement.Trim & ">")
     WordIndex = EndIndex
   End Sub
   Sub ProcessPumlDisplay(ByRef WordIndex As Integer)
@@ -6899,7 +7092,12 @@ Public Class Form1
               AddToListOfOpenModes(ListOfOpenModes, "SORTOUT")
               Exit For
             Case "OPEN"
-              MessageBox.Show("Never found open mode!:" &
+              If x >= 1 Then
+                If srcWords(x - 2) = "EXEC" And srcWords(x - 1) = "SQL" Then
+                  Exit For
+                End If
+              End If
+              MessageBox.Show("Never found open mode for file:" &
                               file_name_1 & ":" & SrcStmt(Index))
               Exit For
             Case "PUT"
@@ -7187,7 +7385,7 @@ Public Class Form1
   End Function
   Function IndexToNextVerb(ByRef StartCondIndex As Integer) As Integer
     ' cWord is a global variable
-    ' VerNames is a global variable
+    ' VerbNames is a global variable
     ' find ending index to next COBOL verb in cWord
     Dim EndCondIndex As Integer = -1
     Dim VerbIndex As Integer = -1
@@ -7195,20 +7393,18 @@ Public Class Form1
       If WithinReadStatement = True Then
         Select Case cWord(EndCondIndex)
           Case "AT", "END", "NOT"
-            IndexToNextVerb = EndCondIndex
-            Exit Function
+            Return EndCondIndex
           Case "NEXT"
             Continue For
         End Select
       End If
       VerbIndex = VerbNames.IndexOf(cWord(EndCondIndex))
       If VerbIndex > -1 Then
-        IndexToNextVerb = EndCondIndex - 1
-        Exit Function
+        Return EndCondIndex - 1
       End If
     Next
     ' there is not another verb in this statement
-    IndexToNextVerb = -1
+    Return -1
   End Function
 
   Sub ProcessComment(ByRef Index As Integer, ByRef statement As String, ByRef Division As String, ByRef CobolFile As String)

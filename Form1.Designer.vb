@@ -37,7 +37,6 @@ Partial Class Form1
         Me.lblCopybookMessage = New System.Windows.Forms.Label()
         Me.ProgressBar1 = New System.Windows.Forms.ProgressBar()
         Me.cbLogStmt = New System.Windows.Forms.CheckBox()
-        Me.lblJobFileCount = New System.Windows.Forms.Label()
         Me.lblProcessingJob = New System.Windows.Forms.Label()
         Me.lblProcessingSource = New System.Windows.Forms.Label()
         Me.lblProcessingWorksheet = New System.Windows.Forms.Label()
@@ -48,7 +47,20 @@ Partial Class Form1
         Me.txtTelonFoldername = New System.Windows.Forms.TextBox()
         Me.btnScreenMapsFolder = New System.Windows.Forms.Button()
         Me.txtScreenMapsFolderName = New System.Windows.Forms.TextBox()
-        Me.lblSourceFilesFound = New System.Windows.Forms.Label()
+        Me.cbJOBS = New System.Windows.Forms.CheckBox()
+        Me.cbJobComments = New System.Windows.Forms.CheckBox()
+        Me.cbPrograms = New System.Windows.Forms.CheckBox()
+        Me.cbFiles = New System.Windows.Forms.CheckBox()
+        Me.cbRecords = New System.Windows.Forms.CheckBox()
+        Me.cbFields = New System.Windows.Forms.CheckBox()
+        Me.cbComments = New System.Windows.Forms.CheckBox()
+        Me.cbexecSQL = New System.Windows.Forms.CheckBox()
+        Me.cbexecCICS = New System.Windows.Forms.CheckBox()
+        Me.cbIMS = New System.Windows.Forms.CheckBox()
+        Me.cbCalls = New System.Windows.Forms.CheckBox()
+        Me.cbScreenMaps = New System.Windows.Forms.CheckBox()
+        Me.cbLibraries = New System.Windows.Forms.CheckBox()
+        Me.cbBusinessRules = New System.Windows.Forms.CheckBox()
         Me.SuspendLayout()
         '
         'btnJCLJOBFilename
@@ -115,7 +127,7 @@ Partial Class Form1
         'Label1
         '
         Me.Label1.AutoSize = True
-        Me.Label1.Location = New System.Drawing.Point(357, 379)
+        Me.Label1.Location = New System.Drawing.Point(357, 381)
         Me.Label1.Name = "Label1"
         Me.Label1.Size = New System.Drawing.Size(75, 20)
         Me.Label1.TabIndex = 11
@@ -123,7 +135,7 @@ Partial Class Form1
         '
         'txtDelimiter
         '
-        Me.txtDelimiter.Location = New System.Drawing.Point(438, 376)
+        Me.txtDelimiter.Location = New System.Drawing.Point(438, 378)
         Me.txtDelimiter.Name = "txtDelimiter"
         Me.txtDelimiter.Size = New System.Drawing.Size(31, 26)
         Me.txtDelimiter.TabIndex = 12
@@ -160,21 +172,12 @@ Partial Class Form1
         'cbLogStmt
         '
         Me.cbLogStmt.AutoSize = True
-        Me.cbLogStmt.Location = New System.Drawing.Point(184, 377)
+        Me.cbLogStmt.Location = New System.Drawing.Point(184, 379)
         Me.cbLogStmt.Name = "cbLogStmt"
         Me.cbLogStmt.Size = New System.Drawing.Size(141, 24)
         Me.cbLogStmt.TabIndex = 10
         Me.cbLogStmt.Text = "Log Stmt Array"
         Me.cbLogStmt.UseVisualStyleBackColor = True
-        '
-        'lblJobFileCount
-        '
-        Me.lblJobFileCount.AutoSize = True
-        Me.lblJobFileCount.Location = New System.Drawing.Point(10, 314)
-        Me.lblJobFileCount.Name = "lblJobFileCount"
-        Me.lblJobFileCount.Size = New System.Drawing.Size(161, 20)
-        Me.lblJobFileCount.TabIndex = 18
-        Me.lblJobFileCount.Text = "JCL Job files found: 0"
         '
         'lblProcessingJob
         '
@@ -206,7 +209,7 @@ Partial Class Form1
         'cbScanModeOnly
         '
         Me.cbScanModeOnly.AutoSize = True
-        Me.cbScanModeOnly.Location = New System.Drawing.Point(13, 377)
+        Me.cbScanModeOnly.Location = New System.Drawing.Point(13, 379)
         Me.cbScanModeOnly.Name = "cbScanModeOnly"
         Me.cbScanModeOnly.Size = New System.Drawing.Size(151, 24)
         Me.cbScanModeOnly.TabIndex = 9
@@ -261,21 +264,193 @@ Partial Class Form1
         Me.txtScreenMapsFolderName.Size = New System.Drawing.Size(994, 26)
         Me.txtScreenMapsFolderName.TabIndex = 27
         '
-        'lblSourceFilesFound
+        'cbJOBS
         '
-        Me.lblSourceFilesFound.AutoSize = True
-        Me.lblSourceFilesFound.Location = New System.Drawing.Point(12, 343)
-        Me.lblSourceFilesFound.Name = "lblSourceFilesFound"
-        Me.lblSourceFilesFound.Size = New System.Drawing.Size(154, 20)
-        Me.lblSourceFilesFound.TabIndex = 28
-        Me.lblSourceFilesFound.Text = "Source files found: 0"
+        Me.cbJOBS.AutoSize = True
+        Me.cbJOBS.Checked = True
+        Me.cbJOBS.CheckState = System.Windows.Forms.CheckState.Checked
+        Me.cbJOBS.Location = New System.Drawing.Point(18, 318)
+        Me.cbJOBS.Name = "cbJOBS"
+        Me.cbJOBS.Size = New System.Drawing.Size(77, 24)
+        Me.cbJOBS.TabIndex = 30
+        Me.cbJOBS.Text = "JOBS"
+        Me.cbJOBS.UseVisualStyleBackColor = True
+        '
+        'cbJobComments
+        '
+        Me.cbJobComments.AutoSize = True
+        Me.cbJobComments.Checked = True
+        Me.cbJobComments.CheckState = System.Windows.Forms.CheckState.Checked
+        Me.cbJobComments.Location = New System.Drawing.Point(101, 318)
+        Me.cbJobComments.Name = "cbJobComments"
+        Me.cbJobComments.Size = New System.Drawing.Size(147, 24)
+        Me.cbJobComments.TabIndex = 31
+        Me.cbJobComments.Text = "JOB Comments"
+        Me.cbJobComments.UseVisualStyleBackColor = True
+        '
+        'cbPrograms
+        '
+        Me.cbPrograms.AutoSize = True
+        Me.cbPrograms.Checked = True
+        Me.cbPrograms.CheckState = System.Windows.Forms.CheckState.Checked
+        Me.cbPrograms.Location = New System.Drawing.Point(254, 318)
+        Me.cbPrograms.Name = "cbPrograms"
+        Me.cbPrograms.Size = New System.Drawing.Size(103, 24)
+        Me.cbPrograms.TabIndex = 32
+        Me.cbPrograms.Text = "Programs"
+        Me.cbPrograms.UseVisualStyleBackColor = True
+        '
+        'cbFiles
+        '
+        Me.cbFiles.AutoSize = True
+        Me.cbFiles.Checked = True
+        Me.cbFiles.CheckState = System.Windows.Forms.CheckState.Checked
+        Me.cbFiles.Location = New System.Drawing.Point(363, 318)
+        Me.cbFiles.Name = "cbFiles"
+        Me.cbFiles.Size = New System.Drawing.Size(68, 24)
+        Me.cbFiles.TabIndex = 33
+        Me.cbFiles.Text = "Files"
+        Me.cbFiles.UseVisualStyleBackColor = True
+        '
+        'cbRecords
+        '
+        Me.cbRecords.AutoSize = True
+        Me.cbRecords.Checked = True
+        Me.cbRecords.CheckState = System.Windows.Forms.CheckState.Checked
+        Me.cbRecords.Location = New System.Drawing.Point(437, 318)
+        Me.cbRecords.Name = "cbRecords"
+        Me.cbRecords.Size = New System.Drawing.Size(95, 24)
+        Me.cbRecords.TabIndex = 34
+        Me.cbRecords.Text = "Records"
+        Me.cbRecords.UseVisualStyleBackColor = True
+        '
+        'cbFields
+        '
+        Me.cbFields.AutoSize = True
+        Me.cbFields.Checked = True
+        Me.cbFields.CheckState = System.Windows.Forms.CheckState.Checked
+        Me.cbFields.Location = New System.Drawing.Point(538, 318)
+        Me.cbFields.Name = "cbFields"
+        Me.cbFields.Size = New System.Drawing.Size(77, 24)
+        Me.cbFields.TabIndex = 35
+        Me.cbFields.Text = "Fields"
+        Me.cbFields.UseVisualStyleBackColor = True
+        '
+        'cbComments
+        '
+        Me.cbComments.AutoSize = True
+        Me.cbComments.Checked = True
+        Me.cbComments.CheckState = System.Windows.Forms.CheckState.Checked
+        Me.cbComments.Location = New System.Drawing.Point(621, 317)
+        Me.cbComments.Name = "cbComments"
+        Me.cbComments.Size = New System.Drawing.Size(112, 24)
+        Me.cbComments.TabIndex = 36
+        Me.cbComments.Text = "Comments"
+        Me.cbComments.UseVisualStyleBackColor = True
+        '
+        'cbexecSQL
+        '
+        Me.cbexecSQL.AutoSize = True
+        Me.cbexecSQL.Checked = True
+        Me.cbexecSQL.CheckState = System.Windows.Forms.CheckState.Checked
+        Me.cbexecSQL.Location = New System.Drawing.Point(739, 317)
+        Me.cbexecSQL.Name = "cbexecSQL"
+        Me.cbexecSQL.Size = New System.Drawing.Size(100, 24)
+        Me.cbexecSQL.TabIndex = 37
+        Me.cbexecSQL.Text = "execSQL"
+        Me.cbexecSQL.UseVisualStyleBackColor = True
+        '
+        'cbexecCICS
+        '
+        Me.cbexecCICS.AutoSize = True
+        Me.cbexecCICS.Checked = True
+        Me.cbexecCICS.CheckState = System.Windows.Forms.CheckState.Checked
+        Me.cbexecCICS.Location = New System.Drawing.Point(845, 318)
+        Me.cbexecCICS.Name = "cbexecCICS"
+        Me.cbexecCICS.Size = New System.Drawing.Size(106, 24)
+        Me.cbexecCICS.TabIndex = 38
+        Me.cbexecCICS.Text = "execCICS"
+        Me.cbexecCICS.UseVisualStyleBackColor = True
+        '
+        'cbIMS
+        '
+        Me.cbIMS.AutoSize = True
+        Me.cbIMS.Checked = True
+        Me.cbIMS.CheckState = System.Windows.Forms.CheckState.Checked
+        Me.cbIMS.Location = New System.Drawing.Point(957, 318)
+        Me.cbIMS.Name = "cbIMS"
+        Me.cbIMS.Size = New System.Drawing.Size(64, 24)
+        Me.cbIMS.TabIndex = 39
+        Me.cbIMS.Text = "IMS"
+        Me.cbIMS.UseVisualStyleBackColor = True
+        '
+        'cbCalls
+        '
+        Me.cbCalls.AutoSize = True
+        Me.cbCalls.Checked = True
+        Me.cbCalls.CheckState = System.Windows.Forms.CheckState.Checked
+        Me.cbCalls.Location = New System.Drawing.Point(1027, 317)
+        Me.cbCalls.Name = "cbCalls"
+        Me.cbCalls.Size = New System.Drawing.Size(69, 24)
+        Me.cbCalls.TabIndex = 40
+        Me.cbCalls.Text = "Calls"
+        Me.cbCalls.UseVisualStyleBackColor = True
+        '
+        'cbScreenMaps
+        '
+        Me.cbScreenMaps.AutoSize = True
+        Me.cbScreenMaps.Checked = True
+        Me.cbScreenMaps.CheckState = System.Windows.Forms.CheckState.Checked
+        Me.cbScreenMaps.Location = New System.Drawing.Point(16, 348)
+        Me.cbScreenMaps.Name = "cbScreenMaps"
+        Me.cbScreenMaps.Size = New System.Drawing.Size(129, 24)
+        Me.cbScreenMaps.TabIndex = 41
+        Me.cbScreenMaps.Text = "Screen Maps"
+        Me.cbScreenMaps.UseVisualStyleBackColor = True
+        '
+        'cbLibraries
+        '
+        Me.cbLibraries.AutoSize = True
+        Me.cbLibraries.Checked = True
+        Me.cbLibraries.CheckState = System.Windows.Forms.CheckState.Checked
+        Me.cbLibraries.Location = New System.Drawing.Point(151, 348)
+        Me.cbLibraries.Name = "cbLibraries"
+        Me.cbLibraries.Size = New System.Drawing.Size(95, 24)
+        Me.cbLibraries.TabIndex = 42
+        Me.cbLibraries.Text = "Libraries"
+        Me.cbLibraries.UseVisualStyleBackColor = True
+        '
+        'cbBusinessRules
+        '
+        Me.cbBusinessRules.AutoSize = True
+        Me.cbBusinessRules.Checked = True
+        Me.cbBusinessRules.CheckState = System.Windows.Forms.CheckState.Checked
+        Me.cbBusinessRules.Location = New System.Drawing.Point(252, 348)
+        Me.cbBusinessRules.Name = "cbBusinessRules"
+        Me.cbBusinessRules.Size = New System.Drawing.Size(145, 24)
+        Me.cbBusinessRules.TabIndex = 43
+        Me.cbBusinessRules.Text = "Business Rules"
+        Me.cbBusinessRules.UseVisualStyleBackColor = True
         '
         'Form1
         '
         Me.AutoScaleDimensions = New System.Drawing.SizeF(9.0!, 20.0!)
         Me.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font
         Me.ClientSize = New System.Drawing.Size(1279, 652)
-        Me.Controls.Add(Me.lblSourceFilesFound)
+        Me.Controls.Add(Me.cbBusinessRules)
+        Me.Controls.Add(Me.cbLibraries)
+        Me.Controls.Add(Me.cbScreenMaps)
+        Me.Controls.Add(Me.cbCalls)
+        Me.Controls.Add(Me.cbIMS)
+        Me.Controls.Add(Me.cbexecCICS)
+        Me.Controls.Add(Me.cbexecSQL)
+        Me.Controls.Add(Me.cbComments)
+        Me.Controls.Add(Me.cbFields)
+        Me.Controls.Add(Me.cbRecords)
+        Me.Controls.Add(Me.cbFiles)
+        Me.Controls.Add(Me.cbPrograms)
+        Me.Controls.Add(Me.cbJobComments)
+        Me.Controls.Add(Me.cbJOBS)
         Me.Controls.Add(Me.txtScreenMapsFolderName)
         Me.Controls.Add(Me.btnScreenMapsFolder)
         Me.Controls.Add(Me.txtTelonFoldername)
@@ -286,7 +461,6 @@ Partial Class Form1
         Me.Controls.Add(Me.lblProcessingWorksheet)
         Me.Controls.Add(Me.lblProcessingSource)
         Me.Controls.Add(Me.lblProcessingJob)
-        Me.Controls.Add(Me.lblJobFileCount)
         Me.Controls.Add(Me.cbLogStmt)
         Me.Controls.Add(Me.ProgressBar1)
         Me.Controls.Add(Me.lblCopybookMessage)
@@ -322,7 +496,6 @@ Partial Class Form1
     Friend WithEvents lblCopybookMessage As Label
     Friend WithEvents ProgressBar1 As ProgressBar
     Friend WithEvents cbLogStmt As CheckBox
-    Friend WithEvents lblJobFileCount As Label
     Friend WithEvents lblProcessingJob As Label
     Friend WithEvents lblProcessingSource As Label
     Friend WithEvents lblProcessingWorksheet As Label
@@ -333,5 +506,18 @@ Partial Class Form1
     Friend WithEvents txtTelonFoldername As TextBox
     Friend WithEvents btnScreenMapsFolder As Button
     Friend WithEvents txtScreenMapsFolderName As TextBox
-    Friend WithEvents lblSourceFilesFound As Label
+    Friend WithEvents cbJOBS As CheckBox
+    Friend WithEvents cbJobComments As CheckBox
+    Friend WithEvents cbPrograms As CheckBox
+    Friend WithEvents cbFiles As CheckBox
+    Friend WithEvents cbRecords As CheckBox
+    Friend WithEvents cbFields As CheckBox
+    Friend WithEvents cbComments As CheckBox
+    Friend WithEvents cbexecSQL As CheckBox
+    Friend WithEvents cbexecCICS As CheckBox
+    Friend WithEvents cbIMS As CheckBox
+    Friend WithEvents cbCalls As CheckBox
+    Friend WithEvents cbScreenMaps As CheckBox
+    Friend WithEvents cbLibraries As CheckBox
+    Friend WithEvents cbBusinessRules As CheckBox
 End Class
