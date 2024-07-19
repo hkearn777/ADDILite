@@ -3,7 +3,7 @@
 Module FlowchartCOBOL
   Const ESCAPENEWLINE As String = "\n"
 
-  Dim Delimiter As String = "|"
+  'Dim Delimiter As String = "|"
   Dim newLine As String = System.Environment.NewLine
 
 
@@ -11,7 +11,6 @@ Module FlowchartCOBOL
   Dim stmt As String = ""
   Dim IndentLevel As Integer = 0
   Dim cWord As New List(Of String)
-  Dim ListOfParagraphs As New List(Of String)      'hold the paragraph names found
   Dim ListOfStatements As New List(Of String)
 
   Dim currentParagraph As String = ""
@@ -88,12 +87,11 @@ Module FlowchartCOBOL
         Continue For
       End If
       ' split statement into cobol words 
-      Call GetSourceWords(stmt, cWord)
+      Call form1.GetSourceWords(stmt, cWord)
 
       ' If paragraph name, store it (maybe use later)
-      If IsParagraph(cWord) Then
+      If Form1.IsParagraph(cWord) Then
         currentParagraph = cWord(0)
-        ListOfParagraphs.Add(currentParagraph)
         If cWord.Count = 2 Then     'add SECTION or EXIT
           currentParagraph &= " " & cWord(1)
         End If
@@ -217,7 +215,7 @@ Module FlowchartCOBOL
     PumlPageBreak(exec)
 
     For Each Statement In ListOfStatements
-      Dim parts As String() = Statement.Split(Delimiter)
+      Dim parts As String() = Statement.Split(Form1.Delimiter)
       Select Case Val(parts(1))
         Case > 0        'statements
           IndentLevel = Val(parts(1)) * 2
@@ -251,7 +249,7 @@ Module FlowchartCOBOL
       MessageBox.Show("stmt.length is 0")
       Exit Sub
     End If
-    Call GetSourceWords(stmt, cWord)
+    Call Form1.GetSourceWords(stmt, cWord)
     Select Case cWord(0)
       Case "IF"
         pumlLineCnt += 1
@@ -311,7 +309,7 @@ Module FlowchartCOBOL
   Function Process_ELSE(ByRef cWordIndex As Integer) As Integer
     'check if the ELSE is correct by searching backwards looking for same stmtLevel with an "IF"
     For x As Integer = ListOfStatements.Count - 1 To 0 Step -1
-      Dim stuff As String() = ListOfStatements(x).Split(Delimiter)
+      Dim stuff As String() = ListOfStatements(x).Split(Form1.Delimiter)
       If Val(stuff(1)) = StmtLevel Then
         Dim words As String() = stuff(2).Split(" ")
         If words(0) <> "IF" Then
@@ -395,7 +393,7 @@ Module FlowchartCOBOL
     If (EndOfReadConditionIndex - NumberOfConditionals) = 0 Then
       GetStatement(cWordIndex, EndIndex, Imperative)    'the whole read statement there is no conditions
     Else
-      Imperative = StringTogetherWords(cWordIndex, EndOfReadConditionIndex - NumberOfConditionals)
+      Imperative = Form1.StringTogetherWords(cWord, cWordIndex, EndOfReadConditionIndex - NumberOfConditionals)
     End If
     If Imperative.Length = 0 Then
       'MessageBox.Show("Read imperative length is 0")
@@ -432,8 +430,8 @@ Module FlowchartCOBOL
     Dim WhenIndex As Integer = cWord.IndexOf("WHEN", cWordIndex + 1)
 
     ' write out the "Search <table-name> at end imperatives" statement (first section)
-    Imperative = StringTogetherWords(cWordIndex, WhenIndex - 1)
-    Imperative = AddNewLineAboutEveryNthCharacters(Imperative, ESCAPENEWLINE, 30)
+    Imperative = Form1.StringTogetherWords(cWord, cWordIndex, WhenIndex - 1)
+    Imperative = Form1.AddNewLineAboutEveryNthCharacters(Imperative, ESCAPENEWLINE, 30)
     AddToListOfStatements(Imperative)
 
     Return WhenIndex - 1
@@ -448,7 +446,7 @@ Module FlowchartCOBOL
     End If
     Dim InvalidIndex As Integer = cWord.IndexOf("INVALID", cWordIndex + 1)
     If InvalidIndex = -1 Then
-      Imperative = StringTogetherWords(cWordIndex, EndIndex)
+      Imperative = Form1.StringTogetherWords(cWord, cWordIndex, EndIndex)
       AddToListOfStatements(Imperative)
       Return EndIndex
     End If
@@ -461,11 +459,11 @@ Module FlowchartCOBOL
       InvalidIndex -= 1
     End If
     ' Write the START command w/o the INVALID condition.
-    Imperative = StringTogetherWords(cWordIndex, InvalidIndex - 1)
+    Imperative = Form1.StringTogetherWords(cWord, cWordIndex, InvalidIndex - 1)
     AddToListOfStatements(Imperative)
 
     ' write the INVALID condition
-    Condition = StringTogetherWords(InvalidIndex, EndInvalidIndex)
+    Condition = Form1.StringTogetherWords(cWord, InvalidIndex, EndInvalidIndex)
     AddToListOfStatements("IF " & Condition & " THEN")
     WithinIF += 1
     StmtLevel += 1
@@ -494,7 +492,7 @@ Module FlowchartCOBOL
     If EndIndex = -1 Then
       EndIndex = cWord.Count - 1
     End If
-    Imperative = StringTogetherWords(cWordIndex, EndIndex)
+    Imperative = Form1.StringTogetherWords(cWord, cWordIndex, EndIndex)
     AddToListOfStatements(Imperative)
     Return EndIndex
   End Function
@@ -505,7 +503,7 @@ Module FlowchartCOBOL
     If Statement.Length = 0 Then
       MessageBox.Show("addtolistofstatement statement length is 0")
     End If
-    ListOfStatements.Add(idxStatement & Delimiter & StmtLevel & Delimiter & Statement)
+    ListOfStatements.Add(idxStatement & Form1.Delimiter & StmtLevel & Form1.Delimiter & Statement)
     If ListOfStatements.Count > 40000 Then
       MessageBox.Show("Over 40,000K ListOfStatements?")
     End If
@@ -513,7 +511,7 @@ Module FlowchartCOBOL
   Function GetEndIndex(ByRef Wordindex As Integer, ByRef count As Integer) As Integer
     ' determine the end Index to the next verb
     ' adjust if no ending verb to last word as the index
-    Dim EndIndex = IndexToNextVerb(Wordindex)
+    Dim EndIndex = Form1.IndexToNextVerb(cWord, Wordindex)
     If EndIndex = -1 Then
       EndIndex = count - 1
     End If
@@ -525,135 +523,116 @@ Module FlowchartCOBOL
   Function GetLogStmt(logStatement As String) As String
     Return logStatement
   End Function
-  Function IsParagraph(ByRef CobolWords As List(Of String)) As Boolean
-    ' Identify if the stmt is a paragraph or a section name.
-    If CobolWords.Count <> 1 Then
-      If CobolWords.Count = 2 Then
-        If CobolWords(1) = "SECTION" Then
-          Return True
-        End If
-        If CobolWords(1) = "EXIT" Then      'exit is on same line as paragraph name...ugh!
-          Return True
-        End If
-      End If
-      Return False
-    End If
-    Select Case CobolWords(0)
-      Case "GOBACK", "EXIT"
-        Return False
-    End Select
-    Return True
-  End Function
 
   ' routines from addilite
 
   Sub GetStatement(ByRef WordIndex As Integer, ByRef EndIndex As Integer, ByRef statement As String)
     ' get the whole COBOL statement of this verb by looking for the next verb
     'Dim StartIndex As Integer = WordIndex
-    EndIndex = IndexToNextVerb(WordIndex)
+    EndIndex = Form1.IndexToNextVerb(cWord, WordIndex)
     If EndIndex = -1 Then
       EndIndex = cWord.Count - 1
     End If
-    Dim WordsTogether As String = StringTogetherWords(WordIndex, EndIndex)
-    statement = AddNewLineAboutEveryNthCharacters(WordsTogether, ESCAPENEWLINE, 30)
+    Dim WordsTogether As String = Form1.StringTogetherWords(cWord, WordIndex, EndIndex)
+    statement = Form1.AddNewLineAboutEveryNthCharacters(WordsTogether, ESCAPENEWLINE, 30)
   End Sub
 
-  Function StringTogetherWords(ByRef StartCondIndex As Integer, ByRef EndCondIndex As Integer) As String
-    ' string together from startofconditionindex to endofconditionindex
-    ' cWord is a global variable
-    Dim wordsStrungTogether As String = ""
-    Try
-      For condIndex As Integer = StartCondIndex To EndCondIndex
-        wordsStrungTogether &= cWord(condIndex) & " "
-      Next
+  'Function StringTogetherWords(ByRef StartCondIndex As Integer, ByRef EndCondIndex As Integer) As String
+  '  ' string together from startofconditionindex to endofconditionindex
+  '  ' cWord is a global variable
+  '  Dim wordsStrungTogether As String = ""
+  '  Try
+  '    For condIndex As Integer = StartCondIndex To EndCondIndex
+  '      wordsStrungTogether &= cWord(condIndex) & " "
+  '    Next
 
-    Catch ex As Exception
-      MessageBox.Show("error:" & ex.Message)
-    End Try
-    StringTogetherWords = wordsStrungTogether.TrimEnd
-  End Function
-  Function IndexToNextVerb(ByRef StartCondIndex As Integer) As Integer
-    ' cWord is a global variable
-    ' VerNames is a global variable
-    ' find ending index to next COBOL verb in cWord
-    Dim EndCondIndex As Integer = -1
-    Dim VerbIndex As Integer = -1
-    For EndCondIndex = StartCondIndex + 1 To cWord.Count - 1
-      If WithinReadStatement > 0 Then
-        Select Case cWord(EndCondIndex)
-          Case "AT", "END", "NOT"
-            Return EndCondIndex
-          Case "NEXT"
-            Continue For
-        End Select
-      End If
-      VerbIndex = VerbNames.IndexOf(cWord(EndCondIndex))
-      If VerbIndex > -1 Then
-        Return EndCondIndex - 1
-      End If
-    Next
-    ' there is not another verb in this statement
-    Return -1
-  End Function
+  '  Catch ex As Exception
+  '    MessageBox.Show("error:" & ex.Message)
+  '  End Try
+  '  StringTogetherWords = wordsStrungTogether.TrimEnd
+  'End Function
+  'Function IndexToNextVerb(ByRef StartCondIndex As Integer) As Integer
+  '  ' cWord is a global variable
+  '  ' VerNames is a global variable
+  '  ' find ending index to next COBOL verb in cWord
+  '  Dim EndCondIndex As Integer = -1
+  '  Dim VerbIndex As Integer = -1
+  '  For EndCondIndex = StartCondIndex + 1 To cWord.Count - 1
+  '    If WithinReadStatement > 0 Then
+  '      Select Case cWord(EndCondIndex)
+  '        Case "AT", "END", "NOT"
+  '          Return EndCondIndex
+  '        Case "NEXT"
+  '          Continue For
+  '      End Select
+  '    End If
+  '    VerbIndex = VerbNames.IndexOf(cWord(EndCondIndex))
+  '    If VerbIndex > -1 Then
+  '      Return EndCondIndex - 1
+  '    End If
+  '  Next
+  '  ' there is not another verb in this statement
+  '  Return -1
+  'End Function
 
-  Function AddNewLineAboutEveryNthCharacters(ByRef condStatement As String,
-                                            ByRef theNewLine As String,
-                                            ByVal Size As Integer) As String
-    ' add "\n" or vbnewline (theNewLine) about every SIZE number of characters
-    Dim condStatementCR As String = ""
-    Dim bytesMoved As Integer = 0
-    If condStatement.Length = 0 Then
-      Return ""
-    End If
-    If condStatement.Length > Size Then
-      For condIndex As Integer = 0 To condStatement.Length - 1
-        If condStatement.Substring(condIndex, 1) = Space(1) And bytesMoved > (Size - 1) Then
-          condStatementCR &= theNewLine
-          bytesMoved = 0
-        End If
-        condStatementCR &= condStatement.Substring(condIndex, 1)
-        bytesMoved += 1
-      Next
-    Else
-      condStatementCR = condStatement
-    End If
-    Return condStatementCR
-  End Function
+  'Function AddNewLineAboutEveryNthCharacters(ByRef condStatement As String,
+  '                                          ByRef theNewLine As String,
+  '                                          ByVal Size As Integer) As String
+  '  ' add "\n" or vbnewline (theNewLine) about every SIZE number of characters
+  '  Dim condStatementCR As String = ""
+  '  Dim bytesMoved As Integer = 0
+  '  If condStatement.Length = 0 Then
+  '    Return ""
+  '  End If
+  '  If condStatement.Length > Size Then
+  '    For condIndex As Integer = 0 To condStatement.Length - 1
+  '      If condStatement.Substring(condIndex, 1) = Space(1) And bytesMoved > (Size - 1) Then
+  '        condStatementCR &= theNewLine
+  '        bytesMoved = 0
+  '      End If
+  '      condStatementCR &= condStatement.Substring(condIndex, 1)
+  '      bytesMoved += 1
+  '    Next
+  '  Else
+  '    condStatementCR = condStatement
+  '  End If
+  '  Return condStatementCR
+  'End Function
 
-  Sub GetSourceWords(ByVal statement As String, ByRef srcWords As List(Of String))
-    ' takes the stmt and breaks into words and drops blanks
-    srcWords.Clear()
-    statement = statement.Trim
-    Dim WithinQuotes As Boolean = False
-    Dim word As String = ""
-    Dim aByte As String = ""
-    For x As Integer = 0 To statement.Length - 1
-      aByte = statement.Substring(x, 1)
-      If aByte = "'" Then
-        WithinQuotes = Not WithinQuotes
-      End If
-      If aByte = " " Then
-        If WithinQuotes Then
-          word &= aByte
-        Else
-          If word.Trim.Length > 0 Then
-            srcWords.Add(word.ToUpper)
-            word = ""
-          End If
-        End If
-      Else
-        word &= aByte
-      End If
-    Next
-    If word.EndsWith(".") Then
-      word = word.Remove(word.Length - 1)
-      srcWords.Add(word.ToUpper)
-      word = ""
-    End If
-    If word.Length > 0 Then
-      srcWords.Add(word)
-    End If
-  End Sub
+  'Sub GetSourceWords(ByVal statement As String, ByRef srcWords As List(Of String))
+  '  ' takes the stmt and breaks into words and drops blanks
+  '  srcWords.Clear()
+  '  statement = statement.Trim
+  '  Dim WithinQuotes As Boolean = False
+  '  Dim word As String = ""
+  '  Dim aByte As String = ""
+  '  For x As Integer = 0 To statement.Length - 1
+  '    aByte = statement.Substring(x, 1)
+  '    If aByte = "'" Then
+  '      WithinQuotes = Not WithinQuotes
+  '    End If
+  '    If aByte = " " Then
+  '      If WithinQuotes Then
+  '        word &= aByte
+  '      Else
+  '        If word.Trim.Length > 0 Then
+  '          srcWords.Add(word.ToUpper)
+  '          word = ""
+  '        End If
+  '      End If
+  '    Else
+  '      word &= aByte
+  '    End If
+  '  Next
+  '  If word.EndsWith(".") Then
+  '    word = word.Remove(word.Length - 1)
+  '    srcWords.Add(word.ToUpper)
+  '    word = ""
+  '  End If
+  '  If word.Length > 0 Then
+  '    srcWords.Add(word)
+  '  End If
+  'End Sub
   Sub ProcessPumlParagraph(ByRef ParagraphStarted As Boolean, ByRef statement As String, ByRef exec As String)
     If ParagraphStarted = True Then
       pumlLineCnt += 3
@@ -742,162 +721,159 @@ Module FlowchartCOBOL
     FirstWhenStatement = 0
     OutputFolder = ""
 
-
-    ListOfParagraphs.Clear()
     ListOfStatements.Clear()
-
 
     ' This area is the COBOL Verb array with counts. 
     ' **BE SURE TO KEEP VerbNames AND VerbCount ARRAYS IN SYNC!!!**
     ' Flow commands
-    VerbNames.Add("GO")
-    VerbNames.Add("ALTER")
-    VerbNames.Add("CALL")
-    VerbNames.Add("PERFORM")
-    VerbNames.Add("EVALUATE")
-    VerbNames.Add("WHEN")
-    VerbNames.Add("CONTINUE")
-    VerbNames.Add("IF")
-    VerbNames.Add("ELSE")
-    VerbNames.Add("GOBACK")
-    VerbNames.Add("STOP")
-    VerbNames.Add("CHAIN")
-    ' I/O
-    VerbNames.Add("OPEN")
-    VerbNames.Add("READ")
-    VerbNames.Add("WRITE")
-    VerbNames.Add("REWRITE")
-    VerbNames.Add("CLOSE")
-    VerbNames.Add("EXEC")
-    VerbNames.Add("COMMIT")
-    VerbNames.Add("CANCEL")
-    VerbNames.Add("DELETE")
-    VerbNames.Add("MERGE")
-    VerbNames.Add("SORT")
-    VerbNames.Add("RETURN")
-    VerbNames.Add("NEXT")
-    ' Maths
-    VerbNames.Add("COMPUTE")
-    VerbNames.Add("ADD")
-    VerbNames.Add("SUBTRACT")
-    VerbNames.Add("MULTIPLY")
-    VerbNames.Add("DIVIDE")
-    ' Misc
-    VerbNames.Add("MOVE")
-    VerbNames.Add("DISABLE")
-    VerbNames.Add("DISPLAY")
-    VerbNames.Add("ENABLE")
-    VerbNames.Add("END-READ")
-    VerbNames.Add("END-EVALUATE")
-    VerbNames.Add("END-IF")
-    VerbNames.Add("END-INVOKE")
-    VerbNames.Add("END-PERFORM")
-    VerbNames.Add("END-SET")
-    VerbNames.Add("ENTER")
-    VerbNames.Add("ENTRY")
-    VerbNames.Add("EXAMINE")
-    VerbNames.Add("EXECUTE")
-    VerbNames.Add("EXHIBIT")
-    VerbNames.Add("EXIT")
-    VerbNames.Add("GENERATE")
-    VerbNames.Add("INITIALIZE")
-    VerbNames.Add("INITIATE")
-    VerbNames.Add("INSPECT")
-    VerbNames.Add("INVOKE")
-    VerbNames.Add("NOTE")
-    VerbNames.Add("OTHERWISE")
-    VerbNames.Add("READY")
-    VerbNames.Add("RECEIVE")
-    VerbNames.Add("RECOVER")
-    VerbNames.Add("RELEASE")
-    VerbNames.Add("RESET")
-    VerbNames.Add("ROLLBACK")
-    VerbNames.Add("SEARCH")
-    VerbNames.Add("SEND")
-    VerbNames.Add("SERVICE")
-    VerbNames.Add("SET")
-    VerbNames.Add("START")
-    VerbNames.Add("STRING")
-    VerbNames.Add("SUPPRESS")
-    VerbNames.Add("TERMINATE")
-    VerbNames.Add("TRANSFORM")
-    VerbNames.Add("UNLOCK")
-    VerbNames.Add("UNSTRING")
+    'VerbNames.Add("GO")
+    'VerbNames.Add("ALTER")
+    'VerbNames.Add("CALL")
+    'VerbNames.Add("PERFORM")
+    'VerbNames.Add("EVALUATE")
+    'VerbNames.Add("WHEN")
+    'VerbNames.Add("CONTINUE")
+    'VerbNames.Add("IF")
+    'VerbNames.Add("ELSE")
+    'VerbNames.Add("GOBACK")
+    'VerbNames.Add("STOP")
+    'VerbNames.Add("CHAIN")
+    '' I/O
+    'VerbNames.Add("OPEN")
+    'VerbNames.Add("READ")
+    'VerbNames.Add("WRITE")
+    'VerbNames.Add("REWRITE")
+    'VerbNames.Add("CLOSE")
+    'VerbNames.Add("EXEC")
+    'VerbNames.Add("COMMIT")
+    'VerbNames.Add("CANCEL")
+    'VerbNames.Add("DELETE")
+    'VerbNames.Add("MERGE")
+    'VerbNames.Add("SORT")
+    'VerbNames.Add("RETURN")
+    'VerbNames.Add("NEXT")
+    '' Maths
+    'VerbNames.Add("COMPUTE")
+    'VerbNames.Add("ADD")
+    'VerbNames.Add("SUBTRACT")
+    'VerbNames.Add("MULTIPLY")
+    'VerbNames.Add("DIVIDE")
+    '' Misc
+    'VerbNames.Add("MOVE")
+    'VerbNames.Add("DISABLE")
+    'VerbNames.Add("DISPLAY")
+    'VerbNames.Add("ENABLE")
+    'VerbNames.Add("END-READ")
+    'VerbNames.Add("END-EVALUATE")
+    'VerbNames.Add("END-IF")
+    'VerbNames.Add("END-INVOKE")
+    'VerbNames.Add("END-PERFORM")
+    'VerbNames.Add("END-SET")
+    'VerbNames.Add("ENTER")
+    'VerbNames.Add("ENTRY")
+    'VerbNames.Add("EXAMINE")
+    'VerbNames.Add("EXECUTE")
+    'VerbNames.Add("EXHIBIT")
+    'VerbNames.Add("EXIT")
+    'VerbNames.Add("GENERATE")
+    'VerbNames.Add("INITIALIZE")
+    'VerbNames.Add("INITIATE")
+    'VerbNames.Add("INSPECT")
+    'VerbNames.Add("INVOKE")
+    'VerbNames.Add("NOTE")
+    'VerbNames.Add("OTHERWISE")
+    'VerbNames.Add("READY")
+    'VerbNames.Add("RECEIVE")
+    'VerbNames.Add("RECOVER")
+    'VerbNames.Add("RELEASE")
+    'VerbNames.Add("RESET")
+    'VerbNames.Add("ROLLBACK")
+    'VerbNames.Add("SEARCH")
+    'VerbNames.Add("SEND")
+    'VerbNames.Add("SERVICE")
+    'VerbNames.Add("SET")
+    'VerbNames.Add("START")
+    'VerbNames.Add("STRING")
+    'VerbNames.Add("SUPPRESS")
+    'VerbNames.Add("TERMINATE")
+    'VerbNames.Add("TRANSFORM")
+    'VerbNames.Add("UNLOCK")
+    'VerbNames.Add("UNSTRING")
 
-    ' Flow commands
-    VerbCount.Add(0)    'GO
-    VerbCount.Add(0)    'ALTER
-    VerbCount.Add(0)    'CALL
-    VerbCount.Add(0)    'PERFORM
-    VerbCount.Add(0)    'EVALUATE
-    VerbCount.Add(0)    'WHEN
-    VerbCount.Add(0)    'CONTINUE
-    VerbCount.Add(0)    'IF
-    VerbCount.Add(0)    'ELSE
-    VerbCount.Add(0)    'GOBACK
-    VerbCount.Add(0)    'STOP
-    VerbCount.Add(0)    'CHAIN
-    ' I/O
-    VerbCount.Add(0)    'OPEN
-    VerbCount.Add(0)    'READ
-    VerbCount.Add(0)    'WRITE
-    VerbCount.Add(0)    'REWRITE
-    VerbCount.Add(0)    'CLOSE
-    VerbCount.Add(0)    'EXEC
-    VerbCount.Add(0)    'COMMIT
-    VerbCount.Add(0)    'CANCEL
-    VerbCount.Add(0)    'DELETE
-    VerbCount.Add(0)    'MERGE
-    VerbCount.Add(0)    'SORT
-    VerbCount.Add(0)    'RETURN
-    VerbCount.Add(0)    'NEXT
-    ' Maths
-    VerbCount.Add(0)    'COMPUTE
-    VerbCount.Add(0)    'ADD
-    VerbCount.Add(0)    'SUBTRACT
-    VerbCount.Add(0)    'MULTIPLY
-    VerbCount.Add(0)    'DIVIDE
-    ' Misc
-    VerbCount.Add(0)    'MOVE
-    VerbCount.Add(0)    'DISABLE
-    VerbCount.Add(0)    'DISPLAY
-    VerbCount.Add(0)    'ENABLE
-    VerbCount.Add(0)    'END-READ
-    VerbCount.Add(0)    'END-EVALUATE
-    VerbCount.Add(0)    'END-IF
-    VerbCount.Add(0)    'END-INVOKE
-    VerbCount.Add(0)    'END-PERFORM
-    VerbCount.Add(0)    'END-SET
-    VerbCount.Add(0)    'ENTER
-    VerbCount.Add(0)    'ENTRY
-    VerbCount.Add(0)    'EXAMINE
-    VerbCount.Add(0)    'EXECUTE
-    VerbCount.Add(0)    'EXHIBIT
-    VerbCount.Add(0)    'EXIT
-    VerbCount.Add(0)    'GENERATE
-    VerbCount.Add(0)    'INITIALIZE
-    VerbCount.Add(0)    'INITIATE
-    VerbCount.Add(0)    'INSPECT
-    VerbCount.Add(0)    'INVOKE
-    VerbCount.Add(0)    'NOTE
-    VerbCount.Add(0)    'OTHERWISE
-    VerbCount.Add(0)    'READY
-    VerbCount.Add(0)    'RECEIVE
-    VerbCount.Add(0)    'RECOVER
-    VerbCount.Add(0)    'RELEASE
-    VerbCount.Add(0)    'RESET
-    VerbCount.Add(0)    'ROLLBACK
-    VerbCount.Add(0)    'SEARCH
-    VerbCount.Add(0)    'SEND
-    VerbCount.Add(0)    'SERVICE
-    VerbCount.Add(0)    'SET
-    VerbCount.Add(0)    'START
-    VerbCount.Add(0)    'STRING
-    VerbCount.Add(0)    'SUPPRESS
-    VerbCount.Add(0)    'TERMINATE
-    VerbCount.Add(0)    'TRANSFORM
-    VerbCount.Add(0)    'UNLOCK
-    VerbCount.Add(0)    'UNSTRING
+    '' Flow commands
+    'VerbCount.Add(0)    'GO
+    'VerbCount.Add(0)    'ALTER
+    'VerbCount.Add(0)    'CALL
+    'VerbCount.Add(0)    'PERFORM
+    'VerbCount.Add(0)    'EVALUATE
+    'VerbCount.Add(0)    'WHEN
+    'VerbCount.Add(0)    'CONTINUE
+    'VerbCount.Add(0)    'IF
+    'VerbCount.Add(0)    'ELSE
+    'VerbCount.Add(0)    'GOBACK
+    'VerbCount.Add(0)    'STOP
+    'VerbCount.Add(0)    'CHAIN
+    '' I/O
+    'VerbCount.Add(0)    'OPEN
+    'VerbCount.Add(0)    'READ
+    'VerbCount.Add(0)    'WRITE
+    'VerbCount.Add(0)    'REWRITE
+    'VerbCount.Add(0)    'CLOSE
+    'VerbCount.Add(0)    'EXEC
+    'VerbCount.Add(0)    'COMMIT
+    'VerbCount.Add(0)    'CANCEL
+    'VerbCount.Add(0)    'DELETE
+    'VerbCount.Add(0)    'MERGE
+    'VerbCount.Add(0)    'SORT
+    'VerbCount.Add(0)    'RETURN
+    'VerbCount.Add(0)    'NEXT
+    '' Maths
+    'VerbCount.Add(0)    'COMPUTE
+    'VerbCount.Add(0)    'ADD
+    'VerbCount.Add(0)    'SUBTRACT
+    'VerbCount.Add(0)    'MULTIPLY
+    'VerbCount.Add(0)    'DIVIDE
+    '' Misc
+    'VerbCount.Add(0)    'MOVE
+    'VerbCount.Add(0)    'DISABLE
+    'VerbCount.Add(0)    'DISPLAY
+    'VerbCount.Add(0)    'ENABLE
+    'VerbCount.Add(0)    'END-READ
+    'VerbCount.Add(0)    'END-EVALUATE
+    'VerbCount.Add(0)    'END-IF
+    'VerbCount.Add(0)    'END-INVOKE
+    'VerbCount.Add(0)    'END-PERFORM
+    'VerbCount.Add(0)    'END-SET
+    'VerbCount.Add(0)    'ENTER
+    'VerbCount.Add(0)    'ENTRY
+    'VerbCount.Add(0)    'EXAMINE
+    'VerbCount.Add(0)    'EXECUTE
+    'VerbCount.Add(0)    'EXHIBIT
+    'VerbCount.Add(0)    'EXIT
+    'VerbCount.Add(0)    'GENERATE
+    'VerbCount.Add(0)    'INITIALIZE
+    'VerbCount.Add(0)    'INITIATE
+    'VerbCount.Add(0)    'INSPECT
+    'VerbCount.Add(0)    'INVOKE
+    'VerbCount.Add(0)    'NOTE
+    'VerbCount.Add(0)    'OTHERWISE
+    'VerbCount.Add(0)    'READY
+    'VerbCount.Add(0)    'RECEIVE
+    'VerbCount.Add(0)    'RECOVER
+    'VerbCount.Add(0)    'RELEASE
+    'VerbCount.Add(0)    'RESET
+    'VerbCount.Add(0)    'ROLLBACK
+    'VerbCount.Add(0)    'SEARCH
+    'VerbCount.Add(0)    'SEND
+    'VerbCount.Add(0)    'SERVICE
+    'VerbCount.Add(0)    'SET
+    'VerbCount.Add(0)    'START
+    'VerbCount.Add(0)    'STRING
+    'VerbCount.Add(0)    'SUPPRESS
+    'VerbCount.Add(0)    'TERMINATE
+    'VerbCount.Add(0)    'TRANSFORM
+    'VerbCount.Add(0)    'UNLOCK
+    'VerbCount.Add(0)    'UNSTRING
 
   End Sub
 End Module
