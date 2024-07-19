@@ -86,6 +86,7 @@
       <AutoGen>True</AutoGen>
       <DependentUpon>Application.myapp</DependentUpon>
     </Compile>
+    <Compile Include="My Project\BusinessRulesCOBOL.vb" />
     <Compile Include="My Project\FlowchartCOBOL.vb" />
     <Compile Include="My Project\Resources.Designer.vb">
       <AutoGen>True</AutoGen>

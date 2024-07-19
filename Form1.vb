@@ -25,6 +25,9 @@ Public Class Form1
   '***Be sure to change ProgramVersion when making changes!!!
   Dim ProgramVersion As String = "v1.3"
   'Change-History.
+  ' 2024/07/03 v1.4  hk Business Rules. Implement ExtractBR into this code.
+  '                  - Paragraph to Paragraph diagram
+  '                  - Code clean up
   ' 2024/04/15 v1.3  hk Create Batch ADDILite feature
   '                  - Optionally Create worksheet Tabs
   '                  - fixed CALLS tab content
@@ -108,7 +111,7 @@ Public Class Form1
   Dim tempNoContdJCLFileName As String = ""
   Dim tempCobFileName As String = ""
   Dim tempEZTFileName As String = ""
-  Dim Delimiter As String = ""
+  Public Delimiter As String = ""
   Dim jControl As String = ""
   Dim jLabel As String = ""
   Dim jParameters As String = ""
@@ -166,7 +169,6 @@ Public Class Form1
   Dim ListOfEasytrieveLoadAndGo As New Dictionary(Of String, String) 'array holding the names of the 'load and go' Easytrieve programs
 
   Dim swIPFile As StreamWriter = Nothing        'Instream proc file, temporary
-  'Dim swDDFile As StreamWriter = Nothing
   Dim swPumlFile As StreamWriter = Nothing
   Dim swInstreamDatasetFile As StreamWriter = Nothing
 
@@ -234,20 +236,6 @@ Public Class Form1
   Dim CntOutputFiles As Integer = 0
   Dim CntTelonFiles As Integer = 0
   Dim CntScreenMapFiles As Integer = 0
-  'Dim CntScreens As Integer = 0
-  'Dim CntDatabases As Integer = 0
-  'Dim CntTables As Integer = 0
-
-  'Dim ListOfBatchCobolPrograms As New List(Of String)
-  'Dim ListOfBatchEasytrievePrograms As New List(Of String)
-  'Dim ListOfOnlineCobolPrograms As New List(Of String)
-  'Dim ListOfOnlineEasytrievePrograms As New List(Of String)
-  'Dim ListOfUtilityPrograms As New List(Of String)
-  'Dim ListOfCalledPrograms As New List(Of String)
-  'Dim ListOfBatchJobs As New List(Of String)
-  'Dim ListOfReports As New List(Of String)
-  'Dim ListOfDataFiles As New List(Of String)
-  'Dim ListOfDatabases As New List(Of String)
 
   Dim ListOfTables As New List(Of String)
   Dim ListOfTableNames As New List(Of String)         'array to hold table names
@@ -268,7 +256,6 @@ Public Class Form1
   Dim ListOfReadIntoRecords As New List(Of String)    'array to hold Read Into Records
   Dim ListOfWriteFromRecords As New List(Of String)   'array to hold Write from records
   Dim ListOfComments As New List(Of String)           'array to hold comments from source (cobol & easytrieve)
-  Dim ListOfParagraphs As New List(Of String)         'array to hold COBOL paragraph names
   Dim ListOfCallPgms As New List(Of String)           'array to hold Call programs (sub routines)
   Dim ListOfEXECSQL As New List(Of String)            'array to hold EXEC SQL statments (cobol & easytrieve)
   Dim ListOfDB2Tables As New List(Of String)          'array to hold the DB2 Table names found
@@ -280,16 +267,15 @@ Public Class Form1
   Dim ListOfIMSMapNames As New List(Of String)        'array to hold the IMS Map Names
 
   Dim IFLevelIndex As New List(Of Integer)            'where in cWord the 'IF' is located
-  Dim VerbNames As New List(Of String)
-  Dim VerbCount As New List(Of Integer)
+  Public VerbNames As New List(Of String)
+  Public VerbCount As New List(Of Integer)
+  Public COBOLCondWords As New List(Of String)
   Dim ProgramAuthor As String = ""
   Dim ProgramWritten As String = ""
   Dim IndentLevel As Integer = -1                  'how deep the if has gone
-  Dim BRLevel As Integer = -1                       'how deep the Business Rule has gone
   Dim FirstWhenStatement As Boolean = False
-  Dim WithinReadStatement As Boolean = False
+  Public WithinReadStatement As Boolean = False
   Dim WithinReadConditionStatement As Boolean = False
-  'Dim WithinPerformWithEndPerformStatement As Boolean = False
   Dim WithinPerformCnt As Integer = 0
   Dim WithinIF As Boolean = False
   Dim pgmSeq As Integer = 0
@@ -466,9 +452,6 @@ Public Class Form1
     Delimiter = txtDelimiter.Text
   End Sub
 
-  Sub BatchADDILite()
-
-  End Sub
   Private Sub btnADDILite_Click(sender As Object, e As EventArgs) Handles btnADDILite.Click
     Dim start_time As DateTime = Now
     Dim stop_time As DateTime
@@ -671,6 +654,7 @@ Public Class Form1
       workbook.Close()
       objExcel.Quit()
     End If
+    GC.Collect()
 
     ProgressBar1.PerformStep()
     ProgressBar1.Show()
@@ -2486,10 +2470,6 @@ Public Class Form1
       listOfPrograms.Clear()
       listOfPrograms = GetListOfPrograms(exec)      'list of programs within the executable source
 
-      ' Analyze Source Statement array (SrcStmt) to get list of paragraph names
-      'ListOfParagraphs.Clear()
-      Call GetListOfParagraphs()
-
       ' Analyze Source Statement array (SrcStmt) to get list of EXEC SQL statments
       'ListOfEXECSQL.Clear()
       Call GetListOfEXECSQLorIMS()
@@ -3077,7 +3057,7 @@ Public Class Form1
 
     For x As Integer = 0 To cWord.Count - 1
       If cWord(x) <> "CALL" Then
-        x = IndexToNextVerb(x)
+        x = IndexToNextVerb(cWord, x)
         If x = -1 Then
           Exit For
         Else
@@ -3131,41 +3111,11 @@ Public Class Form1
           End If
 
       End Select
-      x = IndexToNextVerb(x)
+      x = IndexToNextVerb(cWord, x)
       If x = -1 Then
         Exit For
       End If
     Next
-  End Sub
-  Sub GetListOfParagraphs()
-    ' Scan through the COBOL Procedure division grabbing all Paragraph names which are in AreaA
-    '  and only have 1 word statements (ie no verbs).
-    'Sourcetype is global
-    'SrcStmt is global
-    'listOfPrograms is global
-    'pgm is global
-    'cWord is global, but not used here
-    For Each pgm In listOfPrograms
-      Select Case SourceType
-        Case "COBOL"
-          For stmtIndex As Integer = pgm.ProcedureDivision + 1 To SrcStmt.Count - 1
-            If SrcStmt(stmtIndex).Substring(0, 1) = "*" Then
-              Continue For
-            End If
-            If SrcStmt(stmtIndex).Length > 5 Then
-              If SrcStmt(stmtIndex).Substring(0, 4) <> Space(4) Then
-                Call GetSourceWords(SrcStmt(stmtIndex), cWord)
-                If cWord.Count = 1 Then
-                  ListOfParagraphs.Add(cWord(0))
-                End If
-              End If
-            End If
-          Next stmtIndex
-
-        Case "Easytrieve"
-      End Select
-    Next pgm
-
   End Sub
   Sub GetListOfEXECSQLorIMS()
     Dim StartIndex As Integer = -1
@@ -4018,11 +3968,14 @@ Public Class Form1
     'Call CreatePumlCOBOL(exec)
     Call CreateCobolFlowchart(SrcStmt, exec, txtOutputFoldername.Text)
 
+
     ' Create a Records/Fields spreadsheet
     Call CollectRecordsAndFieldsInfo()
 
-    ' Create the Business Rules
-    'Call CreateBRCOBOL(exec)
+    'Create a Business Rules spreadsheet file, based on the Procedure division.
+    If cbBusinessRules.Checked Then
+      Call CreateCOBOLBusinessRules(SrcStmt, exec, txtOutputFoldername.Text, pgm, ListOfFields)
+    End If
 
     ' Call CreateComponentsFile()
 
@@ -6287,7 +6240,7 @@ Public Class Form1
             WithinReadStatement = True
             Dim StartIndex = index
             Dim EndIndex As Integer = StartIndex + 1
-            Dim TogetherWords As String = StringTogetherWords(StartIndex, EndIndex)
+            Dim TogetherWords As String = StringTogetherWords(cWord, StartIndex, EndIndex)
             Dim ReadStatement As String = AddNewLineAboutEveryNthCharacters(TogetherWords, ESCAPENEWLINE, 30)
             pumlLineCnt += 1
             pumlFile.WriteLine(Indent() & ":" & ReadStatement.Trim & "/")
@@ -6296,7 +6249,7 @@ Public Class Form1
         Case "START", "FINISH"
           Dim StartIndex = index + 1
           Dim EndIndex As Integer = StartIndex
-          Dim TogetherWords As String = StringTogetherWords(StartIndex, EndIndex)
+          Dim TogetherWords As String = StringTogetherWords(cWord, StartIndex, EndIndex)
           Dim ReadStatement As String = AddNewLineAboutEveryNthCharacters(TogetherWords, ESCAPENEWLINE, 30)
           pumlLineCnt += 1
           pumlFile.WriteLine(Indent() & ":PERFORM " & ReadStatement.Trim & "|")
@@ -6359,35 +6312,13 @@ Public Class Form1
   Sub ProcessPumlSortEasytrieve(ByRef WordIndex As Integer)
     ' note that cWord is global
     Dim EndIndex As Integer = cWord.Count - 1
-    Dim TogetherWords As String = StringTogetherWords(WordIndex, (cWord.Count - 1))
+    Dim TogetherWords As String = StringTogetherWords(cWord, WordIndex, (cWord.Count - 1))
     Dim SortStatement As String = AddNewLineAboutEveryNthCharacters(TogetherWords, ESCAPENEWLINE, 30)
 
     pumlLineCnt += 2
     pumlFile.WriteLine("start")
     pumlFile.WriteLine(":" & SortStatement.Trim & ";")
     WordIndex = cWord.Count - 1
-  End Sub
-  Sub ProcessPumlIF(ByRef WordIndex As Integer, ByRef IfCnt As Integer)
-    ' find the 'IF' aka Conditional statement
-    ' Indentlevel is global
-    Dim EndIndex As Integer = 0
-    Dim Statement As String = ""
-    Call GetStatement(WordIndex, EndIndex, Statement)
-    pumlLineCnt += 1
-    pumlFile.WriteLine(Indent() & "if (" & Statement.Trim & ") then (yes)")
-    IndentLevel += 1
-    WordIndex = EndIndex
-    WithinIF = True
-    IfCnt += 1
-  End Sub
-  Sub ProcessBRIF(ByRef WordIndex As Integer, ByRef IFStatement As String)
-    ' find the 'IF' aka Conditional statement
-    ' Indentlevel is global
-    Dim EndIndex As Integer = 0
-    Call GetStatement(WordIndex, EndIndex, IFStatement) 'to next cobol verb
-    BRLevel += 1
-    WordIndex = EndIndex
-    IndentLevel += 1
   End Sub
   Sub ProcessPumlIFEasytrieve(ByRef WordIndex As Integer)
     ' find the 'IF' aka Conditional statement
@@ -6403,7 +6334,7 @@ Public Class Form1
 
   Sub ProcessPumlSelectEasytrieve(ByRef WordIndex As Integer)
     Dim EndIndex As Integer = cWord.Count - 1
-    Dim MiscStatement As String = StringTogetherWords(WordIndex, EndIndex)
+    Dim MiscStatement As String = StringTogetherWords(cWord, WordIndex, EndIndex)
     MiscStatement = AddNewLineAboutEveryNthCharacters(MiscStatement, ESCAPENEWLINE, 30)
     pumlLineCnt += 1
     pumlFile.WriteLine(Indent() & ":" & MiscStatement.Trim & ";")
@@ -6493,221 +6424,8 @@ Public Class Form1
     pumlFile.WriteLine(Indent() & ":" & Statement.Trim & "/")
     WordIndex = EndIndex
   End Sub
-  Sub ProcessPumlREAD(ByRef WordIndex As Integer)
-    'TODO: need to fix embedded READ
-    ' find the end of 'READ' statement which should be at either a verb, AT, END, NOT or END-READ
-    'cWord is global
-    'IndentLevel is global
-
-    Dim TogetherWords As String = ""
-    Dim ReadStatement As String = ""
-
-    ' Format 1:Sequential Read
-    Dim StartIndex = WordIndex
-    Dim EndIndex As Integer = -1
-    Dim NextVerb As Integer = -1
-
-    WithinReadStatement = True
-    NextVerb = IndexToNextVerb(WordIndex + 1)
-    If NextVerb = -1 Then
-      EndIndex = cWord.Count - 1
-      TogetherWords = StringTogetherWords(WordIndex, EndIndex)
-      ReadStatement = AddNewLineAboutEveryNthCharacters(TogetherWords, ESCAPENEWLINE, 30)
-      pumlLineCnt += 1
-      pumlFile.WriteLine(Indent() & ":" & ReadStatement.Trim & "/")
-      WordIndex = EndIndex
-      Exit Sub
-    End If
-
-    For EndIndex = WordIndex + 1 To NextVerb
-      Select Case cWord(EndIndex)
-        Case "AT", "END", "NOT", "END-READ"
-          WithinReadStatement = True
-          Exit For
-      End Select
-    Next
-    If EndIndex > NextVerb Then
-      EndIndex = NextVerb - 1
-    End If
-    EndIndex -= 1
-    If StartIndex < 0 Or EndIndex < 0 Then
-      LogFile.WriteLine(Date.Now & ",Problem with indexes at processPumlRead," & StartIndex & "/" & EndIndex)
-      WordIndex = cWord.Count - 1
-      Exit Sub
-    End If
-    ' just to be sure indexes are right.
-    If StartIndex < EndIndex Then
-      TogetherWords = StringTogetherWords(StartIndex, EndIndex)
-      ReadStatement = AddNewLineAboutEveryNthCharacters(TogetherWords, ESCAPENEWLINE, 30)
-      pumlLineCnt += 1
-      pumlFile.WriteLine(Indent() & ":" & ReadStatement.Trim & "/")
-      WordIndex = EndIndex
-      IndentLevel += 1
-    Else
-      LogFile.WriteLine(Date.Now & ",Problem #2 with indexes at processPumlRead," & StartIndex & "/" & EndIndex)
-      WordIndex = cWord.Count - 1
-    End If
 
 
-    ''Format 2:random retrieval
-  End Sub
-  Sub ProcessPumlInput(ByRef WordIndex As Integer)
-    ' find the file of 'READ' statement which should next next word
-    'cWord is global
-    'IndentLevel is global
-
-    ' Format 1:Sequential Read
-    WithinReadStatement = True
-    Dim StartIndex = WordIndex
-    Dim EndIndex As Integer = StartIndex + 1
-    Dim TogetherWords As String = StringTogetherWords(StartIndex, EndIndex)
-    Dim ReadStatement As String = AddNewLineAboutEveryNthCharacters(TogetherWords, ESCAPENEWLINE, 30)
-    pumlLineCnt += 1
-    pumlFile.WriteLine(Indent() & ":" & ReadStatement.Trim & "/")
-    WordIndex = EndIndex
-    IndentLevel += 1
-  End Sub
-  Sub ProcessPumlReadCondition(ByRef WordIndex As Integer)
-    If WithinReadStatement = False Then
-      Exit Sub
-    End If
-    If WordIndex + 3 > cWord.Count - 1 Then
-      Exit Sub
-    End If
-    If WithinReadConditionStatement = True Then
-      IndentLevel -= 1
-      pumlLineCnt += 1
-      pumlFile.WriteLine(Indent() & "endif")
-    End If
-    Dim ReadCondition As String = ""
-    Dim ReadConditionCount As Integer = 0
-
-    For x As Integer = WordIndex To WordIndex + 3
-      Select Case cWord(x)
-        Case "AT", "END", "NOT"
-          ReadCondition &= cWord(x) & " "
-          ReadConditionCount += 1
-      End Select
-    Next
-    WithinReadConditionStatement = True
-    pumlLineCnt += 1
-    pumlFile.WriteLine(Indent() & "if (" & ReadCondition.Trim & "?) then (yes)")
-    IndentLevel += 1
-    WordIndex += ReadConditionCount - 1
-  End Sub
-  Sub ProcessPumlENDREAD(ByRef WordIndex As Integer)
-    If WithinReadConditionStatement = True Then
-      IndentLevel -= 1
-      pumlLineCnt += 1
-      pumlFile.WriteLine(Indent() & "endif")
-      IndentLevel -= 1
-    End If
-    'IndentLevel -= 1
-    WithinReadConditionStatement = False
-    WithinReadStatement = False
-  End Sub
-  Sub ProcessPumlSEARCH(ByRef WordIndex As Integer)
-    ' for now just one big block for the search statement
-    ' find end of statement or the END-SEARCH phrase
-    Dim WordsTogether As String = ""
-    Dim EndIndex As Integer = 0
-    Dim Statement As String = ""
-    For EndIndex = WordIndex + 1 To cWord.Count - 1
-      If cWord(EndIndex) = "END-SEARCH" Then
-        WordsTogether = StringTogetherWords(WordIndex, EndIndex)
-        Statement = AddNewLineAboutEveryNthCharacters(WordsTogether, ESCAPENEWLINE, 30)
-        pumlLineCnt += 1
-        pumlFile.WriteLine(Indent() & ":" & Statement.Trim & ";")
-        WordIndex = EndIndex
-        Exit Sub
-      End If
-    Next
-    ' keyword END-SEARCH not found set to end of statement
-    EndIndex = cWord.Count - 1
-    WordsTogether = StringTogetherWords(WordIndex, EndIndex)
-    Statement = AddNewLineAboutEveryNthCharacters(WordsTogether, ESCAPENEWLINE, 30)
-    pumlLineCnt += 1
-    pumlFile.WriteLine(Indent() & ":" & Statement.Trim & ";")
-    WordIndex = EndIndex
-  End Sub
-  Sub ProcessPumlPERFORM(ByRef WordIndex As Integer)
-    ' Need to find the end of 'PERFORM' statement
-    ' From the manual------
-    ' The PERFORM statement is: 
-    ' - An out-of-line PERFORM statement When procedure-name-1 is specified. 
-    ' - An in-line PERFORM statement When procedure-name-1 is omitted.
-    '
-    ' An in-line PERFORM must be delimited by the END-PERFORM phrase. 
-    '
-    ' The in-line and out-of-line formats cannot be combined. For example, if procedure-name-1 is specified, imperative statements and the END-PERFORM 'phrase must not be specified. 
-    '
-    ' The PERFORM statement formats are: 
-    ' - Basic PERFORM 
-    ' - TIMES phrase PERFORM 
-    ' - UNTIL phrase PERFORM 
-    ' - VARYING phrase PERFORM
-    '
-    Dim EndIndex As Integer = 0
-    Dim Statement As String = ""
-
-    ' BASIC Perform
-    ' If the next phrase/word is a procedure-name there is no end-perform
-    '  even if there is a TIMES or VARYING phrase
-    If ListOfParagraphs.IndexOf(cWord(WordIndex + 1)) > -1 Then
-      Call GetStatement(WordIndex, EndIndex, Statement)
-      pumlLineCnt += 1
-      pumlFile.WriteLine(Indent() & ":" & Statement.Trim & "|")
-      WordIndex = EndIndex
-      Exit Sub
-    End If
-
-    ' looking for Conditional (UNTIL) phrase
-    For EndIndex = WordIndex + 1 To cWord.Count - 1
-      If cWord(EndIndex) = "UNTIL" Then
-        Call GetStatement(WordIndex, EndIndex, Statement)
-        pumlLineCnt += 1
-        pumlFile.WriteLine(Indent() & "while (" & Statement.Trim & ") is (true)")
-        IndentLevel += 1
-        WordIndex = EndIndex
-        'WithinPerformWithEndPerformStatement = True
-        WithinPerformCnt += 1
-        Exit Sub
-      End If
-    Next
-
-    ' looking for TIMES phrase
-    For EndIndex = WordIndex + 1 To cWord.Count - 1
-      If cWord(EndIndex) = "TIMES" Then
-        Call GetStatement(WordIndex, EndIndex, Statement)
-        pumlLineCnt += 1
-        pumlFile.WriteLine(Indent() & "while (" & Statement.Trim & ") is (true)")
-        IndentLevel += 1
-        WordIndex = EndIndex
-        'WithinPerformWithEndPerformStatement = True
-        WithinPerformCnt += 1
-        Exit Sub
-      End If
-    Next
-
-    ' all other combinations of the PERFORM should have an END-PERFORM
-    '  this is just a start of a series of commands, not really a PERFORM with a loop
-    For EndIndex = WordIndex + 1 To cWord.Count - 1
-      If cWord(EndIndex) = "END-PERFORM" Then
-        Call GetStatement(WordIndex, EndIndex, Statement)
-        pumlLineCnt += 1
-        pumlFile.WriteLine(Indent() & ":DO;")
-        IndentLevel += 1
-        WordIndex = EndIndex
-        Exit Sub
-      End If
-    Next
-
-    Call GetStatement(WordIndex, EndIndex, Statement)
-    pumlLineCnt += 1
-    pumlFile.WriteLine(Indent() & ":" & Statement.Trim & "|")
-    WordIndex = EndIndex
-
-  End Sub
   Sub ProcessPumlDO(ByRef WordIndex As Integer)
     ' find the end of 'DO' statement
     '
@@ -6723,27 +6441,6 @@ Public Class Form1
     WordIndex = EndIndex
   End Sub
 
-  'Sub ProcessPumlStart(ByRef WordIndex As Integer)
-  '  ' The end of 'PERFORM' statement is the next word
-  '  Dim EndIndex As Integer = WordIndex + 1
-  '  Dim Statement As String = ""
-  '  Call GetStatement(WordIndex, EndIndex, Statement)
-  '  pumlLineCnt += 1
-  '  pumlFile.WriteLine(Indent() & ":" & Statement.Trim & "|")
-  '  WordIndex = EndIndex
-  'End Sub
-  Sub ProcessPumlENDPERFORM()
-    IndentLevel -= 1
-    If WithinPerformCnt > 0 Then
-      pumlLineCnt += 1
-      pumlFile.WriteLine(Indent() & "endwhile (Complete)")
-      'WithinPerformWithEndPerformStatement = False
-      WithinPerformCnt -= 1
-    Else
-      pumlLineCnt += 1
-      pumlFile.WriteLine(Indent() & ":END DO;")
-    End If
-  End Sub
   Sub ProcessPumlENDDO(ByRef wordindex As Integer)
     IndentLevel -= 1
     pumlLineCnt += 1
@@ -6757,54 +6454,7 @@ Public Class Form1
     pumlFile.WriteLine(Indent() & ":" & EXECStatement.Trim & ">")
     WordIndex = EndIndex
   End Sub
-  Sub ProcessPumlDisplay(ByRef WordIndex As Integer)
-    ' find end of display being careful to handle quoted items as one
-    Dim EndIndex As Integer = 0
-    Dim WithinQuotes As Boolean = False
-    For EndIndex = WordIndex + 1 To cWord.Count - 1
-      If cWord(EndIndex).StartsWith("'") Or cWord(EndIndex).StartsWith(QUOTE) Then
-        If WithinQuotes Then
-          WithinQuotes = False
-        Else
-          WithinQuotes = True
-        End If
-        If cWord(EndIndex).Length > 1 Then
-          If cWord(EndIndex).EndsWith("'") Or cWord(EndIndex).EndsWith(QUOTE) Then
-            WithinQuotes = False
-          End If
-          If cWord(EndIndex).EndsWith("',") Or cWord(EndIndex).EndsWith(QUOTE & ",") Then
-            WithinQuotes = False
-          End If
-        End If
-        Continue For
-      End If
-      If cWord(EndIndex).EndsWith("'") Or cWord(EndIndex).EndsWith(QUOTE) Then
-        WithinQuotes = False
-        Continue For
-      End If
-      If cWord(EndIndex).EndsWith("',") Or cWord(EndIndex).EndsWith(QUOTE & ",") Then
-        WithinQuotes = False
-        Continue For
-      End If
-      If WithinQuotes = True Then
-        Continue For
-      End If
-      'is next word a verb?
-      If VerbNames.IndexOf(cWord(EndIndex)) > -1 Then
-        EndIndex -= 1
-        Exit For
-      End If
-    Next
-    If EndIndex > cWord.Count - 1 Then
-      EndIndex = cWord.Count - 1
-    End If
-    Dim WordsTogether As String = StringTogetherWords(WordIndex, EndIndex)
-    Dim Statement As String = AddNewLineAboutEveryNthCharacters(WordsTogether, ESCAPENEWLINE, 30)
-    pumlLineCnt += 1
-    pumlFile.WriteLine(Indent() & ":" & Statement.Trim & ";")
-    WordIndex = EndIndex
 
-  End Sub
   Function Indent() As String
     If IndentLevel > 0 Then
       Return Space(IndentLevel * 2)
@@ -6814,11 +6464,11 @@ Public Class Form1
   Sub GetStatement(ByRef WordIndex As Integer, ByRef EndIndex As Integer, ByRef statement As String)
     ' get the whole COBOL statement of this verb by looking for the next verb
     'Dim StartIndex As Integer = WordIndex
-    EndIndex = IndexToNextVerb(WordIndex)
+    EndIndex = IndexToNextVerb(cWord, WordIndex)
     If EndIndex = -1 Then
       EndIndex = cWord.Count - 1
     End If
-    Dim WordsTogether As String = StringTogetherWords(WordIndex, EndIndex)
+    Dim WordsTogether As String = StringTogetherWords(cWord, WordIndex, EndIndex)
     statement = AddNewLineAboutEveryNthCharacters(WordsTogether, ESCAPENEWLINE, 30)
   End Sub
   Function GetFDDetails(ByRef cWord As List(Of String)) As String
@@ -7236,6 +6886,26 @@ Public Class Form1
       srcWords.Add(word)
     End If
   End Sub
+  Function IsParagraph(ByRef CobolWords As List(Of String)) As Boolean
+    ' Identify if the stmt is a paragraph or a section name.
+    If CobolWords.Count <> 1 Then
+      If CobolWords.Count = 2 Then
+        If CobolWords(1) = "SECTION" Then
+          Return True
+        End If
+        If CobolWords(1) = "EXIT" Then      'exit is on same line as paragraph name...ugh!
+          Return True
+        End If
+      End If
+      Return False
+    End If
+    Select Case CobolWords(0)
+      Case "GOBACK", "EXIT"
+        Return False
+    End Select
+    Return True
+  End Function
+
   Function GetKeywordIndex(keyword As String) As Integer
     ' find the keyword, if any, in the list
     GetKeywordIndex = cWord.IndexOf(keyword)
@@ -7350,12 +7020,12 @@ Public Class Form1
         Exit Function
     End Select
   End Function
-  Function StringTogetherWords(ByRef StartCondIndex As Integer, ByRef EndCondIndex As Integer) As String
+  Function StringTogetherWords(CobWords As List(Of String), ByRef StartCondIndex As Integer, ByRef EndCondIndex As Integer) As String
     ' string together from startofconditionindex to endofconditionindex
     ' cWord is a global variable
     Dim wordsStrungTogether As String = ""
     For condIndex As Integer = StartCondIndex To EndCondIndex
-      wordsStrungTogether &= cWord(condIndex) & " "
+      wordsStrungTogether &= CobWords(condIndex) & " "
     Next
     StringTogetherWords = wordsStrungTogether.TrimEnd
   End Function
@@ -7366,7 +7036,7 @@ Public Class Form1
     Dim condStatementCR As String = ""
     Dim bytesMoved As Integer = 0
     If condStatement.Length = 0 Then
-      AddNewLineAboutEveryNthCharacters = ""
+      Return ""
       Exit Function
     End If
     If condStatement.Length > Size Then
@@ -7381,24 +7051,24 @@ Public Class Form1
     Else
       condStatementCR = condStatement
     End If
-    AddNewLineAboutEveryNthCharacters = condStatementCR
+    Return condStatementCR
   End Function
-  Function IndexToNextVerb(ByRef StartCondIndex As Integer) As Integer
+  Function IndexToNextVerb(cobWords As List(Of String), ByRef StartCondIndex As Integer) As Integer
     ' cWord is a global variable
     ' VerbNames is a global variable
     ' find ending index to next COBOL verb in cWord
     Dim EndCondIndex As Integer = -1
     Dim VerbIndex As Integer = -1
-    For EndCondIndex = StartCondIndex + 1 To cWord.Count - 1
+    For EndCondIndex = StartCondIndex + 1 To cobWords.Count - 1
       If WithinReadStatement = True Then
-        Select Case cWord(EndCondIndex)
+        Select Case cobWords(EndCondIndex)
           Case "AT", "END", "NOT"
             Return EndCondIndex
           Case "NEXT"
             Continue For
         End Select
       End If
-      VerbIndex = VerbNames.IndexOf(cWord(EndCondIndex))
+      VerbIndex = VerbNames.IndexOf(cobWords(EndCondIndex))
       If VerbIndex > -1 Then
         Return EndCondIndex - 1
       End If
@@ -7491,7 +7161,6 @@ Public Class Form1
     ProgramAuthor = ""
     ProgramWritten = ""
     IndentLevel = -1
-    BRLevel = -1
     FirstWhenStatement = False
     WithinReadStatement = False
     WithinReadConditionStatement = False
@@ -7502,7 +7171,11 @@ Public Class Form1
   Private Sub Form1_Load(sender As Object, e As EventArgs) Handles MyBase.Load
     Me.Text = "ADDILite " & ProgramVersion
 
-    InitDirectory = My.Settings.InitDirectory
+    InitDirectory = Environment.GetEnvironmentVariable("ADDILiteSandbox")
+    If InitDirectory Is Nothing Then
+      InitDirectory = My.Settings.InitDirectory
+    End If
+
     Dim UtilitiesFileName As String = InitDirectory & "\Utilities.txt"
     If Not File.Exists(UtilitiesFileName) Then
       MessageBox.Show("Caution! No Utilities.txt file found in folder:" & InitDirectory)
@@ -7671,6 +7344,45 @@ Public Class Form1
     VerbCount.Add(0)    'TRANSFORM
     VerbCount.Add(0)    'UNLOCK
     VerbCount.Add(0)    'UNSTRING
+
+    COBOLCondWords.Add("IF")
+    COBOLCondWords.Add("<NOT>IF")           'special for Type of Rules determination
+    COBOLCondWords.Add("<NOT><NOT>IF")           'special for Type of Rules determination
+    COBOLCondWords.Add("THEN")
+    COBOLCondWords.Add("IS")
+    COBOLCondWords.Add("THAN")
+    COBOLCondWords.Add("GREATER")
+    COBOLCondWords.Add("LESS")
+    COBOLCondWords.Add("EQUAL")
+    COBOLCondWords.Add("TO")
+    COBOLCondWords.Add("OR")
+    COBOLCondWords.Add("AND")
+    COBOLCondWords.Add("NOT")
+    COBOLCondWords.Add("=")
+    COBOLCondWords.Add("<=")
+    COBOLCondWords.Add(">=")
+    COBOLCondWords.Add(">")
+    COBOLCondWords.Add("<")
+    COBOLCondWords.Add("NUMERIC")
+    COBOLCondWords.Add("ALPHABETIC")
+    COBOLCondWords.Add("ALPHABETIC-LOWER")
+    COBOLCondWords.Add("ALPHABETIC-UPPER")
+    COBOLCondWords.Add("POSITIVE")
+    COBOLCondWords.Add("NEGATIVE")
+    COBOLCondWords.Add("DBCS")
+    COBOLCondWords.Add("KANJI")
+    COBOLCondWords.Add("SPACES")
+    COBOLCondWords.Add("SPACE")
+    COBOLCondWords.Add("ZEROES")
+    COBOLCondWords.Add("ZERO")
+    COBOLCondWords.Add("ZEROS")
+    COBOLCondWords.Add("HIGH-VALUES")
+    COBOLCondWords.Add("LOW-VALUES")
+    COBOLCondWords.Add("ADDRESS")
+    COBOLCondWords.Add("OF")
+    COBOLCondWords.Add("NULL")
+    COBOLCondWords.Add("NULLS")
+    COBOLCondWords.Add("SELF")
 
   End Sub
 
