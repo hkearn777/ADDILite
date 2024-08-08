@@ -61,6 +61,7 @@ Partial Class Form1
         Me.cbScreenMaps = New System.Windows.Forms.CheckBox()
         Me.cbLibraries = New System.Windows.Forms.CheckBox()
         Me.cbBusinessRules = New System.Windows.Forms.CheckBox()
+        Me.cbDataCom = New System.Windows.Forms.CheckBox()
         Me.SuspendLayout()
         '
         'btnJCLJOBFilename
@@ -389,7 +390,7 @@ Partial Class Form1
         Me.cbCalls.AutoSize = True
         Me.cbCalls.Checked = True
         Me.cbCalls.CheckState = System.Windows.Forms.CheckState.Checked
-        Me.cbCalls.Location = New System.Drawing.Point(1027, 317)
+        Me.cbCalls.Location = New System.Drawing.Point(1136, 317)
         Me.cbCalls.Name = "cbCalls"
         Me.cbCalls.Size = New System.Drawing.Size(69, 24)
         Me.cbCalls.TabIndex = 40
@@ -432,11 +433,24 @@ Partial Class Form1
         Me.cbBusinessRules.Text = "Business Rules"
         Me.cbBusinessRules.UseVisualStyleBackColor = True
         '
+        'cbDataCom
+        '
+        Me.cbDataCom.AutoSize = True
+        Me.cbDataCom.Checked = True
+        Me.cbDataCom.CheckState = System.Windows.Forms.CheckState.Checked
+        Me.cbDataCom.Location = New System.Drawing.Point(1027, 318)
+        Me.cbDataCom.Name = "cbDataCom"
+        Me.cbDataCom.Size = New System.Drawing.Size(103, 24)
+        Me.cbDataCom.TabIndex = 44
+        Me.cbDataCom.Text = "DataCom"
+        Me.cbDataCom.UseVisualStyleBackColor = True
+        '
         'Form1
         '
         Me.AutoScaleDimensions = New System.Drawing.SizeF(9.0!, 20.0!)
         Me.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font
         Me.ClientSize = New System.Drawing.Size(1279, 652)
+        Me.Controls.Add(Me.cbDataCom)
         Me.Controls.Add(Me.cbBusinessRules)
         Me.Controls.Add(Me.cbLibraries)
         Me.Controls.Add(Me.cbScreenMaps)
@@ -520,4 +534,5 @@ Partial Class Form1
     Friend WithEvents cbScreenMaps As CheckBox
     Friend WithEvents cbLibraries As CheckBox
     Friend WithEvents cbBusinessRules As CheckBox
+    Friend WithEvents cbDataCom As CheckBox
 End Class
