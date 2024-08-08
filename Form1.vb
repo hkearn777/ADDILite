@@ -2,6 +2,7 @@
 Imports System.Reflection
 Imports System.Text.RegularExpressions
 Imports System.Windows.Forms.VisualStyles.VisualStyleElement
+Imports System.Windows.Forms.VisualStyles.VisualStyleElement.ListView
 Imports Microsoft.Office
 Imports Microsoft.Office.Interop
 Imports Microsoft.Office.Interop.Excel
@@ -23,8 +24,9 @@ Public Class Form1
   ' - PlantUml for creating flowchart
   '
   '***Be sure to change ProgramVersion when making changes!!!
-  Dim ProgramVersion As String = "v1.3"
+  Dim ProgramVersion As String = "v1.5"
   'Change-History.
+  ' 2024/07/24 v1.5  hk Support CA-Datacom databases
   ' 2024/07/03 v1.4  hk Business Rules. Implement ExtractBR into this code.
   '                  - Paragraph to Paragraph diagram
   '                  - Code clean up
@@ -159,6 +161,7 @@ Public Class Form1
   Dim EXECSQLRow As Integer = 0
   Dim EXECCICSRow As Integer = 0
   Dim IMSRow As Integer = 0
+  Dim DataComRow As Integer = 0
   Dim ScreenMapRow As Integer = 0
   Dim CallsRow As Integer = 0
   Dim StatsRow As Integer = 0
@@ -195,6 +198,7 @@ Public Class Form1
   Dim EXECSQLWorksheet As Microsoft.Office.Interop.Excel.Worksheet
   Dim EXECCICSWorksheet As Microsoft.Office.Interop.Excel.Worksheet
   Dim IMSWorksheet As Microsoft.Office.Interop.Excel.Worksheet
+  Dim DataComWorksheet As Microsoft.Office.Interop.Excel.Worksheet
   Dim ScreenMapWorksheet As Microsoft.Office.Interop.Excel.Worksheet
   Dim CallsWorksheet As Microsoft.Office.Interop.Excel.Worksheet
   Dim StatsWorksheet As Microsoft.Office.Interop.Excel.Worksheet
@@ -211,6 +215,7 @@ Public Class Form1
   Dim rngEXECSQL As Microsoft.Office.Interop.Excel.Range
   Dim rngEXECCICS As Microsoft.Office.Interop.Excel.Range
   Dim rngIMS As Microsoft.Office.Interop.Excel.Range
+  Dim rngDataCom As Microsoft.Office.Interop.Excel.Range
   Dim rngCalls As Microsoft.Office.Interop.Excel.Range
   Dim rngScreenMap As Microsoft.Office.Interop.Excel.Range
   Dim rngStats As Microsoft.Office.Interop.Excel.Range
@@ -265,6 +270,7 @@ Public Class Form1
   Dim ListOfCICSMapNames As New List(Of String)       'array to hold the CICS Map names (cobol)
   Dim ListofScreenMaps As New List(Of String)            'array to hold the IMS Map names and literals
   Dim ListOfIMSMapNames As New List(Of String)        'array to hold the IMS Map Names
+  Dim ListOfDataComs As New List(Of String)           'array to hold the DataComms
 
   Dim IFLevelIndex As New List(Of Integer)            'where in cWord the 'IF' is located
   Public VerbNames As New List(Of String)
@@ -634,6 +640,7 @@ Public Class Form1
     Call CreateEXECSQLTab()
     Call CreateEXECCICSTab()
     Call CreateIMSTab()
+    Call CreateDataComTab()
     Call CreateCallsTab()
     Call CreateIMSPSPNamesFile()
     Call CreateScreenMapTab()
@@ -2476,6 +2483,10 @@ Public Class Form1
 
       Call GetListOfCICSMapNames()
 
+      If cbDataCom.Checked Then
+        Call GetListOfDataComs()
+      End If
+
       If pgm.ProcedureDivision = -1 Then
         LogFile.WriteLine(Date.Now & ",Source is not complete," & exec)
         Continue For
@@ -2951,7 +2962,6 @@ Public Class Form1
     pgm.ProgramId = ""
     pgm.SourceId = exec
 
-    '**here*** how does programid get populated???
 
     Select Case SourceType
       Case "COBOL"
@@ -3710,6 +3720,337 @@ Public Class Form1
                       MapName & Delimiter &
                       NotFound)
   End Sub
+  Sub GetListOfDataComs()
+    Dim DataComStatement As String = ""
+    Dim DataViewName As String = ""
+    Dim DataViewName_2 As String = ""
+    Dim WhereClause As String = ""
+    Dim BatchOnly As String = ""
+    Dim execCnt As Integer = 0
+    Dim NotFound As String = ""
+    ' are there any 'DATACOM SECTION. ' statements at all?
+    If SrcStmt.IndexOf("DATACOM SECTION. ") = -1 Then
+      Exit Sub
+    End If
+    ' 
+    For Each pgm In listOfPrograms
+      Select Case SourceType
+        Case "COBOL"
+          ' Check each Procedure Divisions for DATACOM commands
+          For stmtIndex As Integer = pgm.ProcedureDivision + 1 To pgm.EndProgram
+
+            Call GetSourceWords(SrcStmt(stmtIndex), cWord)
+
+            DataComStatement = ""
+            DataViewName = ""
+            DataViewName_2 = ""
+            WhereClause = ""
+
+            Select Case cWord(0)
+              Case "ENTER-DATACOM-DB"
+                BatchOnly = "BATCH"
+              Case "FOR"
+                DataComStatement = cWord(0)
+                DataViewName = GetForDataViewName(cWord)
+                WhereClause = GetForWhereClause(cWord)
+              Case "READ", "OBTAIN"
+                Call GetReadDataviewAndWhereClause(cWord, DataComStatement, DataViewName, WhereClause)
+              Case "WRITE", "REWRITE", "DELETE"
+                DataComStatement = cWord(0)
+                DataViewName = cWord(1)
+              Case "LOCATE"
+                Call GetLocateDataviewAndWhereClause(cWord, DataComStatement, DataViewName, WhereClause, DataViewName_2)
+            End Select
+
+            If DataComStatement.Length > 0 Then
+              ListOfDataComs.Add(pgm.SourceId & Delimiter &
+                                 pgm.ProgramId & Delimiter &
+                                 DataComStatement & Delimiter &
+                                 DataViewName & Delimiter &
+                                 WhereClause & Delimiter &
+                                 DataViewName_2)
+            End If
+          Next
+      End Select
+    Next
+
+  End Sub
+  Function GetForDataViewName(ByRef cWord As List(Of String)) As String
+    ' look for the Dataview Name value as stated in the FOR statement
+    Select Case cWord(1)
+      Case "EACH"
+        Return cWord(2)
+      Case "FIRST", "ANY"
+        Return cWord(3)
+      Case Else
+        Return cWord(1)
+    End Select
+  End Function
+  Function GetForWhereClause(ByRef cWord As List(Of String)) As String
+    ' look for the WHERE clause as stated in the FOR statement
+    Dim WhereIndex As Integer = cWord.IndexOf("WHERE")
+    If WhereIndex = -1 Then
+      Return ""
+    End If
+    Dim ForWhereClause As String = "WHERE "
+    For x As Integer = WhereIndex + 1 To cWord.Count - 1
+      Select Case cWord(x)
+        Case "HOLD", "COUNT", "ORDER", "WHEN"
+          Exit For
+        Case Else
+          ForWhereClause &= cWord(x) & " "
+      End Select
+    Next
+    Return ForWhereClause.Trim
+  End Function
+  Sub GetReadDataviewAndWhereClause(ByRef cWord As List(Of String),
+                                    ByRef DataComStatement As String,
+                                    ByRef DataViewName As String,
+                                    ByRef WhereClause As String)
+    ' This will return the DataComStatement, DataviewName, and WhereClause, if any, for the READ statement.
+
+    ' POSSIBLE FLAW!!! the READ NEXT could be a VSAM file or other non-DATACOM file.
+
+    ' For Datacom; the read statement has 7 formats.
+    ' 1. Read [AND HOLD] WHERE, 2. Read Next, 3. Read Next Within Range, 4. Read Physical, 5. Read Previous,
+    ' 6. Read Sequential, 7. Read Within Range WHERE
+
+    Dim WhereIndex As Integer = cWord.IndexOf("WHERE")
+    ' Handle NO where clause (could be formats 2-7)
+    If WhereIndex = -1 Then
+      Call GetReadNoWhereClauses(cWord, DataComStatement, DataViewName)
+      Exit Sub
+    End If
+
+    ' Determine the DatacomStatement and the DataViewName
+    ' Format 1. READ [AND HOLD] dataview-name
+    '              WHERE ...conditions...
+    ' Format 7. READ [AND HOLD] dataview-name WITHIN RANGE
+    '              WHERE ...conditions...
+    If cWord.Count >= 6 Then
+      If (cWord(0) = "READ" Or cWord(0) = "OBTAIN") Then
+        DataComStatement = cWord(0) & " "
+        If cWord(1) = "AND" And cWord(2) = "HOLD" Then
+          DataComStatement &= cWord(1) & Space(1) & cWord(2) & Space(1)
+          DataViewName = cWord(3)
+        End If
+        If cWord(2) = "WITHIN" And cWord(3) = "RANGE" Then
+          DataComStatement &= cWord(2) & Space(1) & cWord(3) & Space(1)
+          DataViewName = cWord(1)
+        End If
+      End If
+    End If
+
+    ' string together the WHERE clause 
+    For x As Integer = WhereIndex To cWord.Count - 1
+      WhereClause &= Space(1) & cWord(x)
+    Next
+  End Sub
+  Sub GetReadNoWhereClauses(ByRef cWord As List(Of String),
+                                 ByRef DatacomStatement As String,
+                                 ByRef DataViewName As String)
+    ' no WHERE clause, check for formats 2-6.
+    ' OBTAIN is a synonym for READ
+    ' Format 2 READ NEXT [DUPLICATE] [AND HOLD] dataview-name
+    If (cWord(0) = "READ" Or cWord(0) = "OBTAIN") And cWord(1) = "NEXT" Then
+      If cWord.Count >= 6 Then
+        If cWord(2) = "DUPLICATE" And cWord(3) = "AND" And cWord(4) = "HOLD" Then
+          DatacomStatement = cWord(0) & " NEXT DUPLICATE AND HOLD"
+          DataViewName = cWord(5)
+          Exit Sub
+        End If
+      End If
+      If cWord.Count >= 5 Then
+        If cWord(2) = "AND" And cWord(3) = "HOLD" Then
+          DatacomStatement = cWord(0) & " NEXT AND HOLD"
+          DataViewName = cWord(4)
+          Exit Sub
+        End If
+      End If
+      If cWord.Count >= 4 Then
+        If cWord(2) = "DUPLICATE" Then
+          DatacomStatement = cWord(0) & " NEXT DUPLICATE"
+          DataViewName = cWord(3)
+          Exit Sub
+        End If
+      End If
+    End If
+
+    ' Format 3 READ [AND HOLD] NEXT dataview-name WITHIN RANGE
+    If cWord.Count >= 7 Then
+      If (cWord(0) = "READ" Or cWord(0) = "OBTAIN") And cWord(1) = "AND" And cWord(2) = "HOLD" And
+        cWord(3) = "NEXT" And cWord(5) = "WITHIN" And cWord(6) = "RANGE" Then
+        DatacomStatement = cWord(0) & " AND HOLD NEXT WITHIN RANGE"
+        DataViewName = cWord(4)
+        Exit Sub
+      End If
+    End If
+    If cWord.Count >= 5 Then
+      If (cWord(0) = "READ" Or cWord(0) = "OBTAIN") And cWord(1) = "NEXT" And
+        cWord(3) = "WITHIN" And cWord(4) = "RANGE" Then
+        DatacomStatement = cWord(0) & " NEXT WITHIN RANGE"
+        DataViewName = cWord(2)
+        Exit Sub
+      End If
+    End If
+    '
+    ' Format 4 READ PHYSICAL dataview-name
+    If cWord.Count >= 3 Then
+      If (cWord(0) = "READ" Or cWord(0) = "OBTAIN") And cWord(1) = "PHYSICAL" Then
+        DatacomStatement = cWord(0) & Space(1) & cWord(1)
+        DataViewName = cWord(2)
+        Exit Sub
+      End If
+    End If
+    '
+    ' Format 5 READ [AND HOLD] PREVIOUS dataview-name
+    If cWord.Count >= 5 Then
+      If (cWord(0) = "READ" Or cWord(0) = "OBTAIN") And cWord(1) = "AND" And cWord(2) = "HOLD" And
+        cWord(3) = "PHYSICAL" Then
+        DatacomStatement = cWord(0) & Space(1) & cWord(1) & Space(1) & cWord(2) & Space(1) & cWord(3)
+        DataViewName = cWord(4)
+        Exit Sub
+      End If
+    End If
+    If cWord.Count >= 3 Then
+      If (cWord(0) = "READ" Or cWord(0) = "OBTAIN") And cWord(1) = "PREVIOUS" Then
+        DatacomStatement = cWord(0) & Space(1) & cWord(1)
+        DataViewName = cWord(2)
+        Exit Sub
+      End If
+    End If
+    '
+    ' Format 6 READ SEQUENTIAL dataview-name
+    If cWord.Count >= 3 Then
+      If (cWord(0) = "READ" Or cWord(0) = "OBTAIN") And cWord(1) = "SEQUENTIAL" Then
+        DatacomStatement = cWord(0) & Space(1) & cWord(1)
+        DataViewName = cWord(2)
+        Exit Sub
+      End If
+    End If
+
+    DatacomStatement = "Unknown:"
+    For Each unknownWord In cWord
+      DatacomStatement &= unknownWord & Space(1)
+    Next
+    DataViewName = "Unknown"
+
+  End Sub
+
+  Sub GetLocateDataviewAndWhereClause(ByRef cWord As List(Of String),
+                                    ByRef DataComStatement As String,
+                                    ByRef DataViewName As String,
+                                    ByRef WhereClause As String,
+                                    ByRef DataViewName_2 As String)
+    ' This will return the DataComStatement, DataviewName, and WhereClause, if any, for the LOCATE statement.
+    ' The LOCATE statement has 8 formats.
+    ' 1. Locate At, 2, Locate Next, 3. Locate Next Within Range, 4. Locate Physical, 5. Locate Previous,
+    ' 6. Locate Sequential Where, 7. Locate Where, 8. Locate Within Range Where
+
+    Dim WhereIndex As Integer = cWord.IndexOf("WHERE")
+    ' Handle NO where clause (could be formats 1-5)
+    If WhereIndex = -1 Then
+      Call GetLocateNoWhereClauses(cWord, DataComStatement, DataViewName, DataViewName_2)
+      Exit Sub
+    End If
+
+    ' Determine the DatacomStatement and the DataViewName
+    ' Format 6. LOCATE SEQUENTIAL dataview-name
+    '              WHERE ...conditions...
+    ' Format 7. LOCATE dataview-name 
+    '              WHERE ...conditions...
+    ' Format 8. LOCATE dataview-name WITHIN RANGE
+    '              WHERE ...conditions
+    If cWord.Count >= 4 Then
+      If cWord(0) = "LOCATE" Then
+        DataComStatement = cWord(0)
+        Select Case True
+          Case cWord(1) = "SEQUENTIAL"
+            DataComStatement &= Space(1) & cWord(1)
+            DataViewName = cWord(2)
+          Case cWord(2) = "WITHIN" And cWord(3) = "RANGE"
+            DataComStatement &= Space(1) & cWord(2) & Space(1) & cWord(3)
+            DataViewName = cWord(1)
+          Case Else
+            DataViewName = cWord(1)
+        End Select
+      End If
+    End If
+
+    ' string together the WHERE clause 
+    For x As Integer = WhereIndex To cWord.Count - 1
+      WhereClause &= Space(1) & cWord(x)
+    Next
+  End Sub
+  Sub GetLocateNoWhereClauses(ByRef cWord As List(Of String),
+                                 ByRef DatacomStatement As String,
+                                 ByRef DataViewName As String,
+                                 ByRef DataViewName_2 As String)
+    ' no WHERE clause, check for formats 1-5.
+    ' Format 1 LOCATE dataview-name-1 AT dataview-name-2
+    If cWord(0) = "LOCATE" And cWord(2) = "AT" Then
+      DatacomStatement = cWord(0) & Space(1) & cWord(2)
+      DataViewName = cWord(1)
+      DataViewName_2 = cWord(3)
+      Exit Sub
+    End If
+    ' Format 2 LOCATE [NEXT] [DUPLICATE]
+    '                        [KEY      ] dataview-name
+    If cWord(0) = "LOCATE" And cWord(1) = "NEXT" And
+         (cWord(2) = "DUPLICATE" Or cWord(2) = "DUP" Or cWord(2) = "KEY") Then
+      DatacomStatement = cWord(0) & Space(1) & cWord(1) & Space(1) & cWord(2)
+      DataViewName = cWord(3)
+      Exit Sub
+    End If
+    If cWord(0) = "LOCATE" And
+         (cWord(1) = "DUPLICATE" Or cWord(1) = "DUP" Or cWord(1) = "KEY") Then
+      DatacomStatement = cWord(0) & Space(1) & cWord(1)
+      DataViewName = cWord(2)
+      Exit Sub
+    End If
+
+    ' Format 3 LOCATE NEXT dataview-name WITHIN RANGE
+    If cWord.Count = 5 Then
+      If cWord(0) = "LOCATE" And cWord(1) = "NEXT" And
+        cWord(3) = "WITHIN" And cWord(4) = "RANGE" Then
+        DatacomStatement = cWord(0) & Space(1) & cWord(1) & Space(1) & cWord(3) & Space(1) & cWord(4)
+        DataViewName = cWord(2)
+        Exit Sub
+      End If
+    End If
+    '
+    ' Format 4 LOCATE PHYSICAL [AND HOLD] dataview-name
+    If cWord(0) = "LOCATE" And cWord(1) = "PHYSICAL" Then
+      If cWord.Count = 5 Then
+        If cWord(2) = "AND" And cWord(3) = "HOLD" Then
+          DatacomStatement = cWord(0) & Space(1) & cWord(1) & Space(1) & cWord(2) & Space(1) & cWord(3)
+          DataViewName = cWord(4)
+          Exit Sub
+        End If
+      Else
+        DatacomStatement = cWord(0) & Space(1) & cWord(1)
+        DataViewName = cWord(2)
+        Exit Sub
+      End If
+    End If
+    '
+    ' Format 5 LOCATE PREVIOUS dataview-name
+    If cWord.Count = 3 Then
+      If cWord(0) = "LOCATE" And cWord(1) = "PREVIOUS" Then
+        DatacomStatement = cWord(0) & Space(1) & cWord(1)
+        DataViewName = cWord(2)
+        Exit Sub
+      End If
+    End If
+    '
+
+    DatacomStatement = "Unknown:"
+    For Each unknownWord In cWord
+      DatacomStatement &= unknownWord & Space(1)
+    Next
+    DataViewName = "Unknown"
+
+  End Sub
   Function GetVariableNameValue(ByRef VariableName As String) As String
     ' search for variable name and get the VALUE clause, if any
     ' if no VALUE clause found; return "NOVALUE"
@@ -4204,6 +4545,8 @@ Public Class Form1
             ListOfRecordNames = GetListOfRecordNamesFILE(FileName, FileNameIndex)
           Case "SQL"
             ListOfRecordNames = GetListOfRecordNamesSQL(FileName, FileNameIndex)
+          Case "Dataview"
+            ListOfRecordNames = GetListOfRecordNamesDataview(FileName, FileNameIndex)
         End Select
         For Each recname In ListOfRecordNames
           RecordNameFields = recname.Split(Delimiter)
@@ -4581,6 +4924,20 @@ Public Class Form1
       objExcel.ErrorCheckingOptions.NumberAsText = False
     End If
 
+    If DataComRow > 0 Then
+      Dim row As Integer = LTrim(Str(DataComRow))
+      ' Format the Sheet - first row bold the columns
+      rngDataCom = DataComWorksheet.Range("A1:F1")
+      rngDataCom.Font.Bold = True
+      ' data area autofit all columns
+      rngDataCom = DataComWorksheet.Range("A1:F" & row)
+      workbook.Worksheets("DataCom").Range("A1").AutoFilter
+      rngDataCom.Columns.AutoFit()
+      rngDataCom.VerticalAlignment = Excel.XlVAlign.xlVAlignTop
+      ' ignore error flag that numbers being loaded into a text field
+      objExcel.ErrorCheckingOptions.NumberAsText = False
+    End If
+
     If CallsRow > 0 Then
       Dim row As Integer = LTrim(Str(CallsRow))
       ' Format the Sheet - first row bold the columns
@@ -4858,6 +5215,47 @@ Public Class Form1
     Next
 
     lblProcessingWorksheet.Text = "Processing IMS worksheet for DBDNames Complete"
+
+  End Sub
+  Sub CreateDataComTab()
+    ' Create the DataComs worksheet tab.
+    ' This worksheet will hold Datacom details such as Datacom, DataView-Name and WHERE statements
+    '
+    If Not cbDataCom.Checked Then
+      Exit Sub
+    End If
+
+    If DataComRow = 0 Then
+      DataComWorksheet = workbook.Sheets.Add(After:=workbook.Worksheets(workbook.Worksheets.Count))
+      DataComWorksheet.Name = "DataCom"
+      ' Write the Column Headers row
+      DataComWorksheet.Range("A1").Value = "Source"
+      DataComWorksheet.Range("B1").Value = "ProgramID"
+      DataComWorksheet.Range("C1").Value = "DataCommand"
+      DataComWorksheet.Range("D1").Value = "DataView"
+      DataComWorksheet.Range("E1").Value = "Where"
+      DataComWorksheet.Range("F1").Value = "DataView AT"
+      DataComRow = 1
+      DataComWorksheet.Activate()
+      DataComWorksheet.Application.ActiveWindow.SplitRow = 1
+      DataComWorksheet.Application.ActiveWindow.FreezePanes = True
+    End If
+
+    lblProcessingWorksheet.Text = "Processing DataComs: " & ListOfDataComs.Count
+
+    For DataComIndx As Integer = 0 To ListOfDataComs.Count - 1
+      Dim DataComColumns As String() = ListOfDataComs(DataComIndx).Split(Delimiter)
+      DataComRow += 1
+      Dim row As String = LTrim(Str(DataComRow))
+      DataComWorksheet.Range("A" & row).Value = DataComColumns(0)       'Source
+      DataComWorksheet.Range("B" & row).Value = DataComColumns(1)       'ProgramId
+      DataComWorksheet.Range("C" & row).Value = DataComColumns(2)       'DataCommand
+      DataComWorksheet.Range("D" & row).Value = DataComColumns(3)       'DataView
+      DataComWorksheet.Range("E" & row).Value = DataComColumns(4)       'Where
+      DataComWorksheet.Range("F" & row).Value = DataComColumns(5)       'DataView AT
+    Next
+
+    lblProcessingWorksheet.Text = "Processing Datacom worksheet Complete"
 
   End Sub
   Sub CreateCallsTab()
@@ -5404,14 +5802,14 @@ Public Class Form1
         'IFLevelIndex.Clear()
 
         For wordIndex = 0 To cWord.Count - 1
-            Select Case cWord(wordIndex)
-              Case "JOB"
-                Call ProcessPumlParagraphEasytrieve(ParagraphStarted)
-                Exit For
+          Select Case cWord(wordIndex)
+            Case "JOB"
+              Call ProcessPumlParagraphEasytrieve(ParagraphStarted)
+              Exit For
             'Case "INPUT"
             '  Call ProcessPumlInput(wordIndex)
-              Case "SORT"
-                Call ProcessPumlSortEasytrieve(wordIndex)
+            Case "SORT"
+              Call ProcessPumlSortEasytrieve(wordIndex)
             'Case "START"
             '  Call ProcessPumlStart(wordIndex)
             'Case "FINISH"
@@ -5423,19 +5821,19 @@ Public Class Form1
               Call ProcessPumlIFEasytrieve(wordIndex)
 
             Case "ELSE", "OTHERWISE"
-                Call ProcessPumlELSE(wordIndex)
+              Call ProcessPumlELSE(wordIndex)
             Case "END-IF", "END-IF."
               IndentLevel -= 1
-                pumlLineCnt += 1
-                pumlFile.WriteLine(Indent() & "endif")
+              pumlLineCnt += 1
+              pumlFile.WriteLine(Indent() & "endif")
             Case "CASE"
               Call ProcessPumlCase(wordIndex)
             Case "END-CASE", "END-CASE."
               IndentLevel -= 1
-                pumlLineCnt += 2
-                pumlFile.WriteLine(Indent() & "endif")
-                IndentLevel -= 1
-                pumlFile.WriteLine(Indent() & ":END-CASE;")
+              pumlLineCnt += 2
+              pumlFile.WriteLine(Indent() & "endif")
+              IndentLevel -= 1
+              pumlFile.WriteLine(Indent() & ":END-CASE;")
             Case "WHEN"
               Call ProcessPumlWHEN(wordIndex)
             Case "END-EVALUATE"
@@ -5444,81 +5842,81 @@ Public Class Form1
               Call ProcessPumlPerformEasytrieve(wordIndex)
             'Case "END-PERFORM"
             '  Call ProcessPumlENDPERFORM(wordIndex)
-              Case "DO"
-                Call ProcessPumlDO(wordIndex)
+            Case "DO"
+              Call ProcessPumlDO(wordIndex)
             Case "END-DO", "END-DO."
               Call ProcessPumlENDDO(wordIndex)
-              Case "COMPUTE"
-                Call ProcessPumlCOMPUTE(wordIndex)
+            Case "COMPUTE"
+              Call ProcessPumlCOMPUTE(wordIndex)
             'Case "READ"
             '  Call ProcessPumlREAD(wordIndex)
-              Case "GET"
-                Call ProcessPumlGET(wordIndex)
+            Case "GET"
+              Call ProcessPumlGET(wordIndex)
             'Case "AT", "END", "NOT"
             '  ProcessPumlReadCondition(wordIndex)
             'Case "END-READ"
             '  ProcessPumlENDREAD(wordIndex)
-              Case "GO"
-                Call ProcessPumlGOTO(wordIndex)
-              Case "EXEC", "DLI"
-                ProcessPumlEXEC(wordIndex)
-              Case "END-PROC", "END-PROC."
-                IndentLevel = 1
-                pumlLineCnt += 3
-                pumlFile.WriteLine("end")
-                pumlFile.WriteLine("}")
-                pumlFile.WriteLine("")
-                ParagraphStarted = False
+            Case "GO"
+              Call ProcessPumlGOTO(wordIndex)
+            Case "EXEC", "DLI"
+              ProcessPumlEXEC(wordIndex)
+            Case "END-PROC", "END-PROC."
+              IndentLevel = 1
+              pumlLineCnt += 3
+              pumlFile.WriteLine("end")
+              pumlFile.WriteLine("}")
+              pumlFile.WriteLine("")
+              ParagraphStarted = False
             'Case "STOP"
             '  pumlLineCnt += 2
             '  pumlFile.WriteLine(Indent() & "stop")
             '  ParagraphStarted = False
-              Case "REPORT"
-                Call ProcessPumlParagraphEasytrieve(ParagraphStarted)
-                Exit For
-              Case "PROC"
-                Call ProcessPumlParagraphEasytrieve(ParagraphStarted)
-                Exit For
-              Case "SEQUENCE"
-                wordIndex = cWord.Count - 1
-              Case "CONTROL"
-                wordIndex = cWord.Count - 1
-              Case "TITLE"
-                If cWord.Count >= 5 Then
-                  If cWord(1) = "1" Or cWord(1) = "2" Then
-                    pumlLineCnt += 1
-                    pumlFile.WriteLine(Indent() & ":" & cWord(4).Replace("'", "").Replace("*", "").Trim & ";")
-                  End If
+            Case "REPORT"
+              Call ProcessPumlParagraphEasytrieve(ParagraphStarted)
+              Exit For
+            Case "PROC"
+              Call ProcessPumlParagraphEasytrieve(ParagraphStarted)
+              Exit For
+            Case "SEQUENCE"
+              wordIndex = cWord.Count - 1
+            Case "CONTROL"
+              wordIndex = cWord.Count - 1
+            Case "TITLE"
+              If cWord.Count >= 5 Then
+                If cWord(1) = "1" Or cWord(1) = "2" Then
+                  pumlLineCnt += 1
+                  pumlFile.WriteLine(Indent() & ":" & cWord(4).Replace("'", "").Replace("*", "").Trim & ";")
                 End If
-                wordIndex = cWord.Count - 1
-              Case "LINE"
-                wordIndex = cWord.Count - 1
-              Case Else
-                If cWord(wordIndex).IndexOf(".") > -1 Then
-                  If cWord.Count > 1 Then
-                    If cWord(wordIndex + 1) = "PROC" Then
-                      theProcName = cWord(wordIndex)
-                      Continue For
-                    End If
-                  Else
-                    ' a paragraph name but the PROC word is not on same line; store the paragraph name
-                    '  for when we eventually get that proc name
+              End If
+              wordIndex = cWord.Count - 1
+            Case "LINE"
+              wordIndex = cWord.Count - 1
+            Case Else
+              If cWord(wordIndex).IndexOf(".") > -1 Then
+                If cWord.Count > 1 Then
+                  If cWord(wordIndex + 1) = "PROC" Then
                     theProcName = cWord(wordIndex)
-                    'ParagraphStarted = True
+                    Continue For
                   End If
                 Else
-                  Dim EndIndex As Integer = 0
-                  Dim MiscStatement As String = ""
-                  Call GetStatement(wordIndex, EndIndex, MiscStatement)
-                  pumlLineCnt += 1
-                  pumlFile.WriteLine(Indent() & ":" & MiscStatement.Trim & ";")
-                  wordIndex = EndIndex
+                  ' a paragraph name but the PROC word is not on same line; store the paragraph name
+                  '  for when we eventually get that proc name
+                  theProcName = cWord(wordIndex)
+                  'ParagraphStarted = True
                 End If
-            End Select
-          Next wordIndex
-        Next index
+              Else
+                Dim EndIndex As Integer = 0
+                Dim MiscStatement As String = ""
+                Call GetStatement(wordIndex, EndIndex, MiscStatement)
+                pumlLineCnt += 1
+                pumlFile.WriteLine(Indent() & ":" & MiscStatement.Trim & ";")
+                wordIndex = EndIndex
+              End If
+          End Select
+        Next wordIndex
+      Next index
 
-        If ParagraphStarted = True Then
+      If ParagraphStarted = True Then
         IndentLevel = 1
         pumlLineCnt += 2
         pumlFile.WriteLine("end")
@@ -5536,10 +5934,11 @@ Public Class Form1
 
   Function GetListOfFiles() As List(Of String)
     ' Scan through the stmt array looking for all data "FILES"
-    '   A "FILE" is something stated with either "SELECT" or "EXEC SQL DECLARE"
-    '  Store also the DDName and indicate if FILE or SQL
+    '   A "FILE" is something stated with either "SELECT" or "EXEC SQL DECLARE" or "DATA-VIEW"
+    '  Store also the DDName and indicate if FILE or SQL or Dataview
     ' in format of: Filename,DDName,FILE,index
     '           or: Tablename,,SQL,index
+    '           or: Dataview-name,DATA-BASE-IDENTIFICATION,Dataview,index
     Dim statement As String = ""
     Dim FDFileName As String = ""
     Dim srcWords As New List(Of String)
@@ -5555,6 +5954,7 @@ Public Class Form1
             End If
           End If
           Call GetSourceWords(statement, srcWords)
+
           If srcWords(0) = "SELECT" Then
             Dim file_name_1 As String = ""
             If srcWords(1).Equals("OPTIONAL") Then
@@ -5595,6 +5995,23 @@ Public Class Form1
                             LTrim(Str(stmtIndex)))
             Continue For
           End If
+
+          If srcWords(0) = "DATA-VIEW" Then
+            Dim dvDBIdIndex As Integer = srcWords.IndexOf("DATA-BASE-IDENTIFICATION")
+            If dvDBIdIndex > -1 Then
+              If srcWords(dvDBIdIndex + 1) = "IS" Then
+                DDName = srcWords(dvDBIdIndex + 2)
+              Else
+                DDName = srcWords(dvDBIdIndex + 1)
+              End If
+            End If
+            ListOfFiles.Add(srcWords(1) & Delimiter &
+                            DDName & Delimiter &
+                            "Dataview" & Delimiter &
+                            LTrim(Str(stmtIndex)))
+            Continue For
+          End If
+
           If srcWords.Count >= 5 Then
             If srcWords(0) = "EXEC" And
               srcWords(1) = "SQL" And
@@ -5849,7 +6266,7 @@ Public Class Form1
         'Easytrieve does not have the concept of multiple records
     End Select
 
-    GetListOfRecordNamesFILE = ListOfRecordNames
+    Return ListOfRecordNames
   End Function
   Function GetListOfRecordNamesSQL(ByRef filename As String, ByRef DeclareIndex As Integer) As List(Of String)
     ' starting at the DeclareIndex look for the record name (01 level)
@@ -5878,6 +6295,66 @@ Public Class Form1
       End If
     Next
     GetListOfRecordNamesSQL = SQLRecordNames
+  End Function
+  Function GetListOfRecordNamesDataview(ByRef filename As String, ByRef FileIndex As Integer) As List(Of String)
+    ' Use the Data Division index to search Stmt array to get the Data-View record details,
+    ' The next stmt record is the "01-Level" with the Dataview's record name.
+    ' Could be multiple 01-levels(record names) for this file
+    ' 0-Record Name,
+    ' 1-index to record name
+    ' 2-Level (DV)
+    ' 3-OpenMode (I,O)
+    ' 4-recfm (F)
+    ' 5-minlrecl 
+    ' 6-maxlrecl
+    ' 7-organization (DataCom/DB)
+    ' Note. variables with 'DV' mean DataView.
+    Dim DVWords As New List(Of String)
+    Dim ListOfRecordNames As New List(Of String)
+    Dim DVDetails As String()
+    Dim DVDetail As String = ""
+    Dim DVDetaillevel As String = ""
+    Dim DVDetailOpenMode As String = ""
+    Dim DVDetailrecfm As String = ""
+    Dim DVDetailminLrecl As String = ""
+    Dim DVDetailmaxLrecl As String = ""
+    Dim DVDetailorganization As String = ""
+    Dim recname As String = ""
+    Dim DVRecName As String = ""      'first DV 01-level (Workarea)
+    Dim recIndex As Integer = 0
+    For DVIndex As Integer = pgm.DataDivision To pgm.ProcedureDivision
+      Call GetSourceWords(SrcStmt(DVIndex), DVWords)
+      If DVWords.Count >= 1 Then
+        If DVWords(0) = "DATA-VIEW" Then
+          If DVWords(1) = filename Then
+            Call GetSourceWords(SrcStmt(FileIndex), cWord)
+            DVDetail = GetDVDetails(cWord)
+            DVDetails = DVDetail.Split(Delimiter)
+            DVDetaillevel = DVDetails(4)
+            DVDetailOpenMode = DVDetails(5)
+            DVDetailrecfm = DVDetails(6)
+            DVDetailminLrecl = DVDetails(7)
+            DVDetailmaxLrecl = DVDetails(8)
+            DVDetailorganization = DVDetails(10)
+            recname = DVDetails(11)
+            recIndex = DVIndex
+            Exit For
+          End If
+        End If
+      End If
+    Next
+
+    ListOfReadIntoRecords.Add(recname)
+    ListOfRecordNames.Add(recname & Delimiter &
+                          LTrim(Str(recIndex)) & Delimiter &
+                          "DV" & Delimiter &
+                          "I-O" & Delimiter &
+                          "F" & Delimiter &
+                          LTrim(Str(0)) & Delimiter &
+                          "0" & Delimiter &
+                          "Datacom/DB")
+
+    Return ListOfRecordNames
   End Function
   Function GetRecordLength(ByRef StartOf01 As Integer) As Integer
     ' To get the record length we get the start and ending index of the 01-level
@@ -6630,6 +7107,79 @@ Public Class Form1
                          organization)
 
   End Function
+  Function GetDVDetails(ByRef cWord As List(Of String)) As String
+    ' Analyze a File's Definition based on the Data-View syntax
+    ' COBOL
+    '   For the given Data-view (provided in cWord).
+    '   This parses the Data-View statements.
+    ' Easytrieve
+    '   NOT APPLICABLE (I HOPE)
+    ' Returns a string separated with delimiter:
+    '0-FileNameOnly (Source)
+    '1-pgmName (pgmid)
+    '2-pgmSeq
+    '3-file_name_1 (dataview-name)
+    '4-Level  (DV)
+    '5-OpenMode (Input/Output)
+    '6-RecordingMode (Fixed) RECFM
+    '7-RecordSizeMinimum
+    '8-RecordSizeMaximum
+    '9-assignment_name_1 (DBID)
+    '10-organization (Datacom/DB)
+    '11-record name (workarea)
+
+    Dim file_name_1 As String = ""
+    Dim level As String = "DV"
+    Dim OpenMode As String = ""
+    Dim RecordingMode As String = "F"
+    Dim RecordSizeMinimum As Integer = 0
+    Dim RecordSizeMaximum As Integer = 0
+    Dim assignment_name_1 As String = ""
+    Dim organization As String = ""
+    Dim RecordName As String = ""
+    Dim fdWords As New List(Of String)
+
+    For dvIndex As Integer = 0 To cWord.Count - 1
+      Select Case cWord(dvIndex)
+        Case "DATA-VIEW"
+          file_name_1 = cWord(dvIndex + 1)
+        Case "WORKAREA"
+          RecordName = cWord(dvIndex + 1)
+        Case "ORGANIZATION"
+          If cWord(dvIndex + 1) = "IS" Then
+            organization = cWord(dvIndex + 2)
+          Else
+            organization = cWord(dvIndex + 1)
+          End If
+        Case "DATA-BASE-IDENTIFICATION"
+          If cWord(dvIndex + 1) = "IS" Then
+            assignment_name_1 = cWord(dvIndex + 2)
+          Else
+            assignment_name_1 = cWord(dvIndex + 1)
+          End If
+        Case "ACCESSED"
+        Case "ELEMENTS"
+        Case "FILE"
+      End Select
+    Next
+
+    OpenMode = "I-O"
+
+    Return (FileNameOnly & Delimiter &
+                         pgmName & Delimiter &
+                         LTrim(Str(pgmSeq)) & Delimiter &
+                         file_name_1 & Delimiter &
+                         level & Delimiter &
+                         RTrim(OpenMode) & Delimiter &
+                         RecordingMode & Delimiter &
+                         LTrim(Str(RecordSizeMinimum)) & Delimiter &
+                         LTrim(Str(RecordSizeMaximum)) & Delimiter &
+                         assignment_name_1 & Delimiter &
+                         organization & Delimiter &
+                         RecordName)
+
+  End Function
+
   Sub AddToFDClause(ByRef NameOfClause As String,
                     ByRef fdIndex As Integer,
                          ByRef fdClauseIndex As Integer,
