@@ -24,8 +24,9 @@ Public Class Form1
   ' - PlantUml for creating flowchart
   '
   '***Be sure to change ProgramVersion when making changes!!!
-  Dim ProgramVersion As String = "v1.5"
+  Dim ProgramVersion As String = "v1.6"
   'Change-History.
+  ' 2024/08/09 v1.6  hk Initial Directory settings on start up (especially new install)
   ' 2024/07/24 v1.5  hk Support CA-Datacom databases
   ' 2024/07/03 v1.4  hk Business Rules. Implement ExtractBR into this code.
   '                  - Paragraph to Paragraph diagram
@@ -459,9 +460,28 @@ Public Class Form1
   End Sub
 
   Private Sub btnADDILite_Click(sender As Object, e As EventArgs) Handles btnADDILite.Click
+
     Dim start_time As DateTime = Now
     Dim stop_time As DateTime
     Dim elapsed_time As TimeSpan
+
+    ' set up the base files Utilities and ControlLibrarues
+    Dim UtilitiesFileName As String = InitDirectory & "\Utilities.txt"
+    If Not File.Exists(UtilitiesFileName) Then
+      MessageBox.Show("Caution! No Utilities.txt file found in folder:" & vbCrLf & InitDirectory)
+      Utilities(0) = ""
+    Else
+      Utilities = File.ReadAllLines(UtilitiesFileName)
+    End If
+
+    Dim ControlLibrariesFileName As String = InitDirectory & "\ControlLibraries.txt"
+    If Not File.Exists(ControlLibrariesFileName) Then
+      MessageBox.Show("Caution! No ControlLibraries.txt file found in folder:" & vbCrLf & InitDirectory)
+      ControlLibraries(0) = ""
+    Else
+      ControlLibraries = File.ReadAllLines(ControlLibrariesFileName)
+    End If
+
 
     DirectoryName = Path.GetDirectoryName(txtJCLJOBFolderName.Text)
 
@@ -7718,30 +7738,59 @@ Public Class Form1
     pgmSeq = 0
 
   End Sub
+  Function GetInitialDirectory(ByRef InitDirectory As String) As String
+    ' get/set the initial directory (aka Sandbox) which holds all the application directories
+    ' This should come from the My.Settings.InitDirectory properties, if path is set
+
+    ' try the properties default value (my folder as distributed)
+    InitDirectory = My.Settings.InitDirectory
+    If Directory.Exists(InitDirectory) Then
+      Return InitDirectory
+    End If
+    MessageBox.Show("Initial Directory of Sandbox not found:" &
+                    vbCrLf & InitDirectory & vbCrLf &
+                    "You will now be prompted to locate a Sandbox directory")
+
+    ' prompt for and select an initial directory name;
+    '  you can create the initial folder here
+    '    but you cannot create a sandbox directory
+    Dim bfd_InitFolder As New FolderBrowserDialog With
+      {
+        .Description = "Enter Directory where Sandbox folders will reside",
+        .ShowNewFolderButton = True,
+        .SelectedPath = Environment.SpecialFolder.Personal
+      }
+    Select Case bfd_InitFolder.ShowDialog
+      Case DialogResult.OK
+        InitDirectory = bfd_InitFolder.SelectedPath
+        My.Settings.InitDirectory = InitDirectory                             'also now save to distributed 
+        My.Settings.Save()
+        lblInitDirectory.Text = InitDirectory
+        Return InitDirectory
+    End Select
+    MessageBox.Show("Initial Directory set cancelled. Try Sandbox button.")
+    Return ""
+  End Function
+  Private Sub btnSandbox_Click(sender As Object, e As EventArgs) Handles btnSandbox.Click
+    'this will set / get the sandbox folder. This is the home directory of sandbox folders (applications)
+
+    Dim bfd_InitFolder As New FolderBrowserDialog With {
+            .Description = "Enter Directory where Sandbox folders will reside",
+            .ShowNewFolderButton = True,
+            .SelectedPath = InitDirectory
+            }
+    Select Case bfd_InitFolder.ShowDialog
+      Case DialogResult.OK
+        InitDirectory = bfd_InitFolder.SelectedPath
+        My.Settings.InitDirectory = InitDirectory                             'also now save
+        My.Settings.Save()
+        lblInitDirectory.Text = InitDirectory
+      Case DialogResult.Cancel
+        Exit Sub
+    End Select
+  End Sub
   Private Sub Form1_Load(sender As Object, e As EventArgs) Handles MyBase.Load
     Me.Text = "ADDILite " & ProgramVersion
-
-    InitDirectory = Environment.GetEnvironmentVariable("ADDILiteSandbox")
-    If InitDirectory Is Nothing Then
-      InitDirectory = My.Settings.InitDirectory
-    End If
-
-    Dim UtilitiesFileName As String = InitDirectory & "\Utilities.txt"
-    If Not File.Exists(UtilitiesFileName) Then
-      MessageBox.Show("Caution! No Utilities.txt file found in folder:" & InitDirectory)
-      Utilities(0) = ""
-    Else
-      Utilities = File.ReadAllLines(UtilitiesFileName)
-    End If
-
-    Dim ControlLibrariesFileName As String = InitDirectory & "\ControlLibraries.txt"
-    If Not File.Exists(ControlLibrariesFileName) Then
-      MessageBox.Show("Caution! No ControlLibraries.txt file found in folder:" & InitDirectory)
-      ControlLibraries(0) = ""
-    Else
-      ControlLibraries = File.ReadAllLines(ControlLibrariesFileName)
-    End If
-
 
     ' This area is the COBOL Verb array with counts. 
     ' **BE SURE TO KEEP VerbNames AND VerbCount ARRAYS IN SYNC!!!**
@@ -7933,6 +7982,23 @@ Public Class Form1
     COBOLCondWords.Add("NULL")
     COBOLCondWords.Add("NULLS")
     COBOLCondWords.Add("SELF")
+
+    ' need to set up the Initial directory value.
+    ' if we couldn't set initial directory program will have terminated
+    InitDirectory = GetInitialDirectory(InitDirectory)
+    lblInitDirectory.Text = InitDirectory
+    If InitDirectory.Length = 0 Then
+      Exit Sub
+    End If
+
+    btnADDILite.Enabled = True
+    btnDataGatheringForm.Enabled = True
+    btnJCLJOBFilename.Enabled = True
+    btnSourceFolder.Enabled = True
+    btnTelonFolder.Enabled = True
+    btnScreenMapsFolder.Enabled = True
+    btnOutputFolder.Enabled = True
+
 
   End Sub
 

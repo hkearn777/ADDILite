@@ -3,7 +3,7 @@
   <Profiles />
   <Settings>
     <Setting Name="InitDirectory" Type="System.String" Scope="User">
-      <Value Profile="(Default)">C:\Users\906074897\Documents\All Projects\State of Illinois\Sandbox</Value>
+      <Value Profile="(Default)">notset</Value>
     </Setting>
   </Settings>
 </SettingsFile>
