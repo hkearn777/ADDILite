@@ -62,10 +62,13 @@ Partial Class Form1
         Me.cbLibraries = New System.Windows.Forms.CheckBox()
         Me.cbBusinessRules = New System.Windows.Forms.CheckBox()
         Me.cbDataCom = New System.Windows.Forms.CheckBox()
+        Me.btnSandbox = New System.Windows.Forms.Button()
+        Me.lblInitDirectory = New System.Windows.Forms.Label()
         Me.SuspendLayout()
         '
         'btnJCLJOBFilename
         '
+        Me.btnJCLJOBFilename.Enabled = False
         Me.btnJCLJOBFilename.Location = New System.Drawing.Point(13, 66)
         Me.btnJCLJOBFilename.Name = "btnJCLJOBFilename"
         Me.btnJCLJOBFilename.Size = New System.Drawing.Size(247, 40)
@@ -82,6 +85,7 @@ Partial Class Form1
         '
         'btnSourceFolder
         '
+        Me.btnSourceFolder.Enabled = False
         Me.btnSourceFolder.Location = New System.Drawing.Point(13, 114)
         Me.btnSourceFolder.Name = "btnSourceFolder"
         Me.btnSourceFolder.Size = New System.Drawing.Size(248, 40)
@@ -102,6 +106,7 @@ Partial Class Form1
         '
         'btnOutputFolder
         '
+        Me.btnOutputFolder.Enabled = False
         Me.btnOutputFolder.Location = New System.Drawing.Point(15, 262)
         Me.btnOutputFolder.Name = "btnOutputFolder"
         Me.btnOutputFolder.Size = New System.Drawing.Size(248, 40)
@@ -118,6 +123,7 @@ Partial Class Form1
         '
         'btnADDILite
         '
+        Me.btnADDILite.Enabled = False
         Me.btnADDILite.Location = New System.Drawing.Point(1055, 363)
         Me.btnADDILite.Name = "btnADDILite"
         Me.btnADDILite.Size = New System.Drawing.Size(96, 53)
@@ -165,7 +171,7 @@ Partial Class Form1
         '
         'ProgressBar1
         '
-        Me.ProgressBar1.Location = New System.Drawing.Point(12, 607)
+        Me.ProgressBar1.Location = New System.Drawing.Point(12, 550)
         Me.ProgressBar1.Name = "ProgressBar1"
         Me.ProgressBar1.Size = New System.Drawing.Size(1248, 30)
         Me.ProgressBar1.TabIndex = 16
@@ -183,7 +189,7 @@ Partial Class Form1
         'lblProcessingJob
         '
         Me.lblProcessingJob.AutoSize = True
-        Me.lblProcessingJob.Location = New System.Drawing.Point(38, 488)
+        Me.lblProcessingJob.Location = New System.Drawing.Point(16, 451)
         Me.lblProcessingJob.Name = "lblProcessingJob"
         Me.lblProcessingJob.Size = New System.Drawing.Size(121, 20)
         Me.lblProcessingJob.TabIndex = 19
@@ -192,7 +198,7 @@ Partial Class Form1
         'lblProcessingSource
         '
         Me.lblProcessingSource.AutoSize = True
-        Me.lblProcessingSource.Location = New System.Drawing.Point(56, 519)
+        Me.lblProcessingSource.Location = New System.Drawing.Point(34, 482)
         Me.lblProcessingSource.Name = "lblProcessingSource"
         Me.lblProcessingSource.Size = New System.Drawing.Size(146, 20)
         Me.lblProcessingSource.TabIndex = 20
@@ -201,7 +207,7 @@ Partial Class Form1
         'lblProcessingWorksheet
         '
         Me.lblProcessingWorksheet.AutoSize = True
-        Me.lblProcessingWorksheet.Location = New System.Drawing.Point(75, 552)
+        Me.lblProcessingWorksheet.Location = New System.Drawing.Point(53, 515)
         Me.lblProcessingWorksheet.Name = "lblProcessingWorksheet"
         Me.lblProcessingWorksheet.Size = New System.Drawing.Size(176, 20)
         Me.lblProcessingWorksheet.TabIndex = 21
@@ -219,6 +225,7 @@ Partial Class Form1
         '
         'btnDataGatheringForm
         '
+        Me.btnDataGatheringForm.Enabled = False
         Me.btnDataGatheringForm.Location = New System.Drawing.Point(13, 13)
         Me.btnDataGatheringForm.Name = "btnDataGatheringForm"
         Me.btnDataGatheringForm.Size = New System.Drawing.Size(247, 42)
@@ -235,6 +242,7 @@ Partial Class Form1
         '
         'btnTelonFolder
         '
+        Me.btnTelonFolder.Enabled = False
         Me.btnTelonFolder.Location = New System.Drawing.Point(14, 163)
         Me.btnTelonFolder.Name = "btnTelonFolder"
         Me.btnTelonFolder.Size = New System.Drawing.Size(248, 40)
@@ -251,6 +259,7 @@ Partial Class Form1
         '
         'btnScreenMapsFolder
         '
+        Me.btnScreenMapsFolder.Enabled = False
         Me.btnScreenMapsFolder.Location = New System.Drawing.Point(16, 213)
         Me.btnScreenMapsFolder.Name = "btnScreenMapsFolder"
         Me.btnScreenMapsFolder.Size = New System.Drawing.Size(248, 40)
@@ -445,11 +454,31 @@ Partial Class Form1
         Me.cbDataCom.Text = "DataCom"
         Me.cbDataCom.UseVisualStyleBackColor = True
         '
+        'btnSandbox
+        '
+        Me.btnSandbox.Location = New System.Drawing.Point(12, 604)
+        Me.btnSandbox.Name = "btnSandbox"
+        Me.btnSandbox.Size = New System.Drawing.Size(98, 36)
+        Me.btnSandbox.TabIndex = 45
+        Me.btnSandbox.Text = "Sandbox"
+        Me.btnSandbox.UseVisualStyleBackColor = True
+        '
+        'lblInitDirectory
+        '
+        Me.lblInitDirectory.AutoSize = True
+        Me.lblInitDirectory.Location = New System.Drawing.Point(116, 612)
+        Me.lblInitDirectory.Name = "lblInitDirectory"
+        Me.lblInitDirectory.Size = New System.Drawing.Size(94, 20)
+        Me.lblInitDirectory.TabIndex = 46
+        Me.lblInitDirectory.Text = "InitDirectory"
+        '
         'Form1
         '
         Me.AutoScaleDimensions = New System.Drawing.SizeF(9.0!, 20.0!)
         Me.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font
         Me.ClientSize = New System.Drawing.Size(1279, 652)
+        Me.Controls.Add(Me.lblInitDirectory)
+        Me.Controls.Add(Me.btnSandbox)
         Me.Controls.Add(Me.cbDataCom)
         Me.Controls.Add(Me.cbBusinessRules)
         Me.Controls.Add(Me.cbLibraries)
@@ -535,4 +564,6 @@ Partial Class Form1
     Friend WithEvents cbLibraries As CheckBox
     Friend WithEvents cbBusinessRules As CheckBox
     Friend WithEvents cbDataCom As CheckBox
+    Friend WithEvents btnSandbox As Button
+    Friend WithEvents lblInitDirectory As Label
 End Class
