@@ -12,6 +12,7 @@ Module BusinessRulesCOBOL
   '   So if we encounter an 'IF' at first word of a statement this begins a Business Rule
   'Written by Howard Kearney
   'Change-history.
+  '  2024-08-21 v1.6.1 Clear Arrays
   '  2024-07-03 hk New code
   '  2024-07-04 hk removed blank lines from business rules
 
@@ -47,6 +48,12 @@ Module BusinessRulesCOBOL
   Public Sub CreateCOBOLBusinessRules(ByRef srcStmt As List(Of String), ByRef exec As String, ByRef outFolder As String,
                                       ByRef pgm As ProgramInfo,
                                       ByRef ListOfFields As List(Of String))
+    ' Initialize Arrays
+    ListOfRules.Clear()
+    ListOfParagraphs.Clear()
+    ListOfFieldNames.Clear()
+    ListOfBusinessFieldNames.Clear()
+    ParagraphReferenceList.Clear()
 
     ' get just the FieldNames (this is used for Rules type determination)
     For Each entry In ListOfFields
