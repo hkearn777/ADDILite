@@ -24,8 +24,9 @@ Public Class Form1
   ' - PlantUml for creating flowchart
   '
   '***Be sure to change ProgramVersion when making changes!!!
-  Dim ProgramVersion As String = "v1.6"
+  Dim ProgramVersion As String = "v1.6.1"
   'Change-History.
+  ' 2024/09/13 v1.6.2 hk Fix Parsing of DD SYSOUT
   ' 2024/08/09 v1.6  hk Initial Directory settings on start up (especially new install)
   ' 2024/07/24 v1.5  hk Support CA-Datacom databases
   ' 2024/07/03 v1.4  hk Business Rules. Implement ExtractBR into this code.
@@ -1813,8 +1814,13 @@ Public Class Form1
 
       Case Else
         Dim sysoutParms As String() = sysout.Replace("(", "").Replace(")", "").Split(",")
-        sysout = "SYSOUT=" & sysoutParms(0)
-        reportID = sysoutParms(1)
+        If sysoutParms.Count <= 1 Then
+          sysout = "SYSOUT=" & sysout
+        Else
+          sysout = "SYSOUT=" & sysoutParms(0)
+          reportID = sysoutParms(1)
+        End If
+
     End Select
 
     ' Adjust for GDG type of datasets; remove the numeric (ie, (0) or (+1))
