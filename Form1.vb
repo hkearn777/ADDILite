@@ -24,8 +24,9 @@ Public Class Form1
   ' - PlantUml for creating flowchart
   '
   '***Be sure to change ProgramVersion when making changes!!!
-  Dim ProgramVersion As String = "v1.6.1"
+  Dim ProgramVersion As String = "v1.6.3"
   'Change-History.
+  ' 2024/09/13 v1.6.3 hk Fix symbolic for program name
   ' 2024/09/13 v1.6.2 hk Fix Parsing of DD SYSOUT
   ' 2024/08/09 v1.6  hk Initial Directory settings on start up (especially new install)
   ' 2024/07/24 v1.5  hk Support CA-Datacom databases
@@ -1029,6 +1030,7 @@ Public Class Form1
     '
     Dim jclWithProc As New List(Of String)
     Dim ListOfInstreamProcs As New List(Of String)
+    Dim JCLParms As New Dictionary(Of String, String)
     Dim Command As Integer = 1
     Dim Label As Integer = 0
     Dim Parameters As Integer = 2
@@ -1038,6 +1040,7 @@ Public Class Form1
       jclWithProc.Add(JCLLine)
       Select Case JCLStatement(Command)
         Case "PROC"
+          'this must be an instream PROC
           jclProcName = JCLStatement(Label).Substring(2)
           ListOfInstreamProcs.Add(jclProcName)
         Case "EXEC"
@@ -1045,7 +1048,10 @@ Public Class Form1
             Exit Select
           End If
           'this must be an exec <procname>, so need to load this proc here, IF not an instream proc
+          '-need to save the JCL Parms for later substitue.
+          '**HERE**
           Dim ParmValues As String() = JCLStatement(Parameters).Split(",")
+          JCLParms = LoadJCLParms(ParmValues)
           Dim ProcName As String = txtSourceFolderName.Text & "\" & ParmValues(0)
           If ListOfInstreamProcs.IndexOf(ParmValues(0)) = -1 Then
             Dim PROC As New List(Of String)
@@ -1054,7 +1060,9 @@ Public Class Form1
               LogFile.WriteLine(Now.Date & ",Missing PROC member," & ParmValues(0))
             End If
             For Each ProcLine In PROC
-              jclWithProc.Add("++" & ProcLine.Substring(2))
+              Dim ProcLinePlus As String = "++" & ProcLine.Substring(2) 'replace leading // with ++ to indicate PROC
+              Dim ProcLineParmsUpdated As String = ReplaceProcLineParms(ProcLinePlus, JCLParms)
+              jclWithProc.Add(ProcLineParmsUpdated)
             Next
           End If
       End Select
@@ -1063,6 +1071,41 @@ Public Class Form1
     jclStmt.AddRange(jclWithProc)
     LoadJCLStatementsToArray = jclStmt.Count
 
+  End Function
+  Function LoadJCLParms(ByRef ParmValues As String()) As Dictionary(Of String, String)
+    'Load the JCL Parameters the JCL Line. The first occurence is not a parameter but a PROC name
+    'i.e., DSNEXEC3,PGMLIB='PRD1.LINKLIB',PROGRAM=INSB610,SYSTEM=DSN 
+    '   would return 3 key/value entries of PGMLIB, PROGRAM, and SYSTEM
+    Dim theJCLParms As New Dictionary(Of String, String)
+    For x As Integer = 1 To ParmValues.Count - 1 Step 1
+      Dim KeyAndValue As String() = ParmValues(x).Split("=")
+      Dim theKey As String = "&" & KeyAndValue(0)   'place an & in front of keyword for later searching
+      Dim theValue As String = KeyAndValue(1)
+      If Not theJCLParms.ContainsKey(theKey) Then
+        theJCLParms.Add(theKey, theValue)
+      End If
+    Next
+    Return theJCLParms
+  End Function
+  Function ReplaceProcLineParms(ByRef ProcLinePlus As String, ByRef JCLParms As Dictionary(Of String, String)) As String
+    ' replace the keyword=&parmValue or keyword='&parmValue' with the value from the JCLParms array
+    ' split by delimiter/pipe
+    Dim PROCStatement As String() = ProcLinePlus.Split(Delimiter)
+    If PROCStatement.Count <= 2 Then
+      Return ProcLinePlus
+    End If
+
+    ' do not substitue for PROC or COMMENT lines
+    Select Case PROCStatement(1)
+      Case "PROC", "COMMENT"
+        Return ProcLinePlus
+    End Select
+    ' substitute jcl parameter
+    Dim theLineReplaced As String = ProcLinePlus
+    For Each pair As KeyValuePair(Of String, String) In JCLParms
+      theLineReplaced = theLineReplaced.Replace(pair.Key, pair.Value) 'replace the value for the keyword
+    Next
+    Return theLineReplaced
   End Function
   Function ReformatJCLAndLoadToArray(ByRef Jobfile As String) As List(Of String)
     ' Load a JCL file to an Array which has
@@ -1542,7 +1585,7 @@ Public Class Form1
           ListOfSymbolics = LoadSymbolics(jParameters)
         Case "PEND"
         Case "EXEC"
-          Call ProcessEXEC(True)
+          Call ProcessEXEC(True, ListOfSymbolics)
         Case "DD"
           Call ProcessDD(ListOfSymbolics)          'this writes the _dd.csv record
         Case "SET"
@@ -1588,7 +1631,7 @@ Public Class Form1
 
     Call CreateJobsTab()
 
-    Call CreateJobCommentsTab()
+    Call CreateJobCommentsTab(ListOfSymbolics)
 
     Call CreateProgramsTab()
     Call CreateFilesTab()
@@ -1658,10 +1701,11 @@ Public Class Form1
       End If
     Next
   End Sub
-  Sub ProcessEXEC(ByVal NeedSourceType As Boolean)
+  Sub ProcessEXEC(ByVal NeedSourceType As Boolean, ListOfSymbolics As List(Of String))
     ' The "EXEC" control is for either PROC or a PGM
     ' For PROC it could be "EXEC <procname>" or "EXEC PROC=<procname"
     ' For PGM it is "EXEC PGM=<pgmname>"
+    ' For PGM replace program name if it is a symbolic
 
     ' If by this time we haven't gotten a JOBname then set the JOB details
     If jobName.Length = 0 Then
@@ -1687,6 +1731,11 @@ Public Class Form1
       End If
       pgmName = ""
       Exit Sub
+    End If
+
+    ' If pgmName is a symbolic name; replace it
+    If pgmName.Substring(0, 1) = "&" Then
+      pgmName = ReplaceSymbolics(pgmName, ListOfSymbolics)
     End If
 
     If stepName = "" Or stepName = "*" Then
@@ -2209,7 +2258,7 @@ Public Class Form1
     JobsWorksheet.Range("O" & row).Value = JobTyprun
 
   End Sub
-  Sub CreateJobCommentsTab()
+  Sub CreateJobCommentsTab(ListOfSymbolics As List(Of String))
     ' Build the JobComments Worksheet.
     ' Process through the JclStmt array. Look for an 'EXEC' command and then process backwards
     '  to find the first of the comments. Then string (vbLF) comments together and write
@@ -2242,7 +2291,7 @@ Public Class Form1
       Select Case jControl
         Case "EXEC"
           stepName = jLabel
-          Call ProcessEXEC(False)
+          Call ProcessEXEC(False, ListOfSymbolics)
           Dim comment As String = ""
           For pgmIndex As Integer = index - 1 To 0 Step -1
             Call GetLabelControlParms(jclStmt(pgmIndex), jLabel, jControl, jParameters)
