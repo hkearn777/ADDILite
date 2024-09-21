@@ -29,6 +29,7 @@ Public Class Form1
   ' 2024/09/20 v1.6.4 hk Reference PROCs in PROC folder instead of Sources
   '                      - remove ENDIF jcl 
   '                      - remove JCL INCLUDE statements
+  '                      - remove PROC= on PROC names
   ' 2024/09/13 v1.6.3 hk Fix symbolic for program name
   ' 2024/09/13 v1.6.2 hk Fix Parsing of DD SYSOUT
   ' 2024/08/09 v1.6  hk Initial Directory settings on start up (especially new install)
@@ -1093,6 +1094,9 @@ Public Class Form1
     'Load the JCL Parameters the JCL Line. The first occurence is not a parameter but a PROC name
     'i.e., DSNEXEC3,PGMLIB='PRD1.LINKLIB',PROGRAM=INSB610,SYSTEM=DSN 
     '   would return 3 key/value entries of PGMLIB, PROGRAM, and SYSTEM
+    ' if the first ParmValues string has PROC= then remove it. 
+    ParmValues(0) = ParmValues(0).Replace("PROC=", "")
+    ' split the out the parmvalues to key/value pairs
     Dim theJCLParms As New Dictionary(Of String, String)
     For x As Integer = 1 To ParmValues.Count - 1 Step 1
       Dim KeyAndValue As String() = ParmValues(x).Split("=")
