@@ -30,6 +30,9 @@ Public Class Form1
   '                      - remove ENDIF jcl 
   '                      - remove JCL INCLUDE statements
   '                      - remove PROC= on PROC names
+  '                      - assign ++ to JCL lines that are part of PROC
+  '                      - clear PROCNAME as needed
+  '                      - uppercase callpgms name and Account to INTERNAL
   ' 2024/09/13 v1.6.3 hk Fix symbolic for program name
   ' 2024/09/13 v1.6.2 hk Fix Parsing of DD SYSOUT
   ' 2024/08/09 v1.6  hk Initial Directory settings on start up (especially new install)
@@ -534,7 +537,7 @@ Public Class Form1
     End If
 
     ' remove previous CallPgms.jcl Job
-    CallPgmsFileName = txtJCLJOBFolderName.Text & "\CallPgms.jcl"
+    CallPgmsFileName = txtJCLJOBFolderName.Text & "\CALLPGMS.JCL"
     ' Prepare for CallPgms file which holds all the Called Programs within the sources
     '  this file is processed as the last "JOB"
     ' Remove previous CallPgms.jcl file
@@ -918,7 +921,7 @@ Public Class Form1
     ' create the CallPgms.jcl file
     swCallPgmsFile = New StreamWriter(CallPgmsFileName, False)
     Dim pgmCnt As Integer = 0
-    swCallPgmsFile.WriteLine("//CALLPGMS JOB '0000','SUBROUTINES CALLED'")
+    swCallPgmsFile.WriteLine("//CALLPGMS JOB 'INTERNAL','SUBROUTINES CALLED'")
     For Each callpgm In ListOfCallPgms
       pgmCnt += 1
       Dim execs As String() = callpgm.Split(Delimiter)
@@ -1053,21 +1056,33 @@ Public Class Form1
     Dim Label As Integer = 0
     Dim Parameters As Integer = 2
     Dim jclProcName As String = ""
+    Dim JustLoadedPROC As Boolean = False
     For Each JCLLine In JCL
       Dim JCLStatement As String() = JCLLine.Split(Delimiter)
+      ' IF JCLline is not PROC or EXEC but is part of a previous PROC load
+      '   then put '++' to indicate part of the PROC
+      '   else leave as is
+      If JustLoadedPROC Then
+        Select Case JCLStatement(Command)
+          Case "DD", "COMMENT"
+            Mid(JCLLine, 1, 2) = "++"
+        End Select
+      End If
+      ' Place the JCLLine to the array 
       jclWithProc.Add(JCLLine)
       Select Case JCLStatement(Command)
         Case "PROC"
           'this must be an instream PROC
           jclProcName = JCLStatement(Label).Substring(2)
           ListOfInstreamProcs.Add(jclProcName)
+          JustLoadedPROC = False
         Case "EXEC"
+          JustLoadedPROC = False
           If JCLStatement(Parameters).Substring(0, 4) = "PGM=" Then
             Exit Select
           End If
           'this must be an exec <procname>, so need to load this proc here, IF not an instream proc
           '-need to save the JCL Parms for later substitue.
-          '**HERE**
           Dim ParmValues As String() = JCLStatement(Parameters).Split(",")
           JCLParms = LoadJCLParms(ParmValues)
           Dim ProcName As String = txtProcFolderName.Text & "\" & ParmValues(0)
@@ -1081,6 +1096,7 @@ Public Class Form1
               Dim ProcLinePlus As String = "++" & ProcLine.Substring(2) 'replace leading // with ++ to indicate PROC
               Dim ProcLineParmsUpdated As String = ReplaceProcLineParms(ProcLinePlus, JCLParms)
               jclWithProc.Add(ProcLineParmsUpdated)
+              JustLoadedPROC = True
             Next
           End If
       End Select
@@ -1592,6 +1608,9 @@ Public Class Form1
     JobLib = ""
 
     For Each statement As String In jclStmt
+      If statement.Substring(0, 2) = "//" Then
+        procName = ""
+      End If
       Call GetLabelControlParms(statement, jLabel, jControl, jParameters)
       If Len(jControl) = 0 Then
         'MessageBox.Show("JCL control not found:" & statement)
