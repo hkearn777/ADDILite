@@ -24,8 +24,15 @@ Public Class Form1
   ' - PlantUml for creating flowchart
   '
   '***Be sure to change ProgramVersion when making changes!!!
-  Dim ProgramVersion As String = "v1.6.3"
+  Dim ProgramVersion As String = "v1.6.4"
   'Change-History.
+  ' 2024/09/20 v1.6.4 hk Reference PROCs in PROC folder instead of Sources
+  '                      - remove ENDIF jcl 
+  '                      - remove JCL INCLUDE statements
+  '                      - remove PROC= on PROC names
+  '                      - assign ++ to JCL lines that are part of PROC
+  '                      - clear PROCNAME as needed
+  '                      - uppercase callpgms name and Account to INTERNAL
   ' 2024/09/13 v1.6.3 hk Fix symbolic for program name
   ' 2024/09/13 v1.6.2 hk Fix Parsing of DD SYSOUT
   ' 2024/08/09 v1.6  hk Initial Directory settings on start up (especially new install)
@@ -240,6 +247,7 @@ Public Class Form1
   'Dim CntTelonOnline As Integer = 0
 
   Dim CntBatchJobs As Integer = 0
+  Dim CntProcFiles As Integer = 0
   Dim CntSourceFiles As Integer = 0
   Dim CntOutputFiles As Integer = 0
   Dim CntTelonFiles As Integer = 0
@@ -355,18 +363,21 @@ Public Class Form1
       myFileInfo = My.Computer.FileSystem.GetFileInfo(txtDataGatheringForm.Text)
       folderPath = myFileInfo.DirectoryName
       txtJCLJOBFolderName.Text = folderPath & "\JOBS"
+      txtProcFolderName.Text = folderPath & "\PROCS"
       txtSourceFolderName.Text = folderPath & "\SOURCES"
       txtTelonFoldername.Text = folderPath & "\TELON"
       txtScreenMapsFolderName.Text = folderPath & "\SCREENS"
       txtOutputFoldername.Text = folderPath & "\OUTPUT"
 
       CntBatchJobs = GetFileCount(txtJCLJOBFolderName.Text)
+      CntProcFiles = GetFileCount(txtProcFolderName.Text)
       CntSourceFiles = GetFileCount(txtSourceFolderName.Text)
       CntTelonFiles = GetFileCount(txtTelonFoldername.Text)
       CntScreenMapFiles = GetFileCount(txtScreenMapsFolderName.Text)
       CntOutputFiles = GetFileCount(txtOutputFoldername.Text)
 
       btnJCLJOBFilename.Text = "JCL JOB Folder (" & CntBatchJobs & "):"
+      btnProcFolder.Text = "Proc Folder (" & CntProcFiles & "):"
       btnSourceFolder.Text = "Source Folder (" & CntSourceFiles & "):"
       btnTelonFolder.Text = "Telon Members Folder (" & CntTelonFiles & "):"
       btnScreenMapsFolder.Text = "Screen Maps Folder (" & CntScreenMapFiles & "):"
@@ -405,6 +416,16 @@ Public Class Form1
 
   End Sub
 
+  Private Sub btnProcFolder_Click(sender As Object, e As EventArgs) Handles btnProcFolder.Click
+    ' browse for and select folder name
+    Dim bfd_ProcFolder As New FolderBrowserDialog With {
+      .Description = "Enter Proc folder name",
+      .SelectedPath = txtProcFolderName.Text
+    }
+    If bfd_ProcFolder.ShowDialog() = DialogResult.OK Then
+      txtSourceFolderName.Text = bfd_ProcFolder.SelectedPath
+    End If
+  End Sub
 
   Private Sub btnSourceFolder_Click(sender As Object, e As EventArgs) Handles btnSourceFolder.Click
     ' browse for and select folder name
@@ -516,7 +537,7 @@ Public Class Form1
     End If
 
     ' remove previous CallPgms.jcl Job
-    CallPgmsFileName = txtJCLJOBFolderName.Text & "\CallPgms.jcl"
+    CallPgmsFileName = txtJCLJOBFolderName.Text & "\CALLPGMS.JCL"
     ' Prepare for CallPgms file which holds all the Called Programs within the sources
     '  this file is processed as the last "JOB"
     ' Remove previous CallPgms.jcl file
@@ -900,7 +921,7 @@ Public Class Form1
     ' create the CallPgms.jcl file
     swCallPgmsFile = New StreamWriter(CallPgmsFileName, False)
     Dim pgmCnt As Integer = 0
-    swCallPgmsFile.WriteLine("//CALLPGMS JOB '0000','SUBROUTINES CALLED'")
+    swCallPgmsFile.WriteLine("//CALLPGMS JOB 'INTERNAL','SUBROUTINES CALLED'")
     For Each callpgm In ListOfCallPgms
       pgmCnt += 1
       Dim execs As String() = callpgm.Split(Delimiter)
@@ -1035,24 +1056,36 @@ Public Class Form1
     Dim Label As Integer = 0
     Dim Parameters As Integer = 2
     Dim jclProcName As String = ""
+    Dim JustLoadedPROC As Boolean = False
     For Each JCLLine In JCL
       Dim JCLStatement As String() = JCLLine.Split(Delimiter)
+      ' IF JCLline is not PROC or EXEC but is part of a previous PROC load
+      '   then put '++' to indicate part of the PROC
+      '   else leave as is
+      If JustLoadedPROC Then
+        Select Case JCLStatement(Command)
+          Case "DD", "COMMENT"
+            Mid(JCLLine, 1, 2) = "++"
+        End Select
+      End If
+      ' Place the JCLLine to the array 
       jclWithProc.Add(JCLLine)
       Select Case JCLStatement(Command)
         Case "PROC"
           'this must be an instream PROC
           jclProcName = JCLStatement(Label).Substring(2)
           ListOfInstreamProcs.Add(jclProcName)
+          JustLoadedPROC = False
         Case "EXEC"
+          JustLoadedPROC = False
           If JCLStatement(Parameters).Substring(0, 4) = "PGM=" Then
             Exit Select
           End If
           'this must be an exec <procname>, so need to load this proc here, IF not an instream proc
           '-need to save the JCL Parms for later substitue.
-          '**HERE**
           Dim ParmValues As String() = JCLStatement(Parameters).Split(",")
           JCLParms = LoadJCLParms(ParmValues)
-          Dim ProcName As String = txtSourceFolderName.Text & "\" & ParmValues(0)
+          Dim ProcName As String = txtProcFolderName.Text & "\" & ParmValues(0)
           If ListOfInstreamProcs.IndexOf(ParmValues(0)) = -1 Then
             Dim PROC As New List(Of String)
             PROC = ReformatJCLAndLoadToArray(ProcName)
@@ -1063,6 +1096,7 @@ Public Class Form1
               Dim ProcLinePlus As String = "++" & ProcLine.Substring(2) 'replace leading // with ++ to indicate PROC
               Dim ProcLineParmsUpdated As String = ReplaceProcLineParms(ProcLinePlus, JCLParms)
               jclWithProc.Add(ProcLineParmsUpdated)
+              JustLoadedPROC = True
             Next
           End If
       End Select
@@ -1076,6 +1110,9 @@ Public Class Form1
     'Load the JCL Parameters the JCL Line. The first occurence is not a parameter but a PROC name
     'i.e., DSNEXEC3,PGMLIB='PRD1.LINKLIB',PROGRAM=INSB610,SYSTEM=DSN 
     '   would return 3 key/value entries of PGMLIB, PROGRAM, and SYSTEM
+    ' if the first ParmValues string has PROC= then remove it. 
+    ParmValues(0) = ParmValues(0).Replace("PROC=", "")
+    ' split the out the parmvalues to key/value pairs
     Dim theJCLParms As New Dictionary(Of String, String)
     For x As Integer = 1 To ParmValues.Count - 1 Step 1
       Dim KeyAndValue As String() = ParmValues(x).Split("=")
@@ -1111,7 +1148,7 @@ Public Class Form1
     ' Load a JCL file to an Array which has
     ' -Remove continuations
     ' -drop Comments
-    ' -keep lines only with '//' 
+    ' -keep lines only with '//' , '++', '/*'
     ' -parsed out as Label, Command, Parameters with Delimiter
     Dim JCL As New List(Of String)
     If Not File.Exists(Jobfile) Then
@@ -1134,17 +1171,6 @@ Public Class Form1
         Case Else
           Continue For
       End Select
-      'If Mid(text1, 1, 2) = "//" Or Mid(text1, 1, 2) = "++" Then
-      'Else
-      '  Continue For
-      'End If
-      '' drop JES commands
-      'If Mid(text1, 1, 14) = "//SEND OUTPUT " Then
-      '  Continue For
-      'End If
-      'If Mid(text1, 1, 9) = "/*JOBPARM" Then
-      '  Continue For
-      'End If
       ' Keep columns 1-72, remove columns 73-80
       text1 = Microsoft.VisualBasic.Left(Mid(text1, 1) + Space(80), 72)
       ' remove '+' in column 72 (which used to mean continuation?)
@@ -1167,6 +1193,19 @@ Public Class Form1
         End If
         JCL.Add(Mid(text1, 1, 2) & "*" & Delimiter & "COMMENT" & Delimiter & comment.Replace(Delimiter, " ").Trim)
         Continue For
+      Else
+        ' Drop simple IF statements in JCL
+        If text1.IndexOf(" IF ") > -1 Then
+          Continue For
+        End If
+        ' Drop simple ENDIF statements in JCL
+        If text1.IndexOf(" ENDIF ") > -1 Then
+          Continue For
+        End If
+        ' Drop the INCLUDE statement in JCL
+        If text1.IndexOf(" INCLUDE ") > -1 Then
+          Continue For
+        End If
       End If
       ' remove leading slashes if this line is a continuation
       If continuation = True Then
@@ -1569,6 +1608,9 @@ Public Class Form1
     JobLib = ""
 
     For Each statement As String In jclStmt
+      If statement.Substring(0, 2) = "//" Then
+        procName = ""
+      End If
       Call GetLabelControlParms(statement, jLabel, jControl, jParameters)
       If Len(jControl) = 0 Then
         'MessageBox.Show("JCL control not found:" & statement)
@@ -1598,7 +1640,7 @@ Public Class Form1
           Continue For
         Case "JCLLIB"
           Call ProcessJCLLIB()
-
+        Case "EOF"
 
         Case Else
           If jLabel = "/*ROUTE" Then
@@ -1660,6 +1702,15 @@ Public Class Form1
     Dim jLabelPrev As String = jLabel
 
     Dim jclWords As String() = statement.Split(Delimiter)
+
+    ' remove the /* end of instream data indicator
+    If jclWords(0) = "/*" Then
+      jLabel = "/*"
+      jControl = "EOF"
+      jParameters = ""
+      Exit Sub
+    End If
+
     jLabel = jclWords(0)
     jControl = jclWords(1)
     jParameters = jclWords(2)
@@ -8056,6 +8107,5 @@ Public Class Form1
 
 
   End Sub
-
 
 End Class
