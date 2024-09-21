@@ -27,6 +27,7 @@ Public Class Form1
   Dim ProgramVersion As String = "v1.6.4"
   'Change-History.
   ' 2024/09/20 v1.6.4 hk Reference PROCs in PROC folder instead of Sources
+  '                      - remove ENDIF jcl 
   ' 2024/09/13 v1.6.3 hk Fix symbolic for program name
   ' 2024/09/13 v1.6.2 hk Fix Parsing of DD SYSOUT
   ' 2024/08/09 v1.6  hk Initial Directory settings on start up (especially new install)
@@ -1171,6 +1172,15 @@ Public Class Form1
         End If
         JCL.Add(Mid(text1, 1, 2) & "*" & Delimiter & "COMMENT" & Delimiter & comment.Replace(Delimiter, " ").Trim)
         Continue For
+      Else
+        ' Drop simple IF statements in JCL
+        If text1.IndexOf(" IF ") > -1 Then
+          Continue For
+        End If
+        ' Drop simple ENDIF statements in JCL
+        If text1.IndexOf(" ENDIF ") > -1 Then
+          Continue For
+        End If
       End If
       ' remove leading slashes if this line is a continuation
       If continuation = True Then
@@ -1602,7 +1612,7 @@ Public Class Form1
           Continue For
         Case "JCLLIB"
           Call ProcessJCLLIB()
-
+        Case "EOF"
 
         Case Else
           If jLabel = "/*ROUTE" Then
@@ -1664,6 +1674,15 @@ Public Class Form1
     Dim jLabelPrev As String = jLabel
 
     Dim jclWords As String() = statement.Split(Delimiter)
+
+    ' remove the /* end of instream data indicator
+    If jclWords(0) = "/*" Then
+      jLabel = "/*"
+      jControl = "EOF"
+      jParameters = ""
+      Exit Sub
+    End If
+
     jLabel = jclWords(0)
     jControl = jclWords(1)
     jParameters = jclWords(2)
