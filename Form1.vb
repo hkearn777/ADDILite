@@ -28,6 +28,7 @@ Public Class Form1
   'Change-History.
   ' 2024/09/20 v1.6.4 hk Reference PROCs in PROC folder instead of Sources
   '                      - remove ENDIF jcl 
+  '                      - remove JCL INCLUDE statements
   ' 2024/09/13 v1.6.3 hk Fix symbolic for program name
   ' 2024/09/13 v1.6.2 hk Fix Parsing of DD SYSOUT
   ' 2024/08/09 v1.6  hk Initial Directory settings on start up (especially new install)
@@ -1179,6 +1180,10 @@ Public Class Form1
         End If
         ' Drop simple ENDIF statements in JCL
         If text1.IndexOf(" ENDIF ") > -1 Then
+          Continue For
+        End If
+        ' Drop the INCLUDE statement in JCL
+        If text1.IndexOf(" INCLUDE ") > -1 Then
           Continue For
         End If
       End If
