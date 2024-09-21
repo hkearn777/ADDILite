@@ -24,8 +24,9 @@ Public Class Form1
   ' - PlantUml for creating flowchart
   '
   '***Be sure to change ProgramVersion when making changes!!!
-  Dim ProgramVersion As String = "v1.6.3"
+  Dim ProgramVersion As String = "v1.6.4"
   'Change-History.
+  ' 2024/09/20 v1.6.4 hk Reference PROCs in PROC folder instead of Sources
   ' 2024/09/13 v1.6.3 hk Fix symbolic for program name
   ' 2024/09/13 v1.6.2 hk Fix Parsing of DD SYSOUT
   ' 2024/08/09 v1.6  hk Initial Directory settings on start up (especially new install)
@@ -240,6 +241,7 @@ Public Class Form1
   'Dim CntTelonOnline As Integer = 0
 
   Dim CntBatchJobs As Integer = 0
+  Dim CntProcFiles As Integer = 0
   Dim CntSourceFiles As Integer = 0
   Dim CntOutputFiles As Integer = 0
   Dim CntTelonFiles As Integer = 0
@@ -355,18 +357,21 @@ Public Class Form1
       myFileInfo = My.Computer.FileSystem.GetFileInfo(txtDataGatheringForm.Text)
       folderPath = myFileInfo.DirectoryName
       txtJCLJOBFolderName.Text = folderPath & "\JOBS"
+      txtProcFolderName.Text = folderPath & "\PROCS"
       txtSourceFolderName.Text = folderPath & "\SOURCES"
       txtTelonFoldername.Text = folderPath & "\TELON"
       txtScreenMapsFolderName.Text = folderPath & "\SCREENS"
       txtOutputFoldername.Text = folderPath & "\OUTPUT"
 
       CntBatchJobs = GetFileCount(txtJCLJOBFolderName.Text)
+      CntProcFiles = GetFileCount(txtProcFolderName.Text)
       CntSourceFiles = GetFileCount(txtSourceFolderName.Text)
       CntTelonFiles = GetFileCount(txtTelonFoldername.Text)
       CntScreenMapFiles = GetFileCount(txtScreenMapsFolderName.Text)
       CntOutputFiles = GetFileCount(txtOutputFoldername.Text)
 
       btnJCLJOBFilename.Text = "JCL JOB Folder (" & CntBatchJobs & "):"
+      btnProcFolder.Text = "Proc Folder (" & CntProcFiles & "):"
       btnSourceFolder.Text = "Source Folder (" & CntSourceFiles & "):"
       btnTelonFolder.Text = "Telon Members Folder (" & CntTelonFiles & "):"
       btnScreenMapsFolder.Text = "Screen Maps Folder (" & CntScreenMapFiles & "):"
@@ -405,6 +410,16 @@ Public Class Form1
 
   End Sub
 
+  Private Sub btnProcFolder_Click(sender As Object, e As EventArgs) Handles btnProcFolder.Click
+    ' browse for and select folder name
+    Dim bfd_ProcFolder As New FolderBrowserDialog With {
+      .Description = "Enter Proc folder name",
+      .SelectedPath = txtProcFolderName.Text
+    }
+    If bfd_ProcFolder.ShowDialog() = DialogResult.OK Then
+      txtSourceFolderName.Text = bfd_ProcFolder.SelectedPath
+    End If
+  End Sub
 
   Private Sub btnSourceFolder_Click(sender As Object, e As EventArgs) Handles btnSourceFolder.Click
     ' browse for and select folder name
@@ -1052,7 +1067,7 @@ Public Class Form1
           '**HERE**
           Dim ParmValues As String() = JCLStatement(Parameters).Split(",")
           JCLParms = LoadJCLParms(ParmValues)
-          Dim ProcName As String = txtSourceFolderName.Text & "\" & ParmValues(0)
+          Dim ProcName As String = txtProcFolderName.Text & "\" & ParmValues(0)
           If ListOfInstreamProcs.IndexOf(ParmValues(0)) = -1 Then
             Dim PROC As New List(Of String)
             PROC = ReformatJCLAndLoadToArray(ProcName)
@@ -1111,7 +1126,7 @@ Public Class Form1
     ' Load a JCL file to an Array which has
     ' -Remove continuations
     ' -drop Comments
-    ' -keep lines only with '//' 
+    ' -keep lines only with '//' , '++', '/*'
     ' -parsed out as Label, Command, Parameters with Delimiter
     Dim JCL As New List(Of String)
     If Not File.Exists(Jobfile) Then
@@ -1134,17 +1149,6 @@ Public Class Form1
         Case Else
           Continue For
       End Select
-      'If Mid(text1, 1, 2) = "//" Or Mid(text1, 1, 2) = "++" Then
-      'Else
-      '  Continue For
-      'End If
-      '' drop JES commands
-      'If Mid(text1, 1, 14) = "//SEND OUTPUT " Then
-      '  Continue For
-      'End If
-      'If Mid(text1, 1, 9) = "/*JOBPARM" Then
-      '  Continue For
-      'End If
       ' Keep columns 1-72, remove columns 73-80
       text1 = Microsoft.VisualBasic.Left(Mid(text1, 1) + Space(80), 72)
       ' remove '+' in column 72 (which used to mean continuation?)
@@ -8056,6 +8060,5 @@ Public Class Form1
 
 
   End Sub
-
 
 End Class
