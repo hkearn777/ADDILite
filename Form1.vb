@@ -24,8 +24,9 @@ Public Class Form1
   ' - PlantUml for creating flowchart
   '
   '***Be sure to change ProgramVersion when making changes!!!
-  Dim ProgramVersion As String = "v1.6.4"
+  Dim ProgramVersion As String = "v1.6.5"
   'Change-History.
+  ' 2024/09/23 v1.6.5 hk fixed key/value parse, fixed MISSING PROC message
   ' 2024/09/20 v1.6.4 hk Reference PROCs in PROC folder instead of Sources
   '                      - remove ENDIF jcl 
   '                      - remove JCL INCLUDE statements
@@ -1090,7 +1091,7 @@ Public Class Form1
             Dim PROC As New List(Of String)
             PROC = ReformatJCLAndLoadToArray(ProcName)
             If PROC.Count = 0 Then
-              LogFile.WriteLine(Now.Date & ",Missing PROC member," & ParmValues(0))
+              LogFile.WriteLine(Date.Now & ",Missing PROC member," & ParmValues(0))
             End If
             For Each ProcLine In PROC
               Dim ProcLinePlus As String = "++" & ProcLine.Substring(2) 'replace leading // with ++ to indicate PROC
@@ -1116,6 +1117,9 @@ Public Class Form1
     Dim theJCLParms As New Dictionary(Of String, String)
     For x As Integer = 1 To ParmValues.Count - 1 Step 1
       Dim KeyAndValue As String() = ParmValues(x).Split("=")
+      If KeyAndValue.Count < 2 Then   'no key/value
+        Continue For
+      End If
       Dim theKey As String = "&" & KeyAndValue(0)   'place an & in front of keyword for later searching
       Dim theValue As String = KeyAndValue(1)
       If Not theJCLParms.ContainsKey(theKey) Then
