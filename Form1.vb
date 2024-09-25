@@ -24,8 +24,9 @@ Public Class Form1
   ' - PlantUml for creating flowchart
   '
   '***Be sure to change ProgramVersion when making changes!!!
-  Dim ProgramVersion As String = "v1.6.5"
+  Dim ProgramVersion As String = "v1.6.6"
   'Change-History.
+  ' 2024/09/24 v1.6.6 hk fix BR value remove equal sign
   ' 2024/09/23 v1.6.5 hk fixed key/value parse, fixed MISSING PROC message
   ' 2024/09/20 v1.6.4 hk Reference PROCs in PROC folder instead of Sources
   '                      - remove ENDIF jcl 
@@ -2080,8 +2081,9 @@ Public Class Form1
     'csvFile.Delimiters = New String() {"|"}
     'csvFile.HasFieldsEnclosedInQuotes = True
     Dim ListOfSteps As New List(Of String)
+    Dim stepSequence As Integer = 0
+    Dim stepNameSeq As String = ""
 
-    'Do While Not csvFile.EndOfData
     For Each DDStmt In ListOfDDs
       csvRecord = DDStmt.Split(Delimiter)
       csvCnt += 1
@@ -2096,6 +2098,12 @@ Public Class Form1
       End If
       execSequence = Val(csvRecord(6))
       Dim DDName As String = csvRecord(7).Replace("$", "S")
+      If DDName.Length >= 6 Then
+        If DDName.Substring(0, 6) = "SORTWK" Then
+          DDName = "SORTWK##"
+        End If
+      End If
+      Dim orgDDName As String = DDName
       Dim DDSeq As String = csvRecord(8)
       ddConcatSeq = Val(csvRecord(9))
       Dim dsn As String = csvRecord(10)
@@ -2109,8 +2117,11 @@ Public Class Form1
       Dim reportDescription As String = csvRecord(18)
       SourceType = csvRecord(19)
 
-      If stepName = "STEPLIB" And ddConcatSeq > 0 Then
-        stepName = stepName & LTrim(Str(ddConcatSeq))
+      'If stepName = "STEPLIB" And ddConcatSeq > 0 Then
+      '  stepName = stepName & LTrim(Str(ddConcatSeq))
+      'End If
+      If DDName = "STEPLIB" And ddConcatSeq > 0 Then
+        DDName = DDName & LTrim(Str(ddConcatSeq))
       End If
 
       Dim InOrOut As String = " <-left- "
@@ -2122,17 +2133,26 @@ Public Class Form1
       End Select
 
       If Val(DDSeq) = 1 And Val(ddConcatSeq) = 0 Then
-        ListOfSteps.Add(stepName)
+        stepSequence += 1
+        stepNameSeq = stepName & Trim(Str(stepSequence))
+        ListOfSteps.Add(stepNameSeq)
         swPumlFile.WriteLine()
-        swPumlFile.WriteLine("node " & Chr(34) & stepName & ":\n" & pgmName & Chr(34) & " as " & stepName)
+        swPumlFile.WriteLine("node " & Chr(34) &
+                             stepName & ":\n" & pgmName &
+                             Chr(34) & " as " &
+                             stepNameSeq)
       End If
 
 
-      Select Case DDName
+      Select Case orgDDName
         Case "STEPLIB"
         Case "SYSOUT"
         Case "SYSPRINT"
         Case "SYSUDUMP"
+        Case "SYSABOUT"
+        Case "SYSLOG"
+        Case "CEEDUMP"
+        Case "SORTWK##"
         Case Else
           If dsn.Length > 0 Then
             If ddConcatSeq > 0 Then
@@ -2141,12 +2161,12 @@ Public Class Form1
             If dispEnd = "DELETE" Then
               dsn = "<s:red>" & dsn & "</s>"
             End If
-            swPumlFile.WriteLine("file " & Chr(34) & DDName & ":\n" & dsn & Chr(34) & " as " & stepName & "." & DDName)
-            swPumlFile.WriteLine(stepName & InOrOut & stepName & "." & DDName)
+            swPumlFile.WriteLine("file " & Chr(34) & DDName & ":\n" & dsn & Chr(34) & " as " & stepNameSeq & "." & DDName)
+            swPumlFile.WriteLine(stepNameSeq & InOrOut & stepNameSeq & "." & DDName)
           End If
           If reportID.Length > 0 Then
-            swPumlFile.WriteLine("file #palegreen " & Chr(34) & DDName & ":\nReport Id:\n" & reportID & Chr(34) & " as " & stepName & "." & DDName)
-            swPumlFile.WriteLine(stepName & InOrOut & stepName & "." & DDName)
+            swPumlFile.WriteLine("file #palegreen " & Chr(34) & DDName & ":\nReport Id:\n" & reportID & Chr(34) & " as " & stepNameSeq & "." & DDName)
+            swPumlFile.WriteLine(stepNameSeq & InOrOut & stepNameSeq & "." & DDName)
           End If
       End Select
 

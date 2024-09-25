@@ -12,6 +12,7 @@ Module BusinessRulesCOBOL
   '   So if we encounter an 'IF' at first word of a statement this begins a Business Rule
   'Written by Howard Kearney
   'Change-history.
+  '  2024-09-24 v1.6.2 remove equal sign in value of spreadsheet
   '  2024-08-21 v1.6.1 Clear Arrays
   '  2024-07-03 hk New code
   '  2024-07-04 hk removed blank lines from business rules
@@ -438,6 +439,7 @@ Module BusinessRulesCOBOL
 
     ' Write the Excel rows
     For Each brFieldsEntry In ListOfBusinessFieldNames
+      brFieldsEntry = brFieldsEntry.Replace("=", "")
       Dim BusinessFieldsColumns As String() = brFieldsEntry.Split(Form1.Delimiter)
       BRFieldsRow += 1
       Dim row As String = LTrim(Str(BRFieldsRow))
