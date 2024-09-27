@@ -24,8 +24,11 @@ Public Class Form1
   ' - PlantUml for creating flowchart
   '
   '***Be sure to change ProgramVersion when making changes!!!
-  Dim ProgramVersion As String = "v1.6.6"
+  Dim ProgramVersion As String = "v1.6.7"
   'Change-History.
+  ' 2024/09/27 v1.6.7 hk fix drop empty '//' and '/*' JCL statements
+  '                      - fix missing execname and pgmname when PROC is utility
+  '                      - fix writing dynamic routines to CALLPGMS.jcl
   ' 2024/09/24 v1.6.6 hk fix BR value remove equal sign
   ' 2024/09/23 v1.6.5 hk fixed key/value parse, fixed MISSING PROC message
   ' 2024/09/20 v1.6.4 hk Reference PROCs in PROC folder instead of Sources
@@ -925,8 +928,11 @@ Public Class Form1
     Dim pgmCnt As Integer = 0
     swCallPgmsFile.WriteLine("//CALLPGMS JOB 'INTERNAL','SUBROUTINES CALLED'")
     For Each callpgm In ListOfCallPgms
-      pgmCnt += 1
       Dim execs As String() = callpgm.Split(Delimiter)
+      If execs(3) = "Dynamic" Then  'do not analyze a dynamic call as we don't know name of program
+        Continue For
+      End If
+      pgmCnt += 1
       swCallPgmsFile.WriteLine("//PGM" & LTrim(Str(pgmCnt)) & " EXEC PGM=" & execs(0).Replace(Delimiter, ""))
       swCallPgmsFile.WriteLine("//STEPLIB DD DSN=" & execs(2) & ",DISP=SHR")
     Next
@@ -1229,7 +1235,11 @@ Public Class Form1
           GetJCLWords(jStatement, jclWords)
           Select Case jclWords.Count
             Case 1
-              JCL.Add(jclWords(0) & Delimiter & Delimiter)
+              Select Case jclWords(0)
+                Case "//", "/*"
+                Case Else
+                  JCL.Add(jclWords(0) & Delimiter & Delimiter)
+              End Select
             Case 2
               JCL.Add(jclWords(0) & Delimiter & jclWords(1) & Delimiter)
             Case 3
@@ -2440,6 +2450,16 @@ Public Class Form1
       ddConcatSeq = Val(csvRecord(9))
       SourceType = csvRecord(19)
       execName = csvRecord(20)
+
+      ' adjust for utility procs
+      If execName = "" Then
+        execName = procName
+      End If
+      If pgmName = "" Then
+        pgmName = procName
+      End If
+
+      ' write to spreadshet
       If ddSequence = 1 And ddConcatSeq = 0 Then
         ProgramsRow += 1
         Dim row As String = LTrim(Str(ProgramsRow))
