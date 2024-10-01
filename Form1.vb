@@ -2294,7 +2294,7 @@ Public Class Form1
     SummaryWorksheet.Range("A6").Value = "SOURCES:"
     SummaryWorksheet.Range("B6").Value = "\SOURCES"
     SummaryWorksheet.Range("A7").Value = "FLOWCHARTS:"
-    SummaryWorksheet.Range("B7").Value = "\OUTPUT\SVG"
+    SummaryWorksheet.Range("B7").Value = txtOutputFoldername.Text & "\SVG"
     SummaryWorksheet.Range("A8").Value = ""
     SummaryWorksheet.Range("B8").Value = ""
     SummaryWorksheet.Range("A9").Value = "Data Gathering Form Contents:"
@@ -2308,7 +2308,6 @@ Public Class Form1
       SummaryWorksheet.Range("B" & row).Value = dgfRow(1)
     Next
 
-
   End Sub
   Sub CreateJobsTab()
     ' Build the Jobs Worksheet
@@ -2321,21 +2320,22 @@ Public Class Form1
       JobsWorksheet = workbook.Sheets.Add(After:=workbook.Worksheets(workbook.Worksheets.Count))
       JobsWorksheet.Name = "Jobs"
       ' Write the column headings row
-      JobsWorksheet.Range("A1").Value = "Job_Source"
-      JobsWorksheet.Range("B1").Value = "Job_Name"
-      JobsWorksheet.Range("C1").Value = "AccountInfo"
-      JobsWorksheet.Range("D1").Value = "ProgrammerName"
-      JobsWorksheet.Range("E1").Value = "Time"
-      JobsWorksheet.Range("F1").Value = "Class"
-      JobsWorksheet.Range("G1").Value = "MsgC"
-      JobsWorksheet.Range("H1").Value = "Send"
-      JobsWorksheet.Range("I1").Value = "Route"
-      JobsWorksheet.Range("J1").Value = "JobParm"
-      JobsWorksheet.Range("K1").Value = "Region"
-      JobsWorksheet.Range("L1").Value = "COND"
-      JobsWorksheet.Range("M1").Value = "JCLLIB"
-      JobsWorksheet.Range("N1").Value = "JOBLIB"
-      JobsWorksheet.Range("O1").Value = "Typrun"
+      JobsWorksheet.Range("A1").Value = "Flow"
+      JobsWorksheet.Range("B1").Value = "Job_Source"
+      JobsWorksheet.Range("C1").Value = "Job_Name"
+      JobsWorksheet.Range("D1").Value = "AccountInfo"
+      JobsWorksheet.Range("E1").Value = "ProgrammerName"
+      JobsWorksheet.Range("F1").Value = "Time"
+      JobsWorksheet.Range("G1").Value = "Class"
+      JobsWorksheet.Range("H1").Value = "MsgC"
+      JobsWorksheet.Range("I1").Value = "Send"
+      JobsWorksheet.Range("J1").Value = "Route"
+      JobsWorksheet.Range("K1").Value = "JobParm"
+      JobsWorksheet.Range("L1").Value = "Region"
+      JobsWorksheet.Range("M1").Value = "COND"
+      JobsWorksheet.Range("N1").Value = "JCLLIB"
+      JobsWorksheet.Range("O1").Value = "JOBLIB"
+      JobsWorksheet.Range("P1").Value = "Typrun"
       JobRow = 1
       JobsWorksheet.Activate()
       JobsWorksheet.Application.ActiveWindow.SplitRow = 1
@@ -2343,24 +2343,36 @@ Public Class Form1
     End If
 
     JobRow += 1
-    Dim row As Integer = LTrim(Str(JobRow))
-    JobsWorksheet.Range("A" & row).Value = JobSourceName
-    JobsWorksheet.Range("B" & row).Value = jobName
-    JobsWorksheet.Range("C" & row).Value = JobAccountInfo
-    JobsWorksheet.Range("D" & row).Value = JobProgrammerName
-    JobsWorksheet.Range("E" & row).Value = JobTime
-    JobsWorksheet.Range("F" & row).Value = jobClass
-    JobsWorksheet.Range("G" & row).Value = jobMsgClass
-    JobsWorksheet.Range("H" & row).Value = JobSend
-    JobsWorksheet.Range("I" & row).Value = JobRoute
-    JobsWorksheet.Range("J" & row).Value = JobParm
-    JobsWorksheet.Range("K" & row).Value = JobRegion
-    JobsWorksheet.Range("L" & row).Value = JobCond.Replace("=", "")
-    JobsWorksheet.Range("M" & row).Value = JobJCLLib
-    JobsWorksheet.Range("N" & row).Value = JobLib
-    JobsWorksheet.Range("O" & row).Value = JobTyprun
+    Dim row As String = LTrim(Str(JobRow))
+    If JobSourceName = "CALLPGMS" Then
+      JobsWorksheet.Range("A" & row).Value = ""
+    Else
+      JobsWorksheet.Range("A" & row).Formula2 = CreateFlowchartHyperLink(JobSourceName)
+    End If
+    JobsWorksheet.Range("B" & row).Value = JobSourceName
+    JobsWorksheet.Range("C" & row).Value = jobName
+    JobsWorksheet.Range("D" & row).Value = JobAccountInfo
+    JobsWorksheet.Range("E" & row).Value = JobProgrammerName
+    JobsWorksheet.Range("F" & row).Value = JobTime
+    JobsWorksheet.Range("G" & row).Value = jobClass
+    JobsWorksheet.Range("H" & row).Value = jobMsgClass
+    JobsWorksheet.Range("I" & row).Value = JobSend
+    JobsWorksheet.Range("J" & row).Value = JobRoute
+    JobsWorksheet.Range("K" & row).Value = JobParm
+    JobsWorksheet.Range("L" & row).Value = JobRegion
+    JobsWorksheet.Range("M" & row).Value = JobCond.Replace("=", "")
+    JobsWorksheet.Range("N" & row).Value = JobJCLLib
+    JobsWorksheet.Range("O" & row).Value = JobLib
+    JobsWorksheet.Range("P" & row).Value = JobTyprun
 
   End Sub
+  Function CreateFlowchartHyperLink(text As String) As String
+    '=HYPERLINK("file:///"&Summary!B7&"\[PRC6950D].svg", "view") 
+    Return "=HYPERLINK(" & QUOTE & "file:///" & QUOTE &
+            "&Summary!B7&" &
+            QUOTE & "\" & QUOTE & "&" & QUOTE & JobSourceName &
+            ".svg" & QUOTE & ", " & QUOTE & "view" & QUOTE & ")"
+  End Function
   Sub CreateJobCommentsTab(ListOfSymbolics As List(Of String))
     ' Build the JobComments Worksheet.
     ' Process through the JclStmt array. Look for an 'EXEC' command and then process backwards
@@ -4964,10 +4976,10 @@ Public Class Form1
     If JobRow > 1 Then
       Dim row As Integer = LTrim(Str(JobRow))
       ' Format the Sheet - first row bold the columns
-      rngJobs = JobsWorksheet.Range("A1:N1")
+      rngJobs = JobsWorksheet.Range("A1:P1")
       rngJobs.Font.Bold = True
       ' data area autofit all columns
-      rngJobs = JobsWorksheet.Range("A1:N" & row)
+      rngJobs = JobsWorksheet.Range("A1:P" & row)
       workbook.Worksheets("Jobs").Range("A1").AutoFilter
       rngJobs.VerticalAlignment = Excel.XlVAlign.xlVAlignTop
       rngJobs.Columns.AutoFit()
