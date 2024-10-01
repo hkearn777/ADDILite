@@ -24,8 +24,9 @@ Public Class Form1
   ' - PlantUml for creating flowchart
   '
   '***Be sure to change ProgramVersion when making changes!!!
-  Dim ProgramVersion As String = "v1.6.7"
+  Dim ProgramVersion As String = "v1.7"
   'Change-History.
+  ' 2024/09/30 v1.7   hk Flowchart Links
   ' 2024/09/27 v1.6.7 hk fix drop empty '//' and '/*' JCL statements
   '                      - fix missing execname and pgmname when PROC is utility
   '                      - fix writing dynamic routines to CALLPGMS.jcl
@@ -526,6 +527,7 @@ Public Class Form1
     LogFile.WriteLine(Date.Now & ",Program Starts," & Me.Text)
     LogFile.WriteLine(Date.Now & ",Data Gathering Form," & txtDataGatheringForm.Text)
     LogFile.WriteLine(Date.Now & ",JOB Folder," & txtJCLJOBFolderName.Text)
+    LogFile.WriteLine(Date.Now & ",PROC Folder" & txtProcFolderName.Text)
     LogFile.WriteLine(Date.Now & ",Source Folder," & txtSourceFolderName.Text)
     LogFile.WriteLine(Date.Now & ",TELON Folder," & txtTelonFoldername.Text)
     LogFile.WriteLine(Date.Now & ",Screen Map Folder," & txtScreenMapsFolderName.Text)
@@ -2272,16 +2274,32 @@ Public Class Form1
     workbook = objExcel.Workbooks.Add
     SummaryWorksheet = workbook.Sheets.Item(1)
     SummaryWorksheet.Name = "Summary"
-    SummaryRow = 0
+    SummaryRow = SummaryWorksheet.Range("A4").Value = "JOBS:"
+    SummaryWorksheet.Range("B4").Value = "\JOBS"
+
     SummaryWorksheet.Range("A1").Value = "Mainframe Documentation Project" & vbNewLine &
                                          "Data Gathering Form" & vbNewLine &
                                          Path.GetFileNameWithoutExtension(txtDataGatheringForm.Text) & vbNewLine &
                                          "Model Created:" & Date.Now & vbNewLine &
                                          "ADDILite, Version:" & ProgramVersion
-    SummaryWorksheet.Range("A2").Value = ""
     SummaryWorksheet.Range("B1").Value = ""
+    SummaryWorksheet.Range("A2").Value = ""
     SummaryWorksheet.Range("B2").Value = ""
-    SummaryRow = 2
+    SummaryWorksheet.Range("A3").Value = "Folder Locations:"
+    SummaryWorksheet.Range("B3").Value = InitDirectory
+    SummaryWorksheet.Range("A4").Value = "JOBS:"
+    SummaryWorksheet.Range("B4").Value = "\JOBS"
+    SummaryWorksheet.Range("A5").Value = "PROCS:"
+    SummaryWorksheet.Range("B5").Value = "\PROCS"
+    SummaryWorksheet.Range("A6").Value = "SOURCES:"
+    SummaryWorksheet.Range("B6").Value = "\SOURCES"
+    SummaryWorksheet.Range("A7").Value = "FLOWCHARTS:"
+    SummaryWorksheet.Range("B7").Value = "\OUTPUT\SVG"
+    SummaryWorksheet.Range("A8").Value = ""
+    SummaryWorksheet.Range("B8").Value = ""
+    SummaryWorksheet.Range("A9").Value = "Data Gathering Form Contents:"
+    SummaryWorksheet.Range("B9").Value = ""
+    SummaryRow = 9
     For Each dgf In ListOfDataGathering
       SummaryRow += 1
       Dim row As Integer = LTrim(Str(SummaryRow))
