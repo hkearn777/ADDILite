@@ -2288,7 +2288,7 @@ Public Class Form1
     SummaryWorksheet.Range("A3").Value = "Folder Locations:"
     SummaryWorksheet.Range("B3").Value = InitDirectory
     SummaryWorksheet.Range("A4").Value = "JOBS:"
-    SummaryWorksheet.Range("B4").Value = "\JOBS"
+    SummaryWorksheet.Range("B4").Value = txtJCLJOBFolderName.Text
     SummaryWorksheet.Range("A5").Value = "PROCS:"
     SummaryWorksheet.Range("B5").Value = "\PROCS"
     SummaryWorksheet.Range("A6").Value = "SOURCES:"
@@ -2346,10 +2346,11 @@ Public Class Form1
     Dim row As String = LTrim(Str(JobRow))
     If JobSourceName = "CALLPGMS" Then
       JobsWorksheet.Range("A" & row).Value = ""
+      JobsWorksheet.Range("B" & row).Value = ""
     Else
       JobsWorksheet.Range("A" & row).Formula2 = CreateFlowchartHyperLink(JobSourceName)
+      JobsWorksheet.Range("B" & row).Formula2 = CreateJobHyperLink(JobSourceName)
     End If
-    JobsWorksheet.Range("B" & row).Value = JobSourceName
     JobsWorksheet.Range("C" & row).Value = jobName
     JobsWorksheet.Range("D" & row).Value = JobAccountInfo
     JobsWorksheet.Range("E" & row).Value = JobProgrammerName
@@ -2367,11 +2368,18 @@ Public Class Form1
 
   End Sub
   Function CreateFlowchartHyperLink(text As String) As String
-    '=HYPERLINK("file:///"&Summary!B7&"\[PRC6950D].svg", "view") 
+    '=HYPERLINK("file:///"&Summary!B7&"\[text].svg", "view") 
     Return "=HYPERLINK(" & QUOTE & "file:///" & QUOTE &
             "&Summary!B7&" &
-            QUOTE & "\" & QUOTE & "&" & QUOTE & JobSourceName &
+            QUOTE & "\" & QUOTE & "&" & QUOTE & text &
             ".svg" & QUOTE & ", " & QUOTE & "view" & QUOTE & ")"
+  End Function
+  Function CreateJobHyperLink(text As String) As String
+    '=HYPERLINK("file:///"&Summary!B4&"\[text]", "view") 
+    Return "=HYPERLINK(" & QUOTE & "file:///" & QUOTE &
+            "&Summary!B4&" &
+            QUOTE & "\" & QUOTE & "&" & QUOTE & text &
+            QUOTE & ", " & QUOTE & text & QUOTE & ")"
   End Function
   Sub CreateJobCommentsTab(ListOfSymbolics As List(Of String))
     ' Build the JobComments Worksheet.
