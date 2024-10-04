@@ -2286,15 +2286,15 @@ Public Class Form1
     SummaryWorksheet.Range("A2").Value = ""
     SummaryWorksheet.Range("B2").Value = ""
     SummaryWorksheet.Range("A3").Value = "Folder Locations:"
-    SummaryWorksheet.Range("B3").Value = InitDirectory
+    SummaryWorksheet.Range("B3").Value = folderPath
     SummaryWorksheet.Range("A4").Value = "JOBS:"
-    SummaryWorksheet.Range("B4").Value = txtJCLJOBFolderName.Text
+    SummaryWorksheet.Range("B4").Value = "\JOBS"
     SummaryWorksheet.Range("A5").Value = "PROCS:"
     SummaryWorksheet.Range("B5").Value = "\PROCS"
     SummaryWorksheet.Range("A6").Value = "SOURCES:"
     SummaryWorksheet.Range("B6").Value = "\SOURCES"
     SummaryWorksheet.Range("A7").Value = "FLOWCHARTS:"
-    SummaryWorksheet.Range("B7").Value = txtOutputFoldername.Text & "\SVG"
+    SummaryWorksheet.Range("B7").Value = "\OUTPUT\SVG"
     SummaryWorksheet.Range("A8").Value = ""
     SummaryWorksheet.Range("B8").Value = ""
     SummaryWorksheet.Range("A9").Value = "Data Gathering Form Contents:"
@@ -2370,14 +2370,14 @@ Public Class Form1
   Function CreateFlowchartHyperLink(text As String) As String
     '=HYPERLINK("file:///"&Summary!B7&"\[text].svg", "view") 
     Return "=HYPERLINK(" & QUOTE & "file:///" & QUOTE &
-            "&Summary!B7&" &
+            "&Summary!B3&Summary!B7&" &
             QUOTE & "\" & QUOTE & "&" & QUOTE & text &
             ".svg" & QUOTE & ", " & QUOTE & "view" & QUOTE & ")"
   End Function
   Function CreateJobHyperLink(text As String) As String
     '=HYPERLINK("file:///"&Summary!B4&"\[text]", "view") 
     Return "=HYPERLINK(" & QUOTE & "file:///" & QUOTE &
-            "&Summary!B4&" &
+            "&Summary!B3&Summary!B4&" &
             QUOTE & "\" & QUOTE & "&" & QUOTE & text &
             QUOTE & ", " & QUOTE & text & QUOTE & ")"
   End Function
@@ -2459,8 +2459,9 @@ Public Class Form1
       ProgramsWorksheet.Range("C1").Value = "Proc_Name"
       ProgramsWorksheet.Range("D1").Value = "StepName"
       ProgramsWorksheet.Range("E1").Value = "ExecName"
-      ProgramsWorksheet.Range("F1").Value = "PgmName"
-      ProgramsWorksheet.Range("G1").Value = "SourceType"
+      ProgramsWorksheet.Range("F1").Value = "Flow"
+      ProgramsWorksheet.Range("G1").Value = "PgmName"
+      ProgramsWorksheet.Range("H1").Value = "SourceType"
       ProgramsRow = 1
       ProgramsWorksheet.Activate()
       ProgramsWorksheet.Application.ActiveWindow.SplitRow = 1
@@ -2501,13 +2502,26 @@ Public Class Form1
       If ddSequence = 1 And ddConcatSeq = 0 Then
         ProgramsRow += 1
         Dim row As String = LTrim(Str(ProgramsRow))
+
+
         ProgramsWorksheet.Range("A" & row).Value = JobSourceName
         ProgramsWorksheet.Range("B" & row).Value = jobName
-        ProgramsWorksheet.Range("C" & row).Value = procName
+        If procName = "" Then
+          ProgramsWorksheet.Range("C" & row).Value = ""
+        Else
+          ProgramsWorksheet.Range("C" & row).Formula2 = CreateProcsHyperLink(procName)
+        End If
         ProgramsWorksheet.Range("D" & row).Value = stepName
         ProgramsWorksheet.Range("E" & row).Value = execName
-        ProgramsWorksheet.Range("F" & row).Value = pgmName
-        ProgramsWorksheet.Range("G" & row).Value = SourceType
+        Select Case SourceType
+          Case "COBOL", "EASYTRIEVE"
+            ProgramsWorksheet.Range("F" & row).Formula2 = CreateFlowchartHyperLink(pgmName)
+            ProgramsWorksheet.Range("G" & row).Formula2 = CreateSourcesHyperLink(pgmName)
+          Case Else
+            ProgramsWorksheet.Range("F" & row).Value = ""
+            ProgramsWorksheet.Range("G" & row).Value = pgmName
+        End Select
+        ProgramsWorksheet.Range("H" & row).Value = SourceType
         ' load up a list of executable programs to analyze
         'If SourceType = "COBOL" Or SourceType = "Easytrieve" Or SourceType = "Assembler" Then
         If ListOfExecs.IndexOf(pgmName & Delimiter & SourceType) = -1 Then
@@ -2523,6 +2537,21 @@ Public Class Form1
     lblProcessingWorksheet.Text = "Processing Programs: " & FileNameOnly & " : Complete"
 
   End Sub
+  Function CreateSourcesHyperLink(text As String) As String
+    '=HYPERLINK("file:///"&Summary!B6&"\[text]", "view") 
+    Return "=HYPERLINK(" & QUOTE & "file:///" & QUOTE &
+            "&Summary!B3&Summary!B6&" &
+            QUOTE & "\" & QUOTE & "&" & QUOTE & text &
+            QUOTE & ", " & QUOTE & text & QUOTE & ")"
+  End Function
+  Function CreateProcsHyperLink(text As String) As String
+    '=HYPERLINK("file:///"&Summary!B6&"\[text]", "view") 
+    Return "=HYPERLINK(" & QUOTE & "file:///" & QUOTE &
+            "&Summary!B3&Summary!B5&" &
+            QUOTE & "\" & QUOTE & "&" & QUOTE & text &
+            QUOTE & ", " & QUOTE & text & QUOTE & ")"
+  End Function
+
   Sub CreateFilesTab()
     ' Build the Files Tab. This is a list of all Files (DD) in the JCL Jobs.
     If Not cbFiles.Checked Then
@@ -5018,10 +5047,10 @@ Public Class Form1
     If ProgramsRow > 1 Then
       Dim row As Integer = LTrim(Str(ProgramsRow))
       ' Format the Sheet - first row bold the columns
-      rngPrograms = ProgramsWorksheet.Range("A1:G1")
+      rngPrograms = ProgramsWorksheet.Range("A1:H1")
       rngPrograms.Font.Bold = True
       ' data area autofit all columns
-      rngPrograms = ProgramsWorksheet.Range("A1:G" & row)
+      rngPrograms = ProgramsWorksheet.Range("A1:H" & row)
       workbook.Worksheets("Programs").Range("A1").AutoFilter
       rngPrograms.Columns.AutoFit()
       rngPrograms.Rows.AutoFit()
