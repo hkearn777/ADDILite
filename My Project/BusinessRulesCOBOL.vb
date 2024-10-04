@@ -480,10 +480,10 @@ Module BusinessRulesCOBOL
 
   Sub CreateBRPuml(OutputFolder As String, exec As String)
     ' Open PUML and write headers. Not worrying (try/catch) about subsequent writes
-    Dim pumlFileName As String = OutputFolder & "\" & exec & "_BR.puml"
+    Dim pumlFileName As String = OutputFolder & "\" & exec & "_P2P.puml"
     Try
       pumlFile = My.Computer.FileSystem.OpenTextFileWriter(pumlFileName, False)
-      pumlFile.WriteLine("@startuml " & exec & "_BR")
+      pumlFile.WriteLine("@startuml " & exec & "_P2P")
       pumlFile.WriteLine("header ADDILite(c), by IBM")
       pumlFile.WriteLine("title Paragraph to Paragraph diagram of Program: " & exec)
       pumlFile.WriteLine("")

@@ -1235,6 +1235,7 @@ Public Class Form1
       If continuation = False Then
         If jStatement.Trim.Length > 0 Then
           GetJCLWords(jStatement, jclWords)
+          jclWords(0) = AdjustProcName(jclWords, Jobfile)
           Select Case jclWords.Count
             Case 1
               Select Case jclWords(0)
@@ -1252,6 +1253,24 @@ Public Class Form1
       End If
     Next
     ReformatJCLAndLoadToArray = JCL
+  End Function
+  Function AdjustProcName(ByRef theJCLwords As List(Of String), ByRef theSourceFile As String) As String
+    If theJCLwords.Count < 2 Then
+      Return theJCLwords(0)
+    End If
+    If theJCLwords(1) <> "PROC" Then
+      Return theJCLwords(0)
+    End If
+    ' strip off just the filename with extension (if any), drop the pathinfo
+    Dim theFileName = Path.GetFileName(theSourceFile)
+    Dim theProcName = theJCLwords(0).Replace("//", "")
+    If theProcName = theFileName Then
+      Return theJCLwords(0)
+    End If
+    ' On the PROC statement, the Proc Source Name and Proc Name is different, adjust to the source name
+    LogFile.WriteLine(Date.Now & ",PROC Name adjusted to PROC Source Name," &
+                      theJCLwords(0) & " vs " & theFileName)
+    Return "//" & theFileName
   End Function
   Function JCLContinued(ByRef text As String, ByVal withinContinuation As Boolean) As Boolean
     ' determine if there will be a continuation by looking for a comma + space on the line not within quotes
@@ -2295,11 +2314,13 @@ Public Class Form1
     SummaryWorksheet.Range("B6").Value = "\SOURCES"
     SummaryWorksheet.Range("A7").Value = "FLOWCHARTS:"
     SummaryWorksheet.Range("B7").Value = "\OUTPUT\SVG"
-    SummaryWorksheet.Range("A8").Value = ""
-    SummaryWorksheet.Range("B8").Value = ""
-    SummaryWorksheet.Range("A9").Value = "Data Gathering Form Contents:"
+    SummaryWorksheet.Range("A8").Value = "BUSINESS RULES:"
+    SummaryWorksheet.Range("B8").Value = "\OUTPUT"
+    SummaryWorksheet.Range("A9").Value = ""
     SummaryWorksheet.Range("B9").Value = ""
-    SummaryRow = 9
+    SummaryWorksheet.Range("A10").Value = "Data Gathering Form Contents:"
+    SummaryWorksheet.Range("B10").Value = ""
+    SummaryRow = 10
     For Each dgf In ListOfDataGathering
       SummaryRow += 1
       Dim row As Integer = LTrim(Str(SummaryRow))
@@ -2459,9 +2480,11 @@ Public Class Form1
       ProgramsWorksheet.Range("C1").Value = "Proc_Name"
       ProgramsWorksheet.Range("D1").Value = "StepName"
       ProgramsWorksheet.Range("E1").Value = "ExecName"
-      ProgramsWorksheet.Range("F1").Value = "Flow"
-      ProgramsWorksheet.Range("G1").Value = "PgmName"
-      ProgramsWorksheet.Range("H1").Value = "SourceType"
+      ProgramsWorksheet.Range("F1").Value = "PgmName"
+      ProgramsWorksheet.Range("G1").Value = "SourceType"
+      ProgramsWorksheet.Range("H1").Value = "Flow"
+      ProgramsWorksheet.Range("I1").Value = "P2P"
+      ProgramsWorksheet.Range("J1").Value = "Business Rules"
       ProgramsRow = 1
       ProgramsWorksheet.Activate()
       ProgramsWorksheet.Application.ActiveWindow.SplitRow = 1
@@ -2502,8 +2525,6 @@ Public Class Form1
       If ddSequence = 1 And ddConcatSeq = 0 Then
         ProgramsRow += 1
         Dim row As String = LTrim(Str(ProgramsRow))
-
-
         ProgramsWorksheet.Range("A" & row).Value = JobSourceName
         ProgramsWorksheet.Range("B" & row).Value = jobName
         If procName = "" Then
@@ -2513,15 +2534,19 @@ Public Class Form1
         End If
         ProgramsWorksheet.Range("D" & row).Value = stepName
         ProgramsWorksheet.Range("E" & row).Value = execName
+        ProgramsWorksheet.Range("G" & row).Value = SourceType
         Select Case SourceType
           Case "COBOL", "EASYTRIEVE"
-            ProgramsWorksheet.Range("F" & row).Formula2 = CreateFlowchartHyperLink(pgmName)
-            ProgramsWorksheet.Range("G" & row).Formula2 = CreateSourcesHyperLink(pgmName)
+            ProgramsWorksheet.Range("F" & row).Formula2 = CreateSourcesHyperLink(pgmName)
+            ProgramsWorksheet.Range("H" & row).Formula2 = CreateFlowchartHyperLink(pgmName)
+            ProgramsWorksheet.Range("I" & row).Formula2 = CreateFlowchartHyperLink(pgmName & "_P2P")
+            ProgramsWorksheet.Range("J" & row).Formula2 = CreateOutputHyperLink(pgmName & "_BR.xlsx")
           Case Else
-            ProgramsWorksheet.Range("F" & row).Value = ""
-            ProgramsWorksheet.Range("G" & row).Value = pgmName
+            ProgramsWorksheet.Range("F" & row).Value = pgmName    'view source code
+            ProgramsWorksheet.Range("H" & row).Value = ""         'flowchart
+            ProgramsWorksheet.Range("I" & row).Value = ""         'flowchart P2P
+            ProgramsWorksheet.Range("J" & row).Value = ""         'BR.XLSX
         End Select
-        ProgramsWorksheet.Range("H" & row).Value = SourceType
         ' load up a list of executable programs to analyze
         'If SourceType = "COBOL" Or SourceType = "Easytrieve" Or SourceType = "Assembler" Then
         If ListOfExecs.IndexOf(pgmName & Delimiter & SourceType) = -1 Then
@@ -2548,6 +2573,13 @@ Public Class Form1
     '=HYPERLINK("file:///"&Summary!B6&"\[text]", "view") 
     Return "=HYPERLINK(" & QUOTE & "file:///" & QUOTE &
             "&Summary!B3&Summary!B5&" &
+            QUOTE & "\" & QUOTE & "&" & QUOTE & text &
+            QUOTE & ", " & QUOTE & text & QUOTE & ")"
+  End Function
+  Function CreateOutputHyperLink(text As String) As String
+    '=HYPERLINK("file:///"&Summary!B6&"\[text]", "view") 
+    Return "=HYPERLINK(" & QUOTE & "file:///" & QUOTE &
+            "&Summary!B3&Summary!B8&" &
             QUOTE & "\" & QUOTE & "&" & QUOTE & text &
             QUOTE & ", " & QUOTE & text & QUOTE & ")"
   End Function
@@ -3233,7 +3265,8 @@ Public Class Form1
               pgm.ProcedureDivision = stmtIndex
             Case SrcStmt(stmtIndex).IndexOf("PROGRAM-ID.") > -1
               Dim tmppgmid As String = SrcStmt(stmtIndex).Trim
-              pgm.ProgramId = tmppgmid.Substring(11).Replace(".", "").Replace("'", "").Trim
+              Dim tmppgmid2 As String() = tmppgmid.Substring(11).Replace(".", "").Replace("'", "").Trim.Split(" ")
+              pgm.ProgramId = tmppgmid2(0)
               If pgm.ProgramId.Length = 0 Then
                 ' since Program-id's value is not on same line, presume it is on next line
                 '   else the source is invalid syntax.
@@ -4869,14 +4902,14 @@ Public Class Form1
       RecordsWorksheet.Range("D1").Value = "DD"
       RecordsWorksheet.Range("E1").Value = "Type"
       RecordsWorksheet.Range("F1").Value = "RecordName"
-      RecordsWorksheet.Range("G1").Value = "Length"
-      RecordsWorksheet.Range("H1").Value = "@Line"
-      RecordsWorksheet.Range("I1").Value = "Level"
-      RecordsWorksheet.Range("J1").Value = "Open"
-      RecordsWorksheet.Range("K1").Value = "RecFM"
-      RecordsWorksheet.Range("L1").Value = "FDMinLen"
-      RecordsWorksheet.Range("M1").Value = "FDMaxLen"
-      RecordsWorksheet.Range("N1").Value = "Copybook"
+      RecordsWorksheet.Range("G1").Value = "Copybook"
+      RecordsWorksheet.Range("H1").Value = "Length"
+      RecordsWorksheet.Range("I1").Value = "@Line"
+      RecordsWorksheet.Range("J1").Value = "Level"
+      RecordsWorksheet.Range("K1").Value = "Open"
+      RecordsWorksheet.Range("L1").Value = "RecFM"
+      RecordsWorksheet.Range("M1").Value = "FDMinLen"
+      RecordsWorksheet.Range("N1").Value = "FDMaxLen"
       RecordsWorksheet.Range("O1").Value = "FDOrg"
       RecordsRow = 1
       RecordsWorksheet.Activate()
@@ -4902,14 +4935,14 @@ Public Class Form1
           RecordsWorksheet.Range("D" & row).Value = DelimText(3)       'DD
           RecordsWorksheet.Range("E" & row).Value = DelimText(4)       'Type
           RecordsWorksheet.Range("F" & row).Value = DelimText(5)       'RecordName
-          RecordsWorksheet.Range("G" & row).Value = DelimText(6)       'Length
-          RecordsWorksheet.Range("H" & row).Value = DelimText(7)       '@line
-          RecordsWorksheet.Range("I" & row).Value = DelimText(8)       'Level
-          RecordsWorksheet.Range("J" & row).Value = DelimText(9)       'Open Mode
-          RecordsWorksheet.Range("K" & row).Value = DelimText(10)      'RecFM
-          RecordsWorksheet.Range("L" & row).Value = DelimText(11)      'FDMinLen
-          RecordsWorksheet.Range("M" & row).Value = DelimText(12)      'FDMaxLen
-          RecordsWorksheet.Range("N" & row).Value = DelimText(13)      'Copybook
+          RecordsWorksheet.Range("G" & row).Value = DelimText(13)      'Copybook
+          RecordsWorksheet.Range("H" & row).Value = DelimText(6)       'Length
+          RecordsWorksheet.Range("I" & row).Value = DelimText(7)       '@line
+          RecordsWorksheet.Range("J" & row).Value = DelimText(8)       'Level
+          RecordsWorksheet.Range("K" & row).Value = DelimText(9)       'Open Mode
+          RecordsWorksheet.Range("L" & row).Value = DelimText(10)      'RecFM
+          RecordsWorksheet.Range("M" & row).Value = DelimText(11)      'FDMinLen
+          RecordsWorksheet.Range("N" & row).Value = DelimText(12)      'FDMaxLen
           RecordsWorksheet.Range("O" & row).Value = DelimText(14)      'FDOrg
         End If
         If cnt Mod 100 = 0 Then
@@ -5047,10 +5080,10 @@ Public Class Form1
     If ProgramsRow > 1 Then
       Dim row As Integer = LTrim(Str(ProgramsRow))
       ' Format the Sheet - first row bold the columns
-      rngPrograms = ProgramsWorksheet.Range("A1:H1")
+      rngPrograms = ProgramsWorksheet.Range("A1:J1")
       rngPrograms.Font.Bold = True
       ' data area autofit all columns
-      rngPrograms = ProgramsWorksheet.Range("A1:H" & row)
+      rngPrograms = ProgramsWorksheet.Range("A1:J" & row)
       workbook.Worksheets("Programs").Range("A1").AutoFilter
       rngPrograms.Columns.AutoFit()
       rngPrograms.Rows.AutoFit()
