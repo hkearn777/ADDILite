@@ -4935,7 +4935,11 @@ Public Class Form1
           RecordsWorksheet.Range("D" & row).Value = DelimText(3)       'DD
           RecordsWorksheet.Range("E" & row).Value = DelimText(4)       'Type
           RecordsWorksheet.Range("F" & row).Value = DelimText(5)       'RecordName
-          RecordsWorksheet.Range("G" & row).Value = DelimText(13)      'Copybook
+          If DelimText(13).ToUpper = "NONE" Then
+            RecordsWorksheet.Range("G" & row).Value = DelimText(13)      'Copybook
+          Else
+            RecordsWorksheet.Range("G" & row).Formula2 = CreateSourcesHyperLink(DelimText(13))
+          End If
           RecordsWorksheet.Range("H" & row).Value = DelimText(6)       'Length
           RecordsWorksheet.Range("I" & row).Value = DelimText(7)       '@line
           RecordsWorksheet.Range("J" & row).Value = DelimText(8)       'Level
