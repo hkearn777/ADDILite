@@ -24,8 +24,9 @@ Public Class Form1
   ' - PlantUml for creating flowchart
   '
   '***Be sure to change ProgramVersion when making changes!!!
-  Dim ProgramVersion As String = "v1.7"
+  Dim ProgramVersion As String = "v1.8"
   'Change-History.
+  ' 2024/10/24 v1.8   hk count source lines and place on Programs tab
   ' 2024/09/30 v1.7   hk Flowchart Links
   ' 2024/09/27 v1.6.7 hk fix drop empty '//' and '/*' JCL statements
   '                      - fix missing execname and pgmname when PROC is utility
@@ -265,6 +266,7 @@ Public Class Form1
   Dim theProcName As String = ""
   ' COBOL fields
   Dim SourceType As String = ""
+  Dim SourceCount As Integer = 0
   'Dim CalledMember As String = ""
   Dim SrcStmt As New List(Of String)
   Dim cWord As New List(Of String)
@@ -1847,7 +1849,7 @@ Public Class Form1
     If pgmName <> "DFSRRC00" Then
       execSequence += 1
       If NeedSourceType Then
-        SourceType = GetSourceType(pgmName)
+        SourceType = GetSourceType(pgmName)       'note. SourceCount is also updated there
         execName = pgmName
       End If
       Exit Sub
@@ -1870,7 +1872,7 @@ Public Class Form1
     pgmName = temparray(1)
 
     If NeedSourceType Then
-      SourceType = GetSourceType(pgmName)
+      SourceType = GetSourceType(pgmName)       'note. SourceCount is also updated there
     End If
 
   End Sub
@@ -2034,7 +2036,8 @@ Public Class Form1
                        reportID & Delimiter &
                        "" & Delimiter &
                        SourceType & Delimiter &
-                       execName)
+                       execName & Delimiter &
+                       SourceCount)
     prevDDName = ddName
     prevPgmName = pgmName
     prevStepName = stepName
@@ -2485,6 +2488,7 @@ Public Class Form1
       ProgramsWorksheet.Range("H1").Value = "Flow"
       ProgramsWorksheet.Range("I1").Value = "P2P"
       ProgramsWorksheet.Range("J1").Value = "Business Rules"
+      ProgramsWorksheet.Range("K1").Value = "Count"
       ProgramsRow = 1
       ProgramsWorksheet.Activate()
       ProgramsWorksheet.Application.ActiveWindow.SplitRow = 1
@@ -2512,6 +2516,7 @@ Public Class Form1
       ddConcatSeq = Val(csvRecord(9))
       SourceType = csvRecord(19)
       execName = csvRecord(20)
+      SourceCount = Val(csvRecord(21))
 
       ' adjust for utility procs
       If execName = "" Then
@@ -2547,6 +2552,7 @@ Public Class Form1
             ProgramsWorksheet.Range("I" & row).Value = ""         'flowchart P2P
             ProgramsWorksheet.Range("J" & row).Value = ""         'BR.XLSX
         End Select
+        ProgramsWorksheet.Range("K" & row).Value = SourceCount
         ' load up a list of executable programs to analyze
         'If SourceType = "COBOL" Or SourceType = "Easytrieve" Or SourceType = "Assembler" Then
         If ListOfExecs.IndexOf(pgmName & Delimiter & SourceType) = -1 Then
@@ -4371,6 +4377,7 @@ Public Class Form1
     ' Identify if this file is COBOL or Easytrieve or Utility or Assembler
     ' FileName must exist in the source directory.
     GetSourceType = ""
+    SourceCount = 0
     If FileName.Trim.Length = 0 Then
       LogFile.WriteLine(Date.Now & ",Filename for GetSourcetype is empty," & FileNameOnly)
       Return "UTILITY"
@@ -4392,6 +4399,7 @@ Public Class Form1
     End If
 
     Dim CobolLines As String() = File.ReadAllLines(txtSourceFolderName.Text & "\" & FoundCobolFileName)
+    SourceCount = CobolLines.Count
 
     For index As Integer = 0 To CobolLines.Count - 1
       If Len(Trim(CobolLines(index))) = 0 Then
@@ -5084,10 +5092,10 @@ Public Class Form1
     If ProgramsRow > 1 Then
       Dim row As Integer = LTrim(Str(ProgramsRow))
       ' Format the Sheet - first row bold the columns
-      rngPrograms = ProgramsWorksheet.Range("A1:J1")
+      rngPrograms = ProgramsWorksheet.Range("A1:K1")
       rngPrograms.Font.Bold = True
       ' data area autofit all columns
-      rngPrograms = ProgramsWorksheet.Range("A1:J" & row)
+      rngPrograms = ProgramsWorksheet.Range("A1:K" & row)
       workbook.Worksheets("Programs").Range("A1").AutoFilter
       rngPrograms.Columns.AutoFit()
       rngPrograms.Rows.AutoFit()
