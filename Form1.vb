@@ -27,6 +27,7 @@ Public Class Form1
   Dim ProgramVersion As String = "v1.8"
   'Change-History.
   ' 2024/10/24 v1.8   hk count source lines and place on Programs tab
+  '                      - fixed flowchart to max 45 character lines
   ' 2024/09/30 v1.7   hk Flowchart Links
   ' 2024/09/27 v1.6.7 hk fix drop empty '//' and '/*' JCL statements
   '                      - fix missing execname and pgmname when PROC is utility
