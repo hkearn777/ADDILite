@@ -28,6 +28,8 @@ Public Class Form1
   'Change-History.
   ' 2024/10/24 v1.8   hk count source lines and place on Programs tab
   '                      - fixed flowchart to max 45 character lines
+  '                      - fixed COBOL continuation with blank lines
+  '                      - Included statement for UPDATE, INSERT, DELETE execSQL
   ' 2024/09/30 v1.7   hk Flowchart Links
   ' 2024/09/27 v1.6.7 hk fix drop empty '//' and '/*' JCL statements
   '                      - fix missing execname and pgmname when PROC is utility
@@ -2297,29 +2299,30 @@ Public Class Form1
     workbook = objExcel.Workbooks.Add
     SummaryWorksheet = workbook.Sheets.Item(1)
     SummaryWorksheet.Name = "Summary"
-    SummaryRow = SummaryWorksheet.Range("A4").Value = "JOBS:"
-    SummaryWorksheet.Range("B4").Value = "\JOBS"
-
+    SummaryRow = 0
+    'SummaryWorksheet.Range("A4").Value = "JOBS:"
+    'SummaryWorksheet.Range("B4").Value = "\JOBS"
+    'https://myportal.dhs.state.nj.us/dfd/DIMS/Shared%20Documents/Bull%20Mainframe/Human
     SummaryWorksheet.Range("A1").Value = "Mainframe Documentation Project" & vbNewLine &
                                          "Data Gathering Form" & vbNewLine &
                                          Path.GetFileNameWithoutExtension(txtDataGatheringForm.Text) & vbNewLine &
                                          "Model Created:" & Date.Now & vbNewLine &
-                                         "ADDILite, Version:" & ProgramVersion
+                                         "Accelerator: ADDILite, Version:" & ProgramVersion
     SummaryWorksheet.Range("B1").Value = ""
     SummaryWorksheet.Range("A2").Value = ""
     SummaryWorksheet.Range("B2").Value = ""
     SummaryWorksheet.Range("A3").Value = "Folder Locations:"
-    SummaryWorksheet.Range("B3").Value = folderPath
+    SummaryWorksheet.Range("B3").Value = "file:///" & folderPath
     SummaryWorksheet.Range("A4").Value = "JOBS:"
-    SummaryWorksheet.Range("B4").Value = "\JOBS"
+    SummaryWorksheet.Range("B4").Value = "\JOBS\"
     SummaryWorksheet.Range("A5").Value = "PROCS:"
-    SummaryWorksheet.Range("B5").Value = "\PROCS"
+    SummaryWorksheet.Range("B5").Value = "\PROCS\"
     SummaryWorksheet.Range("A6").Value = "SOURCES:"
-    SummaryWorksheet.Range("B6").Value = "\SOURCES"
+    SummaryWorksheet.Range("B6").Value = "\SOURCES\"
     SummaryWorksheet.Range("A7").Value = "FLOWCHARTS:"
-    SummaryWorksheet.Range("B7").Value = "\OUTPUT\SVG"
+    SummaryWorksheet.Range("B7").Value = "\OUTPUT\SVG\"
     SummaryWorksheet.Range("A8").Value = "BUSINESS RULES:"
-    SummaryWorksheet.Range("B8").Value = "\OUTPUT"
+    SummaryWorksheet.Range("B8").Value = "\OUTPUT\"
     SummaryWorksheet.Range("A9").Value = ""
     SummaryWorksheet.Range("B9").Value = ""
     SummaryWorksheet.Range("A10").Value = "Data Gathering Form Contents:"
@@ -2392,20 +2395,6 @@ Public Class Form1
     JobsWorksheet.Range("P" & row).Value = JobTyprun
 
   End Sub
-  Function CreateFlowchartHyperLink(text As String) As String
-    '=HYPERLINK("file:///"&Summary!B7&"\[text].svg", "view") 
-    Return "=HYPERLINK(" & QUOTE & "file:///" & QUOTE &
-            "&Summary!B3&Summary!B7&" &
-            QUOTE & "\" & QUOTE & "&" & QUOTE & text &
-            ".svg" & QUOTE & ", " & QUOTE & "view" & QUOTE & ")"
-  End Function
-  Function CreateJobHyperLink(text As String) As String
-    '=HYPERLINK("file:///"&Summary!B4&"\[text]", "view") 
-    Return "=HYPERLINK(" & QUOTE & "file:///" & QUOTE &
-            "&Summary!B3&Summary!B4&" &
-            QUOTE & "\" & QUOTE & "&" & QUOTE & text &
-            QUOTE & ", " & QUOTE & text & QUOTE & ")"
-  End Function
   Sub CreateJobCommentsTab(ListOfSymbolics As List(Of String))
     ' Build the JobComments Worksheet.
     ' Process through the JclStmt array. Look for an 'EXEC' command and then process backwards
@@ -2570,25 +2559,34 @@ Public Class Form1
 
   End Sub
   Function CreateSourcesHyperLink(text As String) As String
-    '=HYPERLINK("file:///"&Summary!B6&"\[text]", "view") 
-    Return "=HYPERLINK(" & QUOTE & "file:///" & QUOTE &
-            "&Summary!B3&Summary!B6&" &
-            QUOTE & "\" & QUOTE & "&" & QUOTE & text &
+    Dim theString = "=HYPERLINK(Summary!B3&Summary!B6&" &
+             QUOTE & text &
             QUOTE & ", " & QUOTE & text & QUOTE & ")"
+    Return theString
   End Function
   Function CreateProcsHyperLink(text As String) As String
-    '=HYPERLINK("file:///"&Summary!B6&"\[text]", "view") 
-    Return "=HYPERLINK(" & QUOTE & "file:///" & QUOTE &
-            "&Summary!B3&Summary!B5&" &
-            QUOTE & "\" & QUOTE & "&" & QUOTE & text &
+    Dim theString = "=HYPERLINK(Summary!B3&Summary!B5&" &
+            QUOTE & text &
             QUOTE & ", " & QUOTE & text & QUOTE & ")"
+    Return theString
   End Function
   Function CreateOutputHyperLink(text As String) As String
-    '=HYPERLINK("file:///"&Summary!B6&"\[text]", "view") 
-    Return "=HYPERLINK(" & QUOTE & "file:///" & QUOTE &
-            "&Summary!B3&Summary!B8&" &
-            QUOTE & "\" & QUOTE & "&" & QUOTE & text &
+    Dim theString = "=HYPERLINK(Summary!B3&Summary!B8&" &
+             QUOTE & text &
             QUOTE & ", " & QUOTE & text & QUOTE & ")"
+    Return theString
+  End Function
+  Function CreateFlowchartHyperLink(text As String) As String
+    Dim theString = "=HYPERLINK(Summary!B3&Summary!B7&" &
+            QUOTE & text & ".svg" &
+            QUOTE & ", " & QUOTE & "view" & QUOTE & ")"
+    Return theString
+  End Function
+  Function CreateJobHyperLink(text As String) As String
+    Dim theString = "=HYPERLINK(Summary!B3&Summary!B4&" &
+            QUOTE & text &
+            QUOTE & ", " & QUOTE & text & QUOTE & ")"
+    Return theString
   End Function
 
   Sub CreateFilesTab()
@@ -2971,6 +2969,11 @@ Public Class Form1
 
         ' special adjustment for slash in column 7, must be a Telon artifact
         If IndicatorArea = "/" Then
+          IndicatorArea = "*"
+          Mid(CobolLines(index), 7, 1) = "*"
+        End If
+        ' special adjustment for Continuation in column 7 but areaA and B are empty (HP COBOL)
+        If IndicatorArea = "-" And AreaA.Trim.Length = 0 And AreaB.Trim.Length = 0 Then
           IndicatorArea = "*"
           Mid(CobolLines(index), 7, 1) = "*"
         End If
@@ -3477,7 +3480,7 @@ Public Class Form1
                   ExecSQL = cWord(x + 2)
                   Table = cWord(x + 3)
                   Cursor = ""
-                  Statement = ""
+                  Statement = BuildTheStatement(x + 4, cWord)
                   Call AddToListOfEXECSQL(execCnt, ExecSQL, Table, Cursor, Statement)
                   x += 3
                   Continue For
@@ -3574,7 +3577,7 @@ Public Class Form1
                   ExecSQL = cWord(x + 2)
                   Table = cWord(x + 4)
                   Cursor = ""
-                  Statement = ""
+                  Statement = BuildTheStatement(x + 5, cWord)
                   Call AddToListOfEXECSQL(execCnt, ExecSQL, Table, Cursor, Statement)
                   x += 4
                   Continue For
@@ -3584,7 +3587,7 @@ Public Class Form1
                   ExecSQL = cWord(x + 2)
                   Table = cWord(x + 4)
                   Cursor = ""
-                  Statement = ""
+                  Statement = BuildTheStatement(x + 5, cWord)
                   Call AddToListOfEXECSQL(execCnt, ExecSQL, Table, Cursor, Statement)
                   x += 4
                   Continue For
@@ -3896,6 +3899,17 @@ Public Class Form1
     Next pgm
 
   End Sub
+  Function BuildTheStatement(ByRef x As Integer, ByRef cWord As List(Of String)) As String
+    ' Build the statement
+    Dim theStatement As String = ""
+    For y As Integer = x To cWord.Count - 1
+      If cWord(y) = "END-EXEC" Then
+        Exit For
+      End If
+      theStatement &= cWord(y) & " "
+    Next y
+    Return theStatement.Trim
+  End Function
   Sub AddToListOfEXECSQL(ByRef Execcnt As Integer,
                          ByRef execSql As String,
                          ByRef Table As String,
