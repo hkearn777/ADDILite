@@ -30,6 +30,7 @@ Public Class Form1
   '                      - fixed flowchart to max 45 character lines
   '                      - fixed COBOL continuation with blank lines
   '                      - Included statement for UPDATE, INSERT, DELETE execSQL
+  '                      - New Folder structure for PUML, Flowcharts, Business Rules
   ' 2024/09/30 v1.7   hk Flowchart Links
   ' 2024/09/27 v1.6.7 hk fix drop empty '//' and '/*' JCL statements
   '                      - fix missing execname and pgmname when PROC is utility
@@ -115,6 +116,8 @@ Public Class Form1
   Dim folderPath As String = ""
   Dim Utilities As String()
   Dim ControlLibraries As String()
+  Dim BusinessRulesFolder As String = ""
+  Dim PUMLFolder As String = ""
 
   ' Arrays to hold the DB2 Declare to Member names
   ' these two array will share the same index
@@ -379,6 +382,8 @@ Public Class Form1
       txtTelonFoldername.Text = folderPath & "\TELON"
       txtScreenMapsFolderName.Text = folderPath & "\SCREENS"
       txtOutputFoldername.Text = folderPath & "\OUTPUT"
+      PUMLFolder = folderPath & "\PUML"
+      BusinessRulesFolder = folderPath & "\BUSINESS RULES"
 
       CntBatchJobs = GetFileCount(txtJCLJOBFolderName.Text)
       CntProcFiles = GetFileCount(txtProcFolderName.Text)
@@ -2095,7 +2100,7 @@ Public Class Form1
   End Function
   Sub CreateJCLPuml()
     ' Open the output file PUML
-    Dim PumlFileName = txtOutputFoldername.Text & "\" & FileNameOnly & ".puml"
+    Dim PumlFileName = PUMLFolder & "\" & FileNameOnly & ".puml"
     swPumlFile = My.Computer.FileSystem.OpenTextFileWriter(PumlFileName, False)
 
     ' Write the top of file
@@ -2302,7 +2307,6 @@ Public Class Form1
     SummaryRow = 0
     'SummaryWorksheet.Range("A4").Value = "JOBS:"
     'SummaryWorksheet.Range("B4").Value = "\JOBS"
-    'https://myportal.dhs.state.nj.us/dfd/DIMS/Shared%20Documents/Bull%20Mainframe/Human
     SummaryWorksheet.Range("A1").Value = "Mainframe Documentation Project" & vbNewLine &
                                          "Data Gathering Form" & vbNewLine &
                                          Path.GetFileNameWithoutExtension(txtDataGatheringForm.Text) & vbNewLine &
@@ -2312,17 +2316,20 @@ Public Class Form1
     SummaryWorksheet.Range("A2").Value = ""
     SummaryWorksheet.Range("B2").Value = ""
     SummaryWorksheet.Range("A3").Value = "Folder Locations:"
-    SummaryWorksheet.Range("B3").Value = "file:///" & folderPath
+    Dim theFilename As String = QUOTE & "filename" & quote
+    Dim theOpenBracket As String = QUOTE & "[" & QUOTE
+    Dim theString As String = "=LEFT(CELL(" & theFilename & "),FIND(" & theOpenBracket & ",CELL(" & theFilename & "))-2)"
+    SummaryWorksheet.Range("B3").Value2 = theString
     SummaryWorksheet.Range("A4").Value = "JOBS:"
-    SummaryWorksheet.Range("B4").Value = "\JOBS\"
+    SummaryWorksheet.Range("B4").Value = "/JOBS/"
     SummaryWorksheet.Range("A5").Value = "PROCS:"
-    SummaryWorksheet.Range("B5").Value = "\PROCS\"
+    SummaryWorksheet.Range("B5").Value = "/PROCS/"
     SummaryWorksheet.Range("A6").Value = "SOURCES:"
-    SummaryWorksheet.Range("B6").Value = "\SOURCES\"
+    SummaryWorksheet.Range("B6").Value = "/SOURCES/"
     SummaryWorksheet.Range("A7").Value = "FLOWCHARTS:"
-    SummaryWorksheet.Range("B7").Value = "\OUTPUT\SVG\"
+    SummaryWorksheet.Range("B7").Value = "/FLOWCHARTS/"
     SummaryWorksheet.Range("A8").Value = "BUSINESS RULES:"
-    SummaryWorksheet.Range("B8").Value = "\OUTPUT\"
+    SummaryWorksheet.Range("B8").Value = "/BUSINESS RULES/"
     SummaryWorksheet.Range("A9").Value = ""
     SummaryWorksheet.Range("B9").Value = ""
     SummaryWorksheet.Range("A10").Value = "Data Gathering Form Contents:"
@@ -4600,7 +4607,7 @@ Public Class Form1
 
     ' Create a Plantuml file, step by step, based on the Procedure division.
     'Call CreatePumlCOBOL(exec)
-    Call CreateCobolFlowchart(SrcStmt, exec, txtOutputFoldername.Text)
+    Call CreateCobolFlowchart(SrcStmt, exec, PUMLFolder)
 
 
     ' Create a Records/Fields spreadsheet
@@ -4608,7 +4615,7 @@ Public Class Form1
 
     'Create a Business Rules spreadsheet file, based on the Procedure division.
     If cbBusinessRules.Checked Then
-      Call CreateCOBOLBusinessRules(SrcStmt, exec, txtOutputFoldername.Text, pgm, ListOfFields)
+      Call CreateCOBOLBusinessRules(SrcStmt, exec, BusinessRulesFolder, PUMLFolder, pgm, ListOfFields)
     End If
 
     ' Call CreateComponentsFile()
@@ -6005,9 +6012,9 @@ Public Class Form1
   Sub PumlPageBreak(ByRef exec As String)
     pumlPageCnt += 1
     ' Open the output file Puml 
-    Dim pumlFileName As String = txtOutputFoldername.Text & "\" & exec & ".puml"
+    Dim pumlFileName As String = PUMLFolder & "\" & exec & ".puml"
     If pumlPageCnt > 1 Then
-      pumlFileName = txtOutputFoldername.Text & "\" & exec & "_" & LTrim(Str(pumlPageCnt)) & ".puml"
+      pumlFileName = PUMLFolder & "\" & exec & "_" & LTrim(Str(pumlPageCnt)) & ".puml"
     End If
 
     ' Open and write at least one time. Not worrying (try/catch) about subsequent writes
@@ -6046,7 +6053,7 @@ Public Class Form1
     Dim ifcnt As Integer = 0
 
     ' Open the output file Puml 
-    Dim PumlFileName = txtOutputFoldername.Text & "\" & exec & ".puml"
+    Dim PumlFileName = PUMLFolder & "\" & exec & ".puml"
 
     ' Open and write at least one time. Not worrying (try/catch) about subsequent writes
     Try

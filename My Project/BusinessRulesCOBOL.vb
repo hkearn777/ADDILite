@@ -46,7 +46,9 @@ Module BusinessRulesCOBOL
   Dim newLine As String = System.Environment.NewLine
   Dim delimiter As String = "|"
 
-  Public Sub CreateCOBOLBusinessRules(ByRef srcStmt As List(Of String), ByRef exec As String, ByRef outFolder As String,
+  Public Sub CreateCOBOLBusinessRules(ByRef srcStmt As List(Of String), ByRef exec As String,
+                                      ByRef outFolder As String,
+                                      ByRef outPumlFolder As String,
                                       ByRef pgm As ProgramInfo,
                                       ByRef ListOfFields As List(Of String))
     ' Initialize Arrays
@@ -139,7 +141,7 @@ Module BusinessRulesCOBOL
 
     Call CreateBRExcelWorksheet(outFolder, exec)
 
-    Call CreateBRPuml(outFolder, exec)
+    Call CreateBRPuml(outPumlFolder, exec)
 
   End Sub
   'Sub ProcessParagraphPerform(cWordIndex As Integer, currentParagraph As String)
