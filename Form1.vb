@@ -24,13 +24,15 @@ Public Class Form1
   ' - PlantUml for creating flowchart
   '
   '***Be sure to change ProgramVersion when making changes!!!
-  Dim ProgramVersion As String = "v1.8"
+  Dim ProgramVersion As String = "v1.8.1"
   'Change-History.
   ' 2024/10/24 v1.8   hk count source lines and place on Programs tab
   '                      - fixed flowchart to max 45 character lines
   '                      - fixed COBOL continuation with blank lines
   '                      - Included statement for UPDATE, INSERT, DELETE execSQL
   '                      - New Folder structure for PUML, Flowcharts, Business Rules
+  '                      - Move JOB Flow logic to standalone program: CreateJobFlowcharts
+  '                      - Add COBOL program-id Alias filenames feature
   ' 2024/09/30 v1.7   hk Flowchart Links
   ' 2024/09/27 v1.6.7 hk fix drop empty '//' and '/*' JCL statements
   '                      - fix missing execname and pgmname when PROC is utility
@@ -193,6 +195,7 @@ Public Class Form1
   Dim jclStmt As New List(Of String)
   Dim ListOfExecs As New List(Of String)        'array holding the executable programs
   Dim ListOfEasytrieveLoadAndGo As New Dictionary(Of String, String) 'array holding the names of the 'load and go' Easytrieve programs
+  Dim AliasCobol As New Dictionary(Of String, String)   'program-id to filename
 
   Dim swIPFile As StreamWriter = Nothing        'Instream proc file, temporary
   Dim swPumlFile As StreamWriter = Nothing
@@ -521,6 +524,19 @@ Public Class Form1
       ControlLibraries = File.ReadAllLines(ControlLibrariesFileName)
     End If
 
+    ' Load an AliasCobol array, if any
+    Dim AliasFileName As String = folderPath & "\COBOLAlias.csv"
+    If Not File.Exists(AliasFileName) Then
+      AliasCobol.Add("Empty", "Empty")
+    Else
+      Dim AliasRows As String() = File.ReadAllLines(AliasFileName)
+      For Each aliasrow In AliasRows
+        Dim programidandfilename As String() = aliasrow.Split(",")
+        If programidandfilename.Count > 1 Then
+          AliasCobol.Add(programidandfilename(0), programidandfilename(1))
+        End If
+      Next
+    End If
 
     DirectoryName = Path.GetDirectoryName(txtJCLJOBFolderName.Text)
 
@@ -1715,7 +1731,7 @@ Public Class Form1
 
     Next
 
-    Call CreateJCLPuml()
+    'Call CreateJCLPuml() see new program: CreateJOBFlowcharts
 
     Call CreateJobsTab()
 
@@ -2098,137 +2114,137 @@ Public Class Form1
 
     Return dsn
   End Function
-  Sub CreateJCLPuml()
-    ' Open the output file PUML
-    Dim PumlFileName = PUMLFolder & "\" & FileNameOnly & ".puml"
-    swPumlFile = My.Computer.FileSystem.OpenTextFileWriter(PumlFileName, False)
+  'Sub CreateJCLPuml()
+  '  ' Open the output file PUML
+  '  Dim PumlFileName = PUMLFolder & "\" & FileNameOnly & ".puml"
+  '  swPumlFile = My.Computer.FileSystem.OpenTextFileWriter(PumlFileName, False)
 
-    ' Write the top of file
-    swPumlFile.WriteLine("@startuml " & FileNameOnly)
-    swPumlFile.WriteLine("header ADDILite(c), by IBM")
-    swPumlFile.WriteLine("title Flowchart of JOB: " & FileNameOnly)
+  '  ' Write the top of file
+  '  swPumlFile.WriteLine("@startuml " & FileNameOnly)
+  '  swPumlFile.WriteLine("header ADDILite(c), by IBM")
+  '  swPumlFile.WriteLine("title Flowchart of JOB: " & FileNameOnly)
 
-    ' Read the DD CSV file back in and load to one DD statement array with all its attributes
-    If ListOfDDs.Count = 0 Then
-      Exit Sub
-    End If
-    'Dim FileName = txtOutputFoldername.Text & "/" & FileNameOnly & "_DD.csv"
-    'If Not File.Exists(FileName) Then
-    '  Exit Sub
-    'End If
-    Dim csvCnt As Integer = 0
-    'Dim csvFile As FileIO.TextFieldParser = New FileIO.TextFieldParser(FileName)
-    Dim csvRecord As String()           ' all fields(columns) for a given record
-    'csvFile.TextFieldType = FileIO.FieldType.Delimited
-    'csvFile.Delimiters = New String() {"|"}
-    'csvFile.HasFieldsEnclosedInQuotes = True
-    Dim ListOfSteps As New List(Of String)
-    Dim stepSequence As Integer = 0
-    Dim stepNameSeq As String = ""
+  '  ' Read the DD CSV file back in and load to one DD statement array with all its attributes
+  '  If ListOfDDs.Count = 0 Then
+  '    Exit Sub
+  '  End If
+  '  'Dim FileName = txtOutputFoldername.Text & "/" & FileNameOnly & "_DD.csv"
+  '  'If Not File.Exists(FileName) Then
+  '  '  Exit Sub
+  '  'End If
+  '  Dim csvCnt As Integer = 0
+  '  'Dim csvFile As FileIO.TextFieldParser = New FileIO.TextFieldParser(FileName)
+  '  Dim csvRecord As String()           ' all fields(columns) for a given record
+  '  'csvFile.TextFieldType = FileIO.FieldType.Delimited
+  '  'csvFile.Delimiters = New String() {"|"}
+  '  'csvFile.HasFieldsEnclosedInQuotes = True
+  '  Dim ListOfSteps As New List(Of String)
+  '  Dim stepSequence As Integer = 0
+  '  Dim stepNameSeq As String = ""
 
-    For Each DDStmt In ListOfDDs
-      csvRecord = DDStmt.Split(Delimiter)
-      csvCnt += 1
-      jobName = csvRecord(0)
-      jobSequence = Val(csvRecord(1))
-      procName = csvRecord(2)
-      procSequence = Val(csvRecord(3))
-      stepName = csvRecord(4)
-      pgmName = csvRecord(5)
-      If pgmName.Length = 0 Then
-        Continue For
-      End If
-      execSequence = Val(csvRecord(6))
-      Dim DDName As String = csvRecord(7).Replace("$", "S")
-      If DDName.Length >= 6 Then
-        If DDName.Substring(0, 6) = "SORTWK" Then
-          DDName = "SORTWK##"
-        End If
-      End If
-      Dim orgDDName As String = DDName
-      Dim DDSeq As String = csvRecord(8)
-      ddConcatSeq = Val(csvRecord(9))
-      Dim dsn As String = csvRecord(10)
-      Dim dispStart As String = csvRecord(11)
-      Dim dispEnd As String = csvRecord(12)
-      Dim dispAbend As String = csvRecord(13)
-      Dim dcbRecFM As String = csvRecord(14)
-      Dim dcbLrecl As String = csvRecord(15)
-      Dim db2 As String = csvRecord(16)
-      Dim reportID As String = csvRecord(17)
-      Dim reportDescription As String = csvRecord(18)
-      SourceType = csvRecord(19)
+  '  For Each DDStmt In ListOfDDs
+  '    csvRecord = DDStmt.Split(Delimiter)
+  '    csvCnt += 1
+  '    jobName = csvRecord(0)
+  '    jobSequence = Val(csvRecord(1))
+  '    procName = csvRecord(2)
+  '    procSequence = Val(csvRecord(3))
+  '    stepName = csvRecord(4)
+  '    pgmName = csvRecord(5)
+  '    If pgmName.Length = 0 Then
+  '      Continue For
+  '    End If
+  '    execSequence = Val(csvRecord(6))
+  '    Dim DDName As String = csvRecord(7).Replace("$", "S")
+  '    If DDName.Length >= 6 Then
+  '      If DDName.Substring(0, 6) = "SORTWK" Then
+  '        DDName = "SORTWK##"
+  '      End If
+  '    End If
+  '    Dim orgDDName As String = DDName
+  '    Dim DDSeq As String = csvRecord(8)
+  '    ddConcatSeq = Val(csvRecord(9))
+  '    Dim dsn As String = csvRecord(10)
+  '    Dim dispStart As String = csvRecord(11)
+  '    Dim dispEnd As String = csvRecord(12)
+  '    Dim dispAbend As String = csvRecord(13)
+  '    Dim dcbRecFM As String = csvRecord(14)
+  '    Dim dcbLrecl As String = csvRecord(15)
+  '    Dim db2 As String = csvRecord(16)
+  '    Dim reportID As String = csvRecord(17)
+  '    Dim reportDescription As String = csvRecord(18)
+  '    SourceType = csvRecord(19)
 
-      'If stepName = "STEPLIB" And ddConcatSeq > 0 Then
-      '  stepName = stepName & LTrim(Str(ddConcatSeq))
-      'End If
-      If DDName = "STEPLIB" And ddConcatSeq > 0 Then
-        DDName = DDName & LTrim(Str(ddConcatSeq))
-      End If
+  '    'If stepName = "STEPLIB" And ddConcatSeq > 0 Then
+  '    '  stepName = stepName & LTrim(Str(ddConcatSeq))
+  '    'End If
+  '    If DDName = "STEPLIB" And ddConcatSeq > 0 Then
+  '      DDName = DDName & LTrim(Str(ddConcatSeq))
+  '    End If
 
-      Dim InOrOut As String = " <-left- "
-      Select Case dispStart
-        Case "INPUT"
-          InOrOut = " <-left- "
-        Case "OUTPUT"
-          InOrOut = " -right-> "
-      End Select
+  '    Dim InOrOut As String = " <-left- "
+  '    Select Case dispStart
+  '      Case "INPUT"
+  '        InOrOut = " <-left- "
+  '      Case "OUTPUT"
+  '        InOrOut = " -right-> "
+  '    End Select
 
-      If Val(DDSeq) = 1 And Val(ddConcatSeq) = 0 Then
-        stepSequence += 1
-        stepNameSeq = stepName & Trim(Str(stepSequence))
-        ListOfSteps.Add(stepNameSeq)
-        swPumlFile.WriteLine()
-        swPumlFile.WriteLine("node " & Chr(34) &
-                             stepName & ":\n" & pgmName &
-                             Chr(34) & " as " &
-                             stepNameSeq)
-      End If
+  '    If Val(DDSeq) = 1 And Val(ddConcatSeq) = 0 Then
+  '      stepSequence += 1
+  '      stepNameSeq = stepName & Trim(Str(stepSequence))
+  '      ListOfSteps.Add(stepNameSeq)
+  '      swPumlFile.WriteLine()
+  '      swPumlFile.WriteLine("node " & Chr(34) &
+  '                           stepName & ":\n" & pgmName &
+  '                           Chr(34) & " as " &
+  '                           stepNameSeq)
+  '    End If
 
 
-      Select Case orgDDName
-        Case "STEPLIB"
-        Case "SYSOUT"
-        Case "SYSPRINT"
-        Case "SYSUDUMP"
-        Case "SYSABOUT"
-        Case "SYSLOG"
-        Case "CEEDUMP"
-        Case "SORTWK##"
-        Case Else
-          If dsn.Length > 0 Then
-            If ddConcatSeq > 0 Then
-              DDName = DDName & LTrim(Str(ddConcatSeq))
-            End If
-            If dispEnd = "DELETE" Then
-              dsn = "<s:red>" & dsn & "</s>"
-            End If
-            swPumlFile.WriteLine("file " & Chr(34) & DDName & ":\n" & dsn & Chr(34) & " as " & stepNameSeq & "." & DDName)
-            swPumlFile.WriteLine(stepNameSeq & InOrOut & stepNameSeq & "." & DDName)
-          End If
-          If reportID.Length > 0 Then
-            swPumlFile.WriteLine("file #palegreen " & Chr(34) & DDName & ":\nReport Id:\n" & reportID & Chr(34) & " as " & stepNameSeq & "." & DDName)
-            swPumlFile.WriteLine(stepNameSeq & InOrOut & stepNameSeq & "." & DDName)
-          End If
-      End Select
+  '    Select Case orgDDName
+  '      Case "STEPLIB"
+  '      Case "SYSOUT"
+  '      Case "SYSPRINT"
+  '      Case "SYSUDUMP"
+  '      Case "SYSABOUT"
+  '      Case "SYSLOG"
+  '      Case "CEEDUMP"
+  '      Case "SORTWK##"
+  '      Case Else
+  '        If dsn.Length > 0 Then
+  '          If ddConcatSeq > 0 Then
+  '            DDName = DDName & LTrim(Str(ddConcatSeq))
+  '          End If
+  '          If dispEnd = "DELETE" Then
+  '            dsn = "<s:red>" & dsn & "</s>"
+  '          End If
+  '          swPumlFile.WriteLine("file " & Chr(34) & DDName & ":\n" & dsn & Chr(34) & " as " & stepNameSeq & "." & DDName)
+  '          swPumlFile.WriteLine(stepNameSeq & InOrOut & stepNameSeq & "." & DDName)
+  '        End If
+  '        If reportID.Length > 0 Then
+  '          swPumlFile.WriteLine("file #palegreen " & Chr(34) & DDName & ":\nReport Id:\n" & reportID & Chr(34) & " as " & stepNameSeq & "." & DDName)
+  '          swPumlFile.WriteLine(stepNameSeq & InOrOut & stepNameSeq & "." & DDName)
+  '        End If
+  '    End Select
 
-    Next
+  '  Next
 
-    ' write the final step connections
-    swPumlFile.WriteLine("' STEP CONNECTIONS")
-    For stepIndex = 0 To ListOfSteps.Count - 1
-      If stepIndex = ListOfSteps.Count - 1 Then
-        Exit For
-      End If
-      stepName = ListOfSteps(stepIndex)
-      swPumlFile.WriteLine(ListOfSteps(stepIndex) &
-                           " -[#blue,plain,thickness=16]-->" &
-                           ListOfSteps(stepIndex + 1))
-    Next
-    swPumlFile.WriteLine("@enduml")
-    swPumlFile.Close()
+  '  ' write the final step connections
+  '  swPumlFile.WriteLine("' STEP CONNECTIONS")
+  '  For stepIndex = 0 To ListOfSteps.Count - 1
+  '    If stepIndex = ListOfSteps.Count - 1 Then
+  '      Exit For
+  '    End If
+  '    stepName = ListOfSteps(stepIndex)
+  '    swPumlFile.WriteLine(ListOfSteps(stepIndex) &
+  '                         " -[#blue,plain,thickness=16]-->" &
+  '                         ListOfSteps(stepIndex + 1))
+  '  Next
+  '  swPumlFile.WriteLine("@enduml")
+  '  swPumlFile.Close()
 
-  End Sub
+  'End Sub
   Function DetermineStartDisp(ByRef fileDisp As String()) As String
     ' determine start disp
     If fileDisp Is Nothing Then
@@ -2316,7 +2332,7 @@ Public Class Form1
     SummaryWorksheet.Range("A2").Value = ""
     SummaryWorksheet.Range("B2").Value = ""
     SummaryWorksheet.Range("A3").Value = "Folder Locations:"
-    Dim theFilename As String = QUOTE & "filename" & quote
+    Dim theFilename As String = QUOTE & "filename" & QUOTE
     Dim theOpenBracket As String = QUOTE & "[" & QUOTE
     Dim theString As String = "=LEFT(CELL(" & theFilename & "),FIND(" & theOpenBracket & ",CELL(" & theFilename & "))-2)"
     SummaryWorksheet.Range("B3").Value2 = theString
@@ -2383,8 +2399,8 @@ Public Class Form1
       JobsWorksheet.Range("A" & row).Value = ""
       JobsWorksheet.Range("B" & row).Value = ""
     Else
-      JobsWorksheet.Range("A" & row).Formula2 = CreateFlowchartHyperLink(JobSourceName)
-      JobsWorksheet.Range("B" & row).Formula2 = CreateJobHyperLink(JobSourceName)
+      JobsWorksheet.Range("A" & row).Formula2 = CreateJobFlowchartHyperLink(JobSourceName)
+      JobsWorksheet.Range("B" & row).Formula2 = CreateJobSourceHyperLink(JobSourceName)
     End If
     JobsWorksheet.Range("C" & row).Value = jobName
     JobsWorksheet.Range("D" & row).Value = JobAccountInfo
@@ -2589,7 +2605,14 @@ Public Class Form1
             QUOTE & ", " & QUOTE & "view" & QUOTE & ")"
     Return theString
   End Function
-  Function CreateJobHyperLink(text As String) As String
+  Function CreateJobFlowchartHyperLink(text As String) As String
+    Dim theString = "=HYPERLINK(Summary!B3&Summary!B7&" &
+            QUOTE & text & "_JOB.svg" &
+            QUOTE & ", " & QUOTE & "view" & QUOTE & ")"
+    Return theString
+  End Function
+
+  Function CreateJobSourceHyperLink(text As String) As String
     Dim theString = "=HYPERLINK(Summary!B3&Summary!B4&" &
             QUOTE & text &
             QUOTE & ", " & QUOTE & text & QUOTE & ")"
@@ -2861,7 +2884,13 @@ Public Class Form1
       LoadCobolStatementsToArray = -1
       Exit Function
     End If
-    LogFile.WriteLine(Date.Now & ",Processing Source," & CobolFile)
+    ' Adjust CobolFile to the FOUND filename
+    If CobolFile <> FoundCobolFileName Then
+      LogFile.WriteLine(Date.Now & ",Cobol Alias Used," & CobolFile & "/Alias:" & FoundCobolFileName)
+      CobolFile = FoundCobolFileName
+    End If
+    '
+    LogFile.WriteLine(Date.Now & ",Processing Source," & FoundCobolFileName)
 
     ' Load the COBOL file into the working Array
     Dim CobolLines As String() = File.ReadAllLines(txtSourceFolderName.Text & "\" & FoundCobolFileName)
@@ -4393,6 +4422,13 @@ Public Class Form1
       Case ListofSourceFiles.IndexOf(SourceFileName & ".CBL") > -1
         Return SourceFileName & ".CBL"
     End Select
+    ' See if there is an Alias
+    Dim myKey As String = SourceFileName
+    Dim myValue As String = Nothing
+    If AliasCobol.TryGetValue(myKey, myValue) Then
+      Return myValue
+    End If
+    '
     Return ""
   End Function
   Function GetSourceType(ByRef FileName As String) As String
@@ -4412,6 +4448,10 @@ Public Class Form1
     If FoundCobolFileName.Length = 0 Then
       LogFile.WriteLine(Date.Now & ",Source File Not found," & FileName)
       Return "NotFound"
+    End If
+    If FoundCobolFileName <> FileName Then
+      LogFile.WriteLine(Date.Now & ",Alias used," & FileName & "/Alias:" & FoundCobolFileName)
+      FileName = FoundCobolFileName
     End If
 
     Dim myFileLen As Long = FileLen(txtSourceFolderName.Text & "\" & FoundCobolFileName)
