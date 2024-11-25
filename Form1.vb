@@ -33,6 +33,7 @@ Public Class Form1
   '                      - New Folder structure for PUML, Flowcharts, Business Rules
   '                      - Move JOB Flow logic to standalone program: CreateJobFlowcharts
   '                      - Add COBOL program-id Alias filenames feature
+  '                      - Fix Open Mode for SQL on Records tab
   ' 2024/09/30 v1.7   hk Flowchart Links
   ' 2024/09/27 v1.6.7 hk fix drop empty '//' and '/*' JCL statements
   '                      - fix missing execname and pgmname when PROC is utility
@@ -7683,27 +7684,43 @@ Public Class Form1
         Continue For
       End If
       For cblIndex = 0 To srcWords.Count - 1
-        If srcWords(cblIndex) = "EXEC" Then
-          If srcWords(cblIndex + 1) = "SQL" Then
-            Dim filenamefound As Boolean = False
-            ' find any part of that filename (could have DB Qualifier on it)
-            Dim tblIndex As Integer
-            For tblIndex = cblIndex + 2 To srcWords.Count - 1
-              If srcWords(tblIndex) = "END-EXEC" Then
-                Exit For
-              End If
-              If InStr(srcWords(tblIndex), filename) > 0 Then
-                filenamefound = True
-                Exit For
-              End If
-            Next
-            If filenamefound Then
-              If ListOfOpenModes.IndexOf(srcWords(cblIndex + 2)) = -1 Then
-                ListOfOpenModes.Add(srcWords(cblIndex + 2))
-              End If
-            End If
-            cblIndex = tblIndex
+        If (cblIndex + 1) > (srcWords.Count - 1) Then
+          Exit For
+        End If
+        If srcWords(cblIndex) = "EXEC" And srcWords(cblIndex + 1) = "SQL" Then
+          Dim endExecIndex As Integer = srcWords.IndexOf("END-EXEC")
+          If endExecIndex = -1 Then
+            endExecIndex = srcWords.Count - 1
           End If
+          ' first thing is to figure out the table name location
+          ' SELECT uses FROM next word, DELETE uses FROM next word
+          ' INSERT uses INTO next word, UPDATE uses next word
+          Dim tableNameIndx As Integer = -1
+          Select Case srcWords(cblIndex + 2)
+            Case "SELECT", "DELETE"
+              tableNameIndx = srcWords.IndexOf("FROM") + 1
+            Case "INSERT"
+              tableNameIndx = srcWords.IndexOf("INTO") + 1
+            Case "UPDATE"
+              tableNameIndx = cblIndex + 3
+            Case "FETCH", "OPEN", "CLOSE", "COMMIT"
+              cblIndex = endExecIndex
+              Exit For
+          End Select
+          If tableNameIndx = -1 Then
+            MessageBox.Show("GetOpenModeSQL: Unknown SQL statement:" & SrcStmt(Index))
+            Exit For
+          End If
+          Dim tableName As String = srcWords(tableNameIndx)
+          Dim filenamefound As Boolean = False
+          ' find any part of that filename (could have DB Qualifier on it)
+          If filename.Contains(tableName) Then
+            filenamefound = True
+            If ListOfOpenModes.IndexOf(srcWords(cblIndex + 2)) = -1 Then
+              ListOfOpenModes.Add(srcWords(cblIndex + 2))
+            End If
+          End If
+          cblIndex = endExecIndex
         End If
       Next cblIndex
     Next Index
