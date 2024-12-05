@@ -24,7 +24,7 @@ Public Class Form1
   ' - PlantUml for creating flowchart
   '
   '***Be sure to change ProgramVersion when making changes!!!
-  Dim ProgramVersion As String = "v1.8.1"
+  Dim ProgramVersion As String = "v1.8.2"
   'Change-History.
   ' 2024/10/24 v1.8   hk count source lines and place on Programs tab
   '                      - fixed flowchart to max 45 character lines
@@ -34,6 +34,7 @@ Public Class Form1
   '                      - Move JOB Flow logic to standalone program: CreateJobFlowcharts
   '                      - Add COBOL program-id Alias filenames feature
   '                      - Fix Open Mode for SQL on Records tab
+  '                      - Fix SQL Copybooks
   ' 2024/09/30 v1.7   hk Flowchart Links
   ' 2024/09/27 v1.6.7 hk fix drop empty '//' and '/*' JCL statements
   '                      - fix missing execname and pgmname when PROC is utility
@@ -3110,11 +3111,13 @@ Public Class Form1
             If execDirective(1) = "SQL" And execDirective(2) = "INCLUDE" Then
               CopyType = "SQL"
               CopybookName = execDirective(3)
-              ' comment out these SQL INCLUDE statement(s)
-              For execIndex As Integer = startIndex To endIndex
-                Mid(CobolLines(execIndex), 7, 1) = "*"
-                swTemp.WriteLine(CobolLines(execIndex))
-              Next
+              ' comment out the COMBINED SQL INCLUDE statement(s) as a comment
+              swTemp.WriteLine(Space(6) & "* " & combinedEXEC.Trim)
+              index = endIndex
+              'For execIndex As Integer = startIndex To endIndex
+              '  Mid(CobolLines(execIndex), 7, 1) = "*"
+              '  swTemp.WriteLine(CobolLines(execIndex))
+              'Next
             Else
               '  ' write out these non-INCLUDE SQL statements
               '  For execindex As Integer = startIndex To endIndex
@@ -3139,7 +3142,7 @@ Public Class Form1
         'Dim CopybookFileName As String = txtSourceFolderName.Text &
         '                                 "\" & CopybookName
         swTemp.WriteLine(Space(6) & "*" & CopyType & " " & CopybookName & " Begin Copy/Include")
-        LogFile.WriteLine(Date.Now & ",Including COBOL copybook," & CopybookName)
+        LogFile.WriteLine(Date.Now & ",Including COBOL " & CopyType & " copybook," & CopybookName)
         Call IncludeCopyMember(CopybookName, swTemp)
         swTemp.WriteLine(Space(6) & "*" & CopyType & " " & CopybookName & " End Copy/Include")
       Next
@@ -6977,11 +6980,8 @@ Public Class Form1
   Function FindCopybookName(ByRef DataIndex As Integer, ByVal RecordName As String) As String
     ' Use the Data Division index to search Stmt array to get the Record  location,
     ' then look previous lines to see what the possible copybook name would be.
-
-    Dim CopyWords As New List(Of String)
-    'Dim RecordWords As New List(Of String)
     ' look upward to see if we find 'COPY/INCLUDE/SQL INCLUDE' statement
-    ' here are some examples:
+    'Here are some examples:
     '  COBOL
     '*COPY CRCALC.
     '    EXEC SQL INCLUDE SQLCA END-EXEC.
@@ -6990,35 +6990,40 @@ Public Class Form1
     '*%COPYBOOK SQL CRPVBI
     '*%COPYBOOK FILE PM044025
     ' we can stop searching at a NON-commented line.
-    FindCopybookName = ""
+
+    Dim CopyWords As New List(Of String)
+    Dim myCopybookName As String = ""
+
+    myCopybookName = ""
     For CopyIndex As Integer = DataIndex - 1 To pgm.DataDivision Step -1
-      FindCopybookName = FindCopyOrInclude(CopyIndex, CopyWords)
-      If FindCopybookName.Length > 0 Then
+      myCopybookName = FindCopyOrInclude(CopyIndex, CopyWords)
+      If myCopybookName.Length > 0 Then
         Exit For
       End If
     Next
-    If FindCopybookName = "EXIT FOR" Then
-      FindCopybookName = ""
+    If myCopybookName = "EXIT FOR" Then
+      myCopybookName = ""
     End If
-    If FindCopybookName.Length > 0 Then
-      Exit Function
+    If myCopybookName.Length > 0 Then
+      Return myCopybookName
     End If
 
     ' if still no copybook found at this point then maybe the copy/include is
     ' placed after the record name; so search downward. ugh.
-    FindCopybookName = ""
+    myCopybookName = ""
     For CopyIndex As Integer = DataIndex + 1 To pgm.ProcedureDivision
-      FindCopybookName = FindCopyOrInclude(CopyIndex, CopyWords)
-      If FindCopybookName.Length > 0 Then
+      myCopybookName = FindCopyOrInclude(CopyIndex, CopyWords)
+      If myCopybookName.Length > 0 Then
         Exit For
       End If
     Next
-    If FindCopybookName = "EXIT FOR" Then
-      FindCopybookName = ""
+    If myCopybookName = "EXIT FOR" Then
+      myCopybookName = ""
     End If
-    If FindCopybookName.Length = 0 Then
-      FindCopybookName = "NONE"
+    If myCopybookName.Length = 0 Then
+      myCopybookName = "NONE"
     End If
+    Return myCopybookName
   End Function
   Sub ProcessPumlParagraph(ByRef ParagraphStarted As Boolean, ByRef statement As String, ByRef exec As String)
     If ParagraphStarted = True Then
@@ -7683,15 +7688,24 @@ Public Class Form1
       If srcWords.Count <= 6 Then
         Continue For
       End If
+      Dim endExecIndex As Integer = -1
       For cblIndex = 0 To srcWords.Count - 1
         If (cblIndex + 1) > (srcWords.Count - 1) Then
           Exit For
         End If
         If srcWords(cblIndex) = "EXEC" And srcWords(cblIndex + 1) = "SQL" Then
-          Dim endExecIndex As Integer = srcWords.IndexOf("END-EXEC")
+          ' find the next END-EXEC
           If endExecIndex = -1 Then
-            endExecIndex = srcWords.Count - 1
+            For x = cblIndex + 2 To srcWords.Count - 1
+              If srcWords(x) = "END-EXEC" Then
+                endExecIndex = x
+              End If
+            Next x
+            If endExecIndex = -1 Then
+              endExecIndex = srcWords.Count - 1
+            End If
           End If
+
           ' first thing is to figure out the table name location
           ' SELECT uses FROM next word, DELETE uses FROM next word
           ' INSERT uses INTO next word, UPDATE uses next word
@@ -7703,9 +7717,9 @@ Public Class Form1
               tableNameIndx = srcWords.IndexOf("INTO") + 1
             Case "UPDATE"
               tableNameIndx = cblIndex + 3
-            Case "FETCH", "OPEN", "CLOSE", "COMMIT"
+            Case "FETCH", "OPEN", "CLOSE", "COMMIT", "DECLARE", "SET"
               cblIndex = endExecIndex
-              Exit For
+              Continue For
           End Select
           If tableNameIndx = -1 Then
             MessageBox.Show("GetOpenModeSQL: Unknown SQL statement:" & SrcStmt(Index))
@@ -7898,38 +7912,34 @@ Public Class Form1
     DetermineDigits = picdigits
   End Function
   Function FindCopyOrInclude(ByRef CopyIndex As Integer, ByRef CopyWords As List(Of String)) As String
-    FindCopyOrInclude = ""
+    ' look for various types of copy/include commands once found return copybook name
     Call GetSourceWords(SrcStmt(CopyIndex), CopyWords)
-    If CopyWords.Count >= 2 Then
-      If CopyWords(0) = "*COPY" Then
-        FindCopyOrInclude = CopyWords(1)
-        Exit Function
+    If CopyWords.Count >= 3 Then
+      If CopyWords(0) = "*COPY" And CopyWords(2) = "BEGIN" Then
+        Return CopyWords(1)
       End If
     End If
     If CopyWords.Count >= 5 Then
       If CopyWords(1) = "EXEC" And CopyWords(2) = "SQL" And CopyWords(3) = "INCLUDE" Then
-        FindCopyOrInclude = CopyWords(4)
-        Exit Function
+        Return CopyWords(4)
       End If
     End If
     If CopyWords.Count >= 2 Then
       If CopyWords(0) = "*INCLUDE++" Then
-        FindCopyOrInclude = CopyWords(1)
-        Exit Function
+        Return CopyWords(1)
       End If
       If CopyWords(0) = "*%COPYBOOK" Then
-        FindCopyOrInclude = CopyWords(2)
+        Return CopyWords(2)
       End If
     End If
     If IsNumeric(CopyWords(0)) Then
-      FindCopyOrInclude = "EXIT FOR"
-      Exit Function
+      Return "EXIT FOR"
     End If
     Select Case CopyWords(0)
       Case "FILE", "FD", "WORKING-STORAGE", "LOCAL-STORAGE", "LINKAGE"
-        FindCopyOrInclude = "EXIT FOR"
-        Exit Function
+        Return "EXIT FOR"
     End Select
+    Return ""
   End Function
   Function StringTogetherWords(CobWords As List(Of String), ByRef StartCondIndex As Integer, ByRef EndCondIndex As Integer) As String
     ' string together from startofconditionindex to endofconditionindex
