@@ -1,6 +1,8 @@
 # ADDILite
 Program Code Modeler
 
+Prerequisites: dotnet 8 and PlantUML. Dotnet can be downloaded from Microsoft. PlantUML can be loaded in my Releases.
+
 <img width="596" alt="image" src="https://github.com/hkearn777/ADDILite/assets/110694374/b98f1f6a-72a3-4d61-a0bb-7a1516265d56">
 
 Before actually pressing the ADDILite button, which will start the modeling process be sure to create the directory structure and fill in some of the folders.
