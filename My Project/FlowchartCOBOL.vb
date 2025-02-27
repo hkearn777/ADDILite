@@ -293,8 +293,9 @@ Module FlowchartCOBOL
       Case "END-SEARCH"
 
       Case Else
+        Dim myStmt As String = Form1.AddNewLineAboutEveryNthCharacters(stmt.Trim, ESCAPENEWLINE, 45)
         pumlLineCnt += 1
-        pumlFile.WriteLine(Indent() & ":" & stmt.Trim & "]")
+        pumlFile.WriteLine(Indent() & ":" & myStmt & "]")
 
     End Select
   End Sub

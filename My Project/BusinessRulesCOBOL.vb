@@ -12,6 +12,8 @@ Module BusinessRulesCOBOL
   '   So if we encounter an 'IF' at first word of a statement this begins a Business Rule
   'Written by Howard Kearney
   'Change-history.
+  '  2025-02-10 v1.6.4 New array to range for writing out spreadsheets
+  '  2025-01-14 v1.6.3 Handle when a GO command is NOT followed by a TO.
   '  2024-09-24 v1.6.2 remove equal sign in value of spreadsheet
   '  2024-08-21 v1.6.1 Clear Arrays
   '  2024-07-03 hk New code
@@ -46,7 +48,9 @@ Module BusinessRulesCOBOL
   Dim newLine As String = System.Environment.NewLine
   Dim delimiter As String = "|"
 
-  Public Sub CreateCOBOLBusinessRules(ByRef srcStmt As List(Of String), ByRef exec As String, ByRef outFolder As String,
+  Public Sub CreateCOBOLBusinessRules(ByRef srcStmt As List(Of String), ByRef exec As String,
+                                      ByRef outFolder As String,
+                                      ByRef outPumlFolder As String,
                                       ByRef pgm As ProgramInfo,
                                       ByRef ListOfFields As List(Of String))
     ' Initialize Arrays
@@ -139,7 +143,7 @@ Module BusinessRulesCOBOL
 
     Call CreateBRExcelWorksheet(outFolder, exec)
 
-    Call CreateBRPuml(outFolder, exec)
+    Call CreateBRPuml(outPumlFolder, exec)
 
   End Sub
   'Sub ProcessParagraphPerform(cWordIndex As Integer, currentParagraph As String)
@@ -229,7 +233,12 @@ Module BusinessRulesCOBOL
       Case "PERFORM"
         NameIndex = cWordIndex + 1
       Case "GO"
-        NameIndex = cWordIndex + 2
+        ' check if missing the 'TO' on this GO TO verb
+        If cWord(cWordIndex + 1) <> "TO" Then
+          NameIndex = cWordIndex + 1
+        Else
+          NameIndex = cWordIndex + 2
+        End If
       Case Else
         Exit Sub
     End Select
@@ -375,7 +384,19 @@ Module BusinessRulesCOBOL
     BRobjExcel.Visible = False
 
     ' Create spreadsheet's workbook and first worksheet
-    BRWorkbook = BRobjExcel.Workbooks.Add
+    ' try to create a new Tab
+    Dim successAdd As Boolean = False
+    Do Until successAdd = True
+      Try
+        BRWorkbook = BRobjExcel.Workbooks.Add
+        successAdd = True
+      Catch ex As Exception
+        If MessageBox.Show("Not able to add BR worksheet:" & exec) = DialogResult.OK Then
+        Else
+          Exit Sub
+        End If
+      End Try
+    Loop
     BusinessRulesWorksheet = BRWorkbook.Sheets.Item(1)
     BusinessRulesWorksheet.Name = "BusinessRules"
     BusinessRulesWorksheet.Range("A1").Value = "Source"
@@ -389,26 +410,58 @@ Module BusinessRulesCOBOL
     BusinessRulesWorksheet.Application.ActiveWindow.SplitRow = 1
     BusinessRulesWorksheet.Application.ActiveWindow.FreezePanes = True
 
-
-    ' Write the Excel rows
-    For Each brEntry In ListOfRules
-      Dim BusinessRulesColumns As String() = brEntry.Split(Form1.Delimiter)
-      BRRow += 1
-      Dim row As String = LTrim(Str(BRRow))
-      If BusinessRulesColumns.Count >= 7 Then
-        Dim rulestatement As String = BusinessRulesColumns(2) & "." & BusinessRulesColumns(3)
+    ' Write the data to spreadsheet tab
+    ' convert List to Array 2D
+    Dim DelimText As String()
+    Dim myMaxRows As Integer = ListOfRules.Count - 1
+    Dim myMaxcols As Integer = 6
+    Dim tArray(myMaxRows, myMaxcols) As String
+    For x As Integer = 0 To ListOfRules.Count - 1
+      DelimText = ListOfRules(x).Split(delimiter)
+      If DelimText.Count >= 7 Then
+        Dim rulestatement As String = DelimText(2) & "." & DelimText(3)
         If rulestatement = "." Then
           rulestatement = ""
         End If
-        BusinessRulesWorksheet.Range("A" & row).Value = exec
-        BusinessRulesWorksheet.Range("B" & row).Value = BusinessRulesColumns(0) 'Stmt#
-        BusinessRulesWorksheet.Range("C" & row).Value = BusinessRulesColumns(1) 'Paragraph Name
-        BusinessRulesWorksheet.Range("D" & row).Value = rulestatement 'Rule#.subrule#
-        BusinessRulesWorksheet.Range("E" & row).Value = BusinessRulesColumns(4) 'Rule Text
-        BusinessRulesWorksheet.Range("F" & row).Value = BusinessRulesColumns(6) 'Type of Rule
-        BusinessRulesWorksheet.Range("G" & row).Value = BusinessRulesColumns(5) 'Business Text
+        tArray(x, 0) = exec
+        tArray(x, 1) = DelimText(0)       'stmt#
+        tArray(x, 2) = DelimText(1)       'paragraph name
+        tArray(x, 3) = rulestatement
+        tArray(x, 4) = DelimText(4)       'rule text
+        tArray(x, 5) = DelimText(6)       'type of rule
+        tArray(x, 6) = DelimText(5)       'business text
       End If
     Next
+    ' Move data from Array to spreadsheet range
+    Dim firstColRow As String = "A" & LTrim(Str(BRRow + 1))
+    Dim LastColRow As String = "G" & LTrim(Str(BRRow + ListOfRules.Count))
+    rngBusinessRules = BusinessRulesWorksheet.Range(firstColRow, LastColRow)
+    rngBusinessRules.Value = tArray
+    rngBusinessRules.Value = rngBusinessRules.Formula
+    ' point to next spreadsheet row
+    BRRow += ListOfRules.Count
+
+
+
+    ' Write the Excel rows
+    'For Each brEntry In ListOfRules
+    '  Dim BusinessRulesColumns As String() = brEntry.Split(Form1.Delimiter)
+    '  BRRow += 1
+    '  Dim row As String = LTrim(Str(BRRow))
+    '  If BusinessRulesColumns.Count >= 7 Then
+    '    Dim rulestatement As String = BusinessRulesColumns(2) & "." & BusinessRulesColumns(3)
+    '    If rulestatement = "." Then
+    '      rulestatement = ""
+    '    End If
+    '    BusinessRulesWorksheet.Range("A" & row).Value = exec
+    '    BusinessRulesWorksheet.Range("B" & row).Value = BusinessRulesColumns(0) 'Stmt#
+    '    BusinessRulesWorksheet.Range("C" & row).Value = BusinessRulesColumns(1) 'Paragraph Name
+    '    BusinessRulesWorksheet.Range("D" & row).Value = rulestatement 'Rule#.subrule#
+    '    BusinessRulesWorksheet.Range("E" & row).Value = BusinessRulesColumns(4) 'Rule Text
+    '    BusinessRulesWorksheet.Range("F" & row).Value = BusinessRulesColumns(6) 'Type of Rule
+    '    BusinessRulesWorksheet.Range("G" & row).Value = BusinessRulesColumns(5) 'Business Text
+    '  End If
+    'Next
 
     ' Format Excel Business Rules worksheet
     If BRRow > 1 Then
@@ -437,17 +490,39 @@ Module BusinessRulesCOBOL
     BusinessFieldsWorksheet.Application.ActiveWindow.SplitRow = 1
     BusinessFieldsWorksheet.Application.ActiveWindow.FreezePanes = True
 
-    ' Write the Excel rows
-    For Each brFieldsEntry In ListOfBusinessFieldNames
-      brFieldsEntry = brFieldsEntry.Replace("=", "")
-      Dim BusinessFieldsColumns As String() = brFieldsEntry.Split(Form1.Delimiter)
-      BRFieldsRow += 1
-      Dim row As String = LTrim(Str(BRFieldsRow))
-      If BusinessFieldsColumns.Count >= 2 Then
-        BusinessFieldsWorksheet.Range("A" & row).Value = BusinessFieldsColumns(0) 'Field Name
-        BusinessFieldsWorksheet.Range("B" & row).Value = BusinessFieldsColumns(1) 'Type
-      End If
+
+    ' Write the data to spreadsheet tab
+    ' convert List to Array 2D
+    myMaxRows = ListOfBusinessFieldNames.Count - 1
+    myMaxcols = 1
+    Dim xArray(myMaxRows, myMaxcols) As String
+    For x As Integer = 0 To ListOfBusinessFieldNames.Count - 1
+      DelimText = ListOfBusinessFieldNames(x).Split(delimiter)
+      For y = 0 To myMaxcols
+        xArray(x, y) = DelimText(y)
+      Next
     Next
+    ' Move data from Array to spreadsheet range
+    firstColRow = "A" & LTrim(Str(BRFieldsRow + 1))
+    LastColRow = "K" & LTrim(Str(BRFieldsRow + ListOfBusinessFieldNames.Count))
+    rngBusinessFields = BusinessFieldsWorksheet.Range(firstColRow, LastColRow)
+    rngBusinessFields.Value = xArray
+    rngBusinessFields.Value = rngBusinessFields.Formula
+    ' point to next spreadsheet row
+    BRFieldsRow += ListOfBusinessFieldNames.Count
+
+
+    ' Write the Excel rows
+    'For Each brFieldsEntry In ListOfBusinessFieldNames
+    '  brFieldsEntry = brFieldsEntry.Replace("=", "")
+    '  Dim BusinessFieldsColumns As String() = brFieldsEntry.Split(Form1.Delimiter)
+    '  BRFieldsRow += 1
+    '  Dim row As String = LTrim(Str(BRFieldsRow))
+    '  If BusinessFieldsColumns.Count >= 2 Then
+    '    BusinessFieldsWorksheet.Range("A" & row).Value = BusinessFieldsColumns(0) 'Field Name
+    '    BusinessFieldsWorksheet.Range("B" & row).Value = BusinessFieldsColumns(1) 'Type
+    '  End If
+    'Next
 
     ' Format Excel Business Fields worksheet
     If BRFieldsRow > 1 Then
@@ -480,10 +555,10 @@ Module BusinessRulesCOBOL
 
   Sub CreateBRPuml(OutputFolder As String, exec As String)
     ' Open PUML and write headers. Not worrying (try/catch) about subsequent writes
-    Dim pumlFileName As String = OutputFolder & "\" & exec & "_BR.puml"
+    Dim pumlFileName As String = OutputFolder & "\" & exec & "_P2P.puml"
     Try
       pumlFile = My.Computer.FileSystem.OpenTextFileWriter(pumlFileName, False)
-      pumlFile.WriteLine("@startuml " & exec & "_BR")
+      pumlFile.WriteLine("@startuml " & exec & "_P2P")
       pumlFile.WriteLine("header ADDILite(c), by IBM")
       pumlFile.WriteLine("title Paragraph to Paragraph diagram of Program: " & exec)
       pumlFile.WriteLine("")
