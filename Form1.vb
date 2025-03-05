@@ -27,6 +27,8 @@ Public Class Form1
   Dim ProgramVersion As String = "v2"
   'Change-History.
   ' 2025/02/27 v2     hk Add subfolders for sources (ie cbl, cob, cpy, etc.)
+  '                      - fix CALLPGMS .jcl to have unique program names
+  '                      - delete the #ADDI## files at start of program (at click)
   ' 2025/02/12 v1.8.9 hk add Status display messages
   '                      Comment out a COBOL line if Indictor column as '#"
   '                      For Data gathering summary show file extension
@@ -550,10 +552,9 @@ Public Class Form1
       Exit Sub
     End If
 
-    ' remove previous CallPgms.jcl Job
-    CallPgmsFileName = folderPath & txtJCLJOBFolder.Text & "\CALLPGMS.JCL"
     ' Prepare for CallPgms file which holds all the Called Programs within the sources
     '  this file is processed as the last "JOB"
+    CallPgmsFileName = folderPath & txtJCLJOBFolder.Text & "\CALLPGMS.JCL"
     ' Remove previous CallPgms.jcl file
     If File.Exists(CallPgmsFileName) Then
       Try
@@ -563,6 +564,14 @@ Public Class Form1
         Exit Sub
       End Try
     End If
+
+    ' Remove the previous #ADDI files
+    lblStatusMessage.Text = "Removing previous ADDI files..."
+    Dim dirInfo As New IO.DirectoryInfo(folderPath & txtCobolFolder.Text)
+    Dim aryADDIFiles As IO.FileInfo() = dirInfo.GetFiles("#ADDI*.*", SearchOption.TopDirectoryOnly)
+    For Each ADDIfile As IO.FileInfo In aryADDIFiles
+      File.Delete(ADDIfile.FullName)
+    Next
 
     ' Get the number of JOBS that will be processed
     NumberOfJobsToProcess = My.Computer.FileSystem.GetFiles(folderPath & txtJCLJOBFolder.Text).Count
@@ -653,6 +662,50 @@ Public Class Form1
     Call LoadScreenMaps(folderPath & txtScreenMapsFolder.Text)
     Call LoadScreenMaps(folderPath & txtTelonFolder.Text)
 
+    ' Build a list of source files so we don't have to use file exist function, just the list
+    lblStatusMessage.Text = "Building list of COBOL source files..."
+    Dim di As New IO.DirectoryInfo(folderPath & txtCobolFolder.Text)
+    Dim aryFi As IO.FileInfo() = di.GetFiles("*.*")
+    Dim fi As IO.FileInfo
+    For Each fi In aryFi
+      If fi.Name.ToUpper <> "DESKTOP.INI" Then
+        ListofCOBOLFiles.Add(fi.Name.ToUpper)
+      End If
+    Next
+
+    ' Build a list of copybook files so we don't have to use file exist function, just the list
+    lblStatusMessage.Text = "Building list of copybook files..."
+    Dim cbdi As New IO.DirectoryInfo(folderPath & txtCopybookFolder.Text)
+    Dim aryCBFi As IO.FileInfo() = cbdi.GetFiles("*.*")
+    Dim cbfi As IO.FileInfo
+    For Each cbfi In aryCBFi
+      If cbfi.Name.ToUpper <> "DESKTOP.INI" Then
+        ListofCopybookFiles.Add(cbfi.Name.ToUpper)
+      End If
+    Next
+
+    ' Build a list of Easytrieve files so we don't have to use file exist function, just the list
+    lblStatusMessage.Text = "Building list of Easytrieve source files..."
+    Dim eztDi As New IO.DirectoryInfo(folderPath & txtEasytrieveFolder.Text)
+    Dim ezAryFiles As IO.FileInfo() = eztDi.GetFiles("*.*")
+    Dim ezfile As IO.FileInfo
+    For Each ezfile In ezAryFiles
+      If ezfile.Name.ToUpper <> "DESKTOP.INI" Then
+        ListofEasytrieveFiles.Add(ezfile.Name.ToUpper)
+      End If
+    Next
+
+    ' Build a list of Assembler files so we don't have to use file exist function, just the list
+    lblStatusMessage.Text = "Building list of Assembler source files..."
+    Dim asmDi As New IO.DirectoryInfo(folderPath & txtASMFolder.Text)
+    Dim asmAryFiles As IO.FileInfo() = asmDi.GetFiles("*.*")
+    Dim asmfile As IO.FileInfo
+    For Each asmfile In asmAryFiles
+      If asmfile.Name.ToUpper <> "DESKTOP.INI" Then
+        ListofAsmFiles.Add(asmfile.Name.ToUpper)
+      End If
+    Next
+
     ProgressBar1.PerformStep()
     ProgressBar1.Show()
 
@@ -679,41 +732,6 @@ Public Class Form1
       Call CreateInStreamDataSets(JobFile)
     Next
 
-    ' Build a list of source files so we don't have to use file exist function, just the list
-    lblStatusMessage.Text = "Building list of COBOL source files..."
-    Dim di As New IO.DirectoryInfo(folderPath & txtCobolFolder.Text)
-    Dim aryFi As IO.FileInfo() = di.GetFiles("*.*")
-    Dim fi As IO.FileInfo
-    For Each fi In aryFi
-      ListofCOBOLFiles.Add(fi.Name.ToUpper)
-    Next
-
-    ' Build a list of copybook files so we don't have to use file exist function, just the list
-    lblStatusMessage.Text = "Building list of copybook files..."
-    Dim cbdi As New IO.DirectoryInfo(folderPath & txtCopybookFolder.Text)
-    Dim aryCBFi As IO.FileInfo() = cbdi.GetFiles("*.*")
-    Dim cbfi As IO.FileInfo
-    For Each cbfi In aryCBFi
-      ListofCopybookFiles.Add(cbfi.Name.ToUpper)
-    Next
-
-    ' Build a list of Easytrieve files so we don't have to use file exist function, just the list
-    lblStatusMessage.Text = "Building list of Easytrieve source files..."
-    Dim ezdi As New IO.DirectoryInfo(folderPath & txtEasytrieveFolder.Text)
-    Dim ezaryFi As IO.FileInfo() = di.GetFiles("*.*")
-    Dim ezfi As IO.FileInfo
-    For Each ezfi In ezaryFi
-      ListofEasytrieveFiles.Add(ezfi.Name.ToUpper)
-    Next
-
-    ' Build a list of Assembler files so we don't have to use file exist function, just the list
-    lblStatusMessage.Text = "Building list of Assembler source files..."
-    Dim asmdi As New IO.DirectoryInfo(folderPath & txtASMFolder.Text)
-    Dim asmaryFi As IO.FileInfo() = di.GetFiles("*.*")
-    Dim asmfi As IO.FileInfo
-    For Each asmfi In ezaryFi
-      ListofAsmFiles.Add(asmfi.Name.ToUpper)
-    Next
 
 
     lblStatusMessage.Text = "Processing..."
@@ -985,8 +1003,10 @@ Public Class Form1
         Continue For
       End If
       pgmCnt += 1
-      swCallPgmsFile.WriteLine("//PGM" & LTrim(Str(pgmCnt)) & " EXEC PGM=" & execs(0).Replace(Delimiter, ""))
-      swCallPgmsFile.WriteLine("//STEPLIB DD DSN=" & execs(2) & ",DISP=SHR")
+      swCallPgmsFile.WriteLine("//" & execs(2) & " EXEC PGM=" & execs(0).Replace(Delimiter, ""))
+      swCallPgmsFile.WriteLine("//STEPLIB DD DSN=LIBRARY." & execs(1) & ",DISP=SHR")
+      'swCallPgmsFile.WriteLine("//PGM" & LTrim(Str(pgmCnt)) & " EXEC PGM=" & execs(0).Replace(Delimiter, ""))
+      'swCallPgmsFile.WriteLine("//STEPLIB DD DSN=" & execs(2) & ",DISP=SHR")
     Next
     swCallPgmsFile.Close()
 
