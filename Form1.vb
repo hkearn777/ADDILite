@@ -24,8 +24,9 @@ Public Class Form1
   ' - PlantUml for creating flowchart
   '
   '***Be sure to change ProgramVersion when making changes!!!
-  Dim ProgramVersion As String = "v2"
+  Dim ProgramVersion As String = "v2.0.1"
   'Change-History.
+  ' 2025/03/02 v2.0.1 hk Set Environment variables ADDILite to the folder path
   ' 2025/02/27 v2     hk Add subfolders for sources (ie cbl, cob, cpy, etc.)
   '                      - fix CALLPGMS .jcl to have unique program names
   '                      - delete the #ADDI## files at start of program (at click)
@@ -407,6 +408,7 @@ Public Class Form1
     If bfd_AppFolder.ShowDialog() = DialogResult.OK Then
       Dim folders As String() = bfd_AppFolder.SelectedPath.Split("\")
       txtAppFolder.Text = "\" & folders(folders.Length - 1)
+      Environment.SetEnvironmentVariable("ADDILite_Application", txtAppFolder.Text, EnvironmentVariableTarget.User)
     Else
       Exit Sub
     End If
@@ -414,12 +416,12 @@ Public Class Form1
   End Sub
   Private Sub btnDataGatheringForm_Click(sender As Object, e As EventArgs) Handles btnDataGatheringForm.Click
     If txtAppFolder.Text.Length <= 1 Then
-      MessageBox.Show("Application Folder name is required!")
+      MessageBox.Show("Application Folder name Is required!")
       Exit Sub
     End If
     folderPath = InitDirectory & txtAppFolder.Text
     If Not Directory.Exists(folderPath) Then
-      MessageBox.Show("Application Folder name does not exist!" & vbLf & folderPath)
+      MessageBox.Show("Application Folder name does Not exist!" & vbLf & folderPath)
       Exit Sub
     End If
     ' Open file dialog
@@ -2948,7 +2950,7 @@ Public Class Form1
     '
     'Assign the TempFileName for this particular cobolfile
     '
-    tempCobFileName = folderPath & txtOutputFolder.Text & "\" & CobolFile & "_expandedCOB.txt"
+    tempCobFileName = folderPath & txtExpandedFolder.Text & "\" & CobolFile & "_expandedCOB.txt"
 
     ' Remove the temporary work file
     Try
@@ -3276,7 +3278,7 @@ Public Class Form1
       Next
       swTemp.Close()
 
-      ' check we expanded any copybooks, if so we scan again for any copy/includes
+      ' check if we expanded any copybooks, if so we scan again for any copy/includes
       If NumberOfCopysFound > 0 Then                      'we found at least 1 COPY stmt
         CobolLines = File.ReadAllLines(tempCobFileName)   ' so load what we got so far
       End If
@@ -4888,7 +4890,7 @@ Public Class Form1
     '
     'Assign the Temporay File Name for this particular Easytrieve file
     '
-    tempEZTFileName = folderPath & txtOutputFolder.Text & "\" & exec & "_expandedEZT.txt"
+    tempEZTFileName = folderPath & txtExpandedFolder.Text & "\" & exec & "_expandedEZT.txt"
 
     ' Remove the temporary work file
     Try
@@ -5062,7 +5064,7 @@ Public Class Form1
     '
     'Assign the Temporay File Name for this particular Easytrieve file
     '
-    tempAsmFileName = folderPath & txtOutputFolder.Text & "\" & exec & "_expandedASM.txt"
+    tempAsmFileName = folderPath & txtExpandedFolder.Text & "\" & exec & "_expandedASM.txt"
 
     ' Remove the temporary work file
     Try
@@ -8551,6 +8553,7 @@ Public Class Form1
         My.Settings.InitDirectory = InitDirectory                             'also now save to distributed 
         My.Settings.Save()
         lblInitDirectory.Text = InitDirectory
+        Environment.SetEnvironmentVariable("ADDILite", InitDirectory, EnvironmentVariableTarget.User)
         Return InitDirectory
     End Select
     MessageBox.Show("Initial Directory set cancelled. Try Sandbox button.")
@@ -8570,6 +8573,7 @@ Public Class Form1
         My.Settings.InitDirectory = InitDirectory                             'also now save
         My.Settings.Save()
         lblInitDirectory.Text = InitDirectory
+        Environment.SetEnvironmentVariable("ADDILite_Sandbox", InitDirectory, EnvironmentVariableTarget.User)
       Case DialogResult.Cancel
         Exit Sub
     End Select
