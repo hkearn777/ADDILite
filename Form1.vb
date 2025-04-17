@@ -24,8 +24,12 @@ Public Class Form1
   ' - PlantUml for creating flowchart
   '
   '***Be sure to change ProgramVersion when making changes!!!
-  Dim ProgramVersion As String = "v1.8.9"
+  Dim ProgramVersion As String = "v2.0.1"
   'Change-History.
+  ' 2025/03/02 v2.0.1 hk Set Environment variables ADDILite to the folder path
+  ' 2025/02/27 v2     hk Add subfolders for sources (ie cbl, cob, cpy, etc.)
+  '                      - fix CALLPGMS .jcl to have unique program names
+  '                      - delete the #ADDI## files at start of program (at click)
   ' 2025/02/12 v1.8.9 hk add Status display messages
   '                      Comment out a COBOL line if Indictor column as '#"
   '                      For Data gathering summary show file extension
@@ -128,6 +132,7 @@ Public Class Form1
 
   ' Initial directory TODO make this an environment setting.
   Dim InitDirectory As String = ""
+  Dim AppDirectory As String = ""
   Dim folderPath As String = ""
   Dim Utilities As String()
   Dim ControlLibraries As String()
@@ -145,12 +150,12 @@ Public Class Form1
   Dim ListOfLibraries As New List(Of String)              'array to hold JOBLIB, STEPLIB, JCLLIB names
 
   ' JCL
-  Dim DirectoryName As String = ""
+  'Dim DirectoryName As String = ""
   Dim FileNameOnly As String = ""
   Dim FileNameWithExtension As String = ""
-  Dim tempNoContdJCLFileName As String = ""
   Dim tempCobFileName As String = ""
   Dim tempEZTFileName As String = ""
+  Dim tempAsmFileName As String = ""
   Public Delimiter As String = ""
   Dim jControl As String = ""
   Dim jLabel As String = ""
@@ -276,12 +281,17 @@ Public Class Form1
   'Dim CntTelonBatch As Integer = 0
   'Dim CntTelonOnline As Integer = 0
 
-  Dim CntBatchJobs As Integer = 0
+  Dim CntJobFiles As Integer = 0
   Dim CntProcFiles As Integer = 0
-  Dim CntSourceFiles As Integer = 0
+  Dim CntCOBOLFiles As Integer = 0
   Dim CntOutputFiles As Integer = 0
   Dim CntTelonFiles As Integer = 0
   Dim CntScreenMapFiles As Integer = 0
+  Dim CntCopybookFiles As Integer = 0
+  Dim CntDeclGenFiles As Integer = 0
+  Dim CntEasytrieveFiles As Integer = 0
+  Dim CntASMFiles As Integer = 0
+
 
   Dim ListOfTables As New List(Of String)
   'Dim ListOfTableNames As New List(Of String)         'array to hold table names
@@ -294,7 +304,10 @@ Public Class Form1
   Dim SrcStmt As New List(Of String)
   Dim cWord As New List(Of String)
   Dim lWord As New List(Of String)                    'Word Level value for IF syncs with cWord
-  Dim ListofSourceFiles As New List(Of String)        'array to hold all the source files instead of using file.exist()
+  Dim ListofCOBOLFiles As New List(Of String)        'array to hold all the source files instead of using file.exist()
+  Dim ListofEasytrieveFiles As New List(Of String)    'array to hold all the Easytrieve files instead of using file.exist()
+  Dim ListofAsmFiles As New List(Of String)           'array to hold all the Assembler files instead of using file.exist()
+  Dim ListofCopybookFiles As New List(Of String)      'array to hold all the copybook files instead of using file.exist()
   Dim ListOfPrograms As New List(Of String)           'array to hold Program names and details
   Dim ListOfFiles As New List(Of String)              'array to hold File & DB2 Table names
   Dim ListOfDDs As New List(Of String)                'array to hold the DD entries for 1 JOB
@@ -384,42 +397,61 @@ Public Class Form1
   Dim List_Fields As New List(Of fieldInfo)
   Dim List_Usage As New List(Of String)({"BINARY", "COMP", "COMP-1", "COMP-2", "COMP-3", "COMP-4", "COMP-5", "COMPUTATIONAL", "COMPUTATIONAL-1", "COMPUTATIONAL-2", "COMPUTATIONAL-3", "COMPUTATIONAL-4", "COMPUTATIONAL-5", "DISPLAY", "DISPLAY-1", "INDEX", "NATIONAL", "PACKED-DECIMAL", "POINTER", "PROCEDURE-POINTER", "FUNCTION-POINTER"})
 
+  Private Sub btnAppFolder_Click(sender As Object, e As EventArgs) Handles btnAppFolder.Click
+    ' grab the Application's directory
+
+    ' browse for and select Application folder name that is within the Sandbox folder
+    Dim bfd_AppFolder As New FolderBrowserDialog With {
+      .Description = "Enter Application Folder name",
+      .SelectedPath = InitDirectory
+    }
+    If bfd_AppFolder.ShowDialog() = DialogResult.OK Then
+      Dim folders As String() = bfd_AppFolder.SelectedPath.Split("\")
+      txtAppFolder.Text = "\" & folders(folders.Length - 1)
+      Environment.SetEnvironmentVariable("ADDILite_Application", txtAppFolder.Text, EnvironmentVariableTarget.User)
+    Else
+      Exit Sub
+    End If
+
+  End Sub
   Private Sub btnDataGatheringForm_Click(sender As Object, e As EventArgs) Handles btnDataGatheringForm.Click
+    If txtAppFolder.Text.Length <= 1 Then
+      MessageBox.Show("Application Folder name Is required!")
+      Exit Sub
+    End If
+    folderPath = InitDirectory & txtAppFolder.Text
+    If Not Directory.Exists(folderPath) Then
+      MessageBox.Show("Application Folder name does Not exist!" & vbLf & folderPath)
+      Exit Sub
+    End If
     ' Open file dialog
     Dim ofd_DataGatheringForm As New OpenFileDialog With {
-      .InitialDirectory = InitDirectory,
+      .InitialDirectory = folderPath,
       .Filter = "Spreadsheet|*.xlsx",
       .Title = "Open the Data Gathering Form"
     }
     If ofd_DataGatheringForm.ShowDialog() = DialogResult.OK Then
-      txtDataGatheringForm.Text = ofd_DataGatheringForm.FileName
-      ' grab the dgf's directory
-      Dim myFileInfo As System.IO.FileInfo
-      myFileInfo = My.Computer.FileSystem.GetFileInfo(txtDataGatheringForm.Text)
-      folderPath = myFileInfo.DirectoryName
-      txtJCLJOBFolderName.Text = folderPath & "\JOBS"
-      txtProcFolderName.Text = folderPath & "\PROCS"
-      txtSourceFolderName.Text = folderPath & "\SOURCES"
-      txtTelonFoldername.Text = folderPath & "\TELON"
-      txtScreenMapsFolderName.Text = folderPath & "\SCREENS"
-      txtOutputFoldername.Text = folderPath & "\OUTPUT"
-      PUMLFolder = folderPath & "\PUML"
-      BusinessRulesFolder = folderPath & "\BUSINESS RULES"
-
-      CntBatchJobs = GetFileCount(txtJCLJOBFolderName.Text)
-      CntProcFiles = GetFileCount(txtProcFolderName.Text)
-      CntSourceFiles = GetFileCount(txtSourceFolderName.Text)
-      CntTelonFiles = GetFileCount(txtTelonFoldername.Text)
-      CntScreenMapFiles = GetFileCount(txtScreenMapsFolderName.Text)
-      CntOutputFiles = GetFileCount(txtOutputFoldername.Text)
-
-      btnJCLJOBFilename.Text = "JCL JOB Folder (" & CntBatchJobs & "):"
-      btnProcFolder.Text = "Proc Folder (" & CntProcFiles & "):"
-      btnSourceFolder.Text = "Source Folder (" & CntSourceFiles & "):"
-      btnTelonFolder.Text = "Telon Members Folder (" & CntTelonFiles & "):"
-      btnScreenMapsFolder.Text = "Screen Maps Folder (" & CntScreenMapFiles & "):"
-      btnOutputFolder.Text = "Output Folder (" & CntOutputFiles & "):"
-
+      txtDataGatheringForm.Text = ofd_DataGatheringForm.SafeFileName
+      CntJobFiles = GetFileCount(folderPath & txtJCLJOBFolder.Text)
+      CntProcFiles = GetFileCount(folderPath & txtProcFolder.Text)
+      CntCOBOLFiles = GetFileCount(folderPath & txtCobolFolder.Text)
+      CntCopybookFiles = GetFileCount(folderPath & txtCopybookFolder.Text)
+      CntTelonFiles = GetFileCount(folderPath & txtTelonFolder.Text)
+      CntDeclGenFiles = GetFileCount(folderPath & txtDECLGenFolder.Text)
+      CntEasytrieveFiles = GetFileCount(folderPath & txtEasytrieveFolder.Text)
+      CntASMFiles = GetFileCount(folderPath & txtASMFolder.Text)
+      CntScreenMapFiles = GetFileCount(folderPath & txtScreenMapsFolder.Text)
+      ' show count of files in each folder
+      lblJOBFolder.Text = "JOBS (" & CntJobFiles & "):"
+      lblPROCFolder.Text = "PROCS (" & CntProcFiles & "):"
+      lblCOBOLFolder.Text = "COBOL (" & CntCOBOLFiles & "):"
+      lblCopybooksFolder.Text = "COPYBOOKS (" & CntCopybookFiles & "):"
+      lblTelonFolder.Text = "TELON (" & CntTelonFiles & "):"
+      lblDECLGenFolder.Text = "DECLGEN (" & CntDeclGenFiles & "):"
+      lblEasytrieveFolder.Text = "EASYTRIEVE (" & CntEasytrieveFiles & "):"
+      lblASMFolder.Text = "ASM (" & CntASMFiles & "):"
+      lblScreensFolder.Text = "SCREENS (" & CntScreenMapFiles & "):"
+      PUMLFolder = folderPath & txtPUMLFolder.Text
     Else
       Exit Sub
     End If
@@ -434,83 +466,7 @@ Public Class Form1
       Return -1
     End Try
   End Function
-  Private Sub btnJCLJOBFilename_Click(sender As Object, e As EventArgs) Handles btnJCLJOBFilename.Click
-    ' grab the dgf's directory
-    'Dim myFileInfo As System.IO.FileInfo
-    'myFileInfo = My.Computer.FileSystem.GetFileInfo(txtDataGatheringForm.Text)
-    'Dim folderPath As String = myFileInfo.DirectoryName
 
-    ' browse for and select folder name
-    Dim bfd_JobLibFolder As New FolderBrowserDialog With {
-      .Description = "Enter JCL JOBs folder name",
-      .SelectedPath = folderPath
-    }
-    If bfd_JobLibFolder.ShowDialog() = DialogResult.OK Then
-      txtJCLJOBFolderName.Text = bfd_JobLibFolder.SelectedPath
-    Else
-      Exit Sub
-    End If
-
-  End Sub
-
-  Private Sub btnProcFolder_Click(sender As Object, e As EventArgs) Handles btnProcFolder.Click
-    ' browse for and select folder name
-    Dim bfd_ProcFolder As New FolderBrowserDialog With {
-      .Description = "Enter Proc folder name",
-      .SelectedPath = txtProcFolderName.Text
-    }
-    If bfd_ProcFolder.ShowDialog() = DialogResult.OK Then
-      txtSourceFolderName.Text = bfd_ProcFolder.SelectedPath
-    End If
-  End Sub
-
-  Private Sub btnSourceFolder_Click(sender As Object, e As EventArgs) Handles btnSourceFolder.Click
-    ' browse for and select folder name
-    Dim bfd_SourceFolder As New FolderBrowserDialog With {
-      .Description = "Enter Source folder name",
-      .SelectedPath = txtJCLJOBFolderName.Text
-    }
-    If bfd_SourceFolder.ShowDialog() = DialogResult.OK Then
-      txtSourceFolderName.Text = bfd_SourceFolder.SelectedPath
-    End If
-  End Sub
-  Private Sub btnTelonFolder_Click(sender As Object, e As EventArgs) Handles btnTelonFolder.Click
-    ' browse for and select folder name
-    Dim bfd_TelonFolder As New FolderBrowserDialog With {
-      .Description = "Enter Telon Source folder name",
-      .SelectedPath = txtJCLJOBFolderName.Text
-    }
-    If bfd_TelonFolder.ShowDialog() = DialogResult.OK Then
-      txtTelonFoldername.Text = bfd_TelonFolder.SelectedPath
-    End If
-
-  End Sub
-
-  Private Sub btnMapsFolder_Click(sender As Object, e As EventArgs) Handles btnScreenMapsFolder.Click
-    ' browse for and select folder name
-    Dim bfd_MapsFolder As New FolderBrowserDialog With {
-      .Description = "Enter Screen Maps folder name",
-      .SelectedPath = txtJCLJOBFolderName.Text
-    }
-    If bfd_MapsFolder.ShowDialog() = DialogResult.OK Then
-      txtScreenMapsFolderName.Text = bfd_MapsFolder.SelectedPath
-    End If
-
-  End Sub
-  Private Sub btnOutputFolder_Click(sender As Object, e As EventArgs) Handles btnOutputFolder.Click
-    ' browse for and select folder name
-    Dim bfd_OutputFolder As New FolderBrowserDialog With {
-      .Description = "Enter OUTPUT folder name",
-      .SelectedPath = txtJCLJOBFolderName.Text
-    }
-    If bfd_OutputFolder.ShowDialog() = DialogResult.OK Then
-      txtOutputFoldername.Text = bfd_OutputFolder.SelectedPath
-      DirectoryName = txtOutputFoldername.Text
-      tempNoContdJCLFileName = DirectoryName & "\" & FileNameOnly & "_NoContdJCL.txt"
-      tempCobFileName = DirectoryName & "\" & FileNameOnly & "_expandedCOB.txt"
-      tempEZTFileName = DirectoryName & "\" & FileNameOnly & "_expandedEZT.txt"
-    End If
-  End Sub
   Private Sub btnClose_Click(sender As Object, e As EventArgs) Handles btnClose.Click
     Me.Close()
   End Sub
@@ -526,78 +482,109 @@ Public Class Form1
     Dim elapsed_time As TimeSpan
 
     ' set up the base files Utilities and ControlLibrarues
-    Dim UtilitiesFileName As String = InitDirectory & "\Utilities.txt"
+    Dim UtilitiesFileName As String = folderPath & "\Utilities.txt"
     If Not File.Exists(UtilitiesFileName) Then
-      MessageBox.Show("Caution! No Utilities.txt file found in folder:" & vbCrLf & InitDirectory)
+      MessageBox.Show("Caution! No Utilities.txt file found in folder:" & vbCrLf & folderPath)
       Utilities(0) = ""
     Else
       Utilities = File.ReadAllLines(UtilitiesFileName)
     End If
 
-    Dim ControlLibrariesFileName As String = InitDirectory & "\ControlLibraries.txt"
+    Dim ControlLibrariesFileName As String = folderPath & "\ControlLibraries.txt"
     If Not File.Exists(ControlLibrariesFileName) Then
-      MessageBox.Show("Caution! No ControlLibraries.txt file found in folder:" & vbCrLf & InitDirectory)
+      MessageBox.Show("Caution! No ControlLibraries.txt file found in folder:" & vbCrLf & folderPath)
       ControlLibraries(0) = ""
     Else
       ControlLibraries = File.ReadAllLines(ControlLibrariesFileName)
     End If
 
 
-    DirectoryName = Path.GetDirectoryName(txtJCLJOBFolderName.Text)
+    'DirectoryName = Path.GetDirectoryName(folderPath & txtJCLJOBFolder.Text)
 
     Delimiter = txtDelimiter.Text
-    lblCopybookMessage.Text = ""
+    lblStatusMessage.Text = ""
 
-    If Not Directory.Exists(txtOutputFoldername.Text) Then
-      MessageBox.Show("OUTPUT folder name does not exist to write log file!" & vbLf & txtOutputFoldername.Text)
+    If Not Directory.Exists(folderPath & txtOutputFolder.Text) Then
+      MessageBox.Show("OUTPUT folder name does not exist to write log file!" &
+                      vbLf & folderPath & txtOutputFolder.Text)
       Exit Sub
     End If
 
-    Dim logFileName As String = txtOutputFoldername.Text & "\ADDILite_log.txt"
+    Dim logFileName As String = folderPath & txtOutputFolder.Text & "\ADDILite_log.txt"
     LogFile = My.Computer.FileSystem.OpenTextFileWriter(logFileName, False)
-    LogFile.WriteLine(Date.Now & ",Program Starts," & Me.Text)
-    LogFile.WriteLine(Date.Now & ",Data Gathering Form," & txtDataGatheringForm.Text)
-    LogFile.WriteLine(Date.Now & ",JOB Folder," & txtJCLJOBFolderName.Text)
-    LogFile.WriteLine(Date.Now & ",PROC Folder" & txtProcFolderName.Text)
-    LogFile.WriteLine(Date.Now & ",Source Folder," & txtSourceFolderName.Text)
-    LogFile.WriteLine(Date.Now & ",TELON Folder," & txtTelonFoldername.Text)
-    LogFile.WriteLine(Date.Now & ",Screen Map Folder," & txtScreenMapsFolderName.Text)
-    LogFile.WriteLine(Date.Now & ",Output Folder," & txtOutputFoldername.Text)
-    LogFile.WriteLine(Date.Now & ",Delimiter," & txtDelimiter.Text)
-    LogFile.WriteLine(Date.Now & ",ScanModeOnly," & cbScanModeOnly.Checked)
+    LogFile.WriteLine(Date.Now & ",I,Program Starts," & Me.Text)
+    LogFile.WriteLine(Date.Now & ",I,Data Gathering Form," & folderPath & "\" & txtDataGatheringForm.Text)
+    LogFile.WriteLine(Date.Now & ",I,JOB Folder," & txtJCLJOBFolder.Text)
+    LogFile.WriteLine(Date.Now & ",I,PROC Folder" & txtProcFolder.Text)
+    LogFile.WriteLine(Date.Now & ",I,COBOL Folder," & txtCobolFolder.Text)
+    LogFile.WriteLine(Date.Now & ",I,Copybook Folder," & txtCopybookFolder.Text)
+    LogFile.WriteLine(Date.Now & ",I,DECLGEN Folder," & txtDECLGenFolder.Text)
+    LogFile.WriteLine(Date.Now & ",I,EASYTRIEVE," & txtEasytrieveFolder.Text)
+    LogFile.WriteLine(Date.Now & ",I,ASM Folder," & txtASMFolder.Text)
+    LogFile.WriteLine(Date.Now & ",I,TELON Folder," & txtTelonFolder.Text)
+    LogFile.WriteLine(Date.Now & ",I,Screen Map Folder," & txtScreenMapsFolder.Text)
+    LogFile.WriteLine(Date.Now & ",I,Output Folder," & txtOutputFolder.Text)
+    LogFile.WriteLine(Date.Now & ",I,PUML Folder," & txtPUMLFolder.Text)
+    LogFile.WriteLine(Date.Now & ",I,Expanded Folder," & txtExpandedFolder.Text)
+    LogFile.WriteLine(Date.Now & ",I,Business Rules Folder," & txtBusinessRulesFolder.Text)
+    LogFile.WriteLine(Date.Now & ",I,Delimiter," & txtDelimiter.Text)
+    LogFile.WriteLine(Date.Now & ",I,ScanModeOnly," & cbScanModeOnly.Checked)
+    LogFile.WriteLine(Date.Now & ",I,RunOption Jobs," & cbJOBS.Checked)
+    LogFile.WriteLine(Date.Now & ",I,RunOption Procs," & cbJobComments.Checked)
+    LogFile.WriteLine(Date.Now & ",I,RunOption Programs," & cbPrograms.Checked)
+    LogFile.WriteLine(Date.Now & ",I,RunOption Files," & cbFiles.Checked)
+    LogFile.WriteLine(Date.Now & ",I,RunOption Records," & cbRecords.Checked)
+    LogFile.WriteLine(Date.Now & ",I,RunOption Fields," & cbFields.Checked)
+    LogFile.WriteLine(Date.Now & ",I,RunOption Comments," & cbComments.Checked)
+    LogFile.WriteLine(Date.Now & ",I,RunOption EXECSQL," & cbexecSQL.Checked)
+    LogFile.WriteLine(Date.Now & ",I,RunOption EXECCICS," & cbexecCICS.Checked)
+    LogFile.WriteLine(Date.Now & ",I,RunOption IMS," & cbIMS.Checked)
+    LogFile.WriteLine(Date.Now & ",I,RunOption DataCom," & cbDataCom.Checked)
+    LogFile.WriteLine(Date.Now & ",I,RunOption ScreenMaps," & cbScreenMaps.Checked)
+    LogFile.WriteLine(Date.Now & ",I,RunOption Calls," & cbCalls.Checked)
+    LogFile.WriteLine(Date.Now & ",I,RunOption Libraries," & cbLibraries.Checked)
+    LogFile.WriteLine(Date.Now & ",I,RunOption Instreams," & cbInstream.Checked)
+
 
     'validations
     If Not FileNamesAreValid() Then
-      LogFile.WriteLine(Date.Now & ",Program Abnormally Ends,")
+      LogFile.WriteLine(Date.Now & ",S,Program Abnormally Ends,")
       LogFile.Close()
-      MessageBox.Show("Folder/File Names are not valid, see log.")
+      MessageBox.Show("Folder/File Names are Not valid, see log.")
       Exit Sub
     End If
 
-    ' remove previous CallPgms.jcl Job
-    CallPgmsFileName = txtJCLJOBFolderName.Text & "\CALLPGMS.JCL"
     ' Prepare for CallPgms file which holds all the Called Programs within the sources
     '  this file is processed as the last "JOB"
+    CallPgmsFileName = folderPath & txtJCLJOBFolder.Text & "\CALLPGMS.JCL"
     ' Remove previous CallPgms.jcl file
     If File.Exists(CallPgmsFileName) Then
       Try
         File.Delete(CallPgmsFileName)
       Catch ex As Exception
-        lblCopybookMessage.Text = "Error deleting CallPgms.jcl file:" & ex.Message
+        lblStatusMessage.Text = "Error deleting CallPgms.jcl file:" & ex.Message
         Exit Sub
       End Try
     End If
 
+    ' Remove the previous #ADDI files
+    lblStatusMessage.Text = "Removing previous ADDI files..."
+    Dim dirInfo As New IO.DirectoryInfo(folderPath & txtCobolFolder.Text)
+    Dim aryADDIFiles As IO.FileInfo() = dirInfo.GetFiles("#ADDI*.*", SearchOption.TopDirectoryOnly)
+    For Each ADDIfile As IO.FileInfo In aryADDIFiles
+      File.Delete(ADDIfile.FullName)
+    Next
+
     ' Get the number of JOBS that will be processed
-    NumberOfJobsToProcess = My.Computer.FileSystem.GetFiles(txtJCLJOBFolderName.Text).Count
+    NumberOfJobsToProcess = My.Computer.FileSystem.GetFiles(folderPath & txtJCLJOBFolder.Text).Count
 
     ' Load an AliasCobol array, if any
-    lblCopybookMessage.Text = "Loading Alias Cobol..."
+    lblStatusMessage.Text = "Loading Alias Cobol..."
     Dim AliasFileName As String = folderPath & "\COBOLAlias.csv"
-    LogFile.WriteLine(Date.Now & ",Alias COBOL filename:," & AliasFileName)
+    LogFile.WriteLine(Date.Now & ",I,Alias COBOL filename:," & AliasFileName)
     If Not File.Exists(AliasFileName) Then
       AliasCobol.Add("Empty", "Empty")
-      LogFile.WriteLine(Date.Now & ",Alias COBOL file,Not Found")
+      LogFile.WriteLine(Date.Now & ",W,Alias COBOL file,Not Found")
     Else
       Dim AliasRows As String() = File.ReadAllLines(AliasFileName)
       For Each aliasrow In AliasRows
@@ -608,17 +595,8 @@ Public Class Form1
           End If
         End If
       Next
-      LogFile.WriteLine(Date.Now & ",Alias COBOL entries loaded:," & LTrim(Str(AliasCobol.Count)))
+      LogFile.WriteLine(Date.Now & ",I,Alias COBOL entries loaded:," & LTrim(Str(AliasCobol.Count)))
     End If
-
-
-    ' Count the Telon files to determine Batch and Online members
-    'Dim TelonBDfiles As String() = Directory.GetFiles(txtTelonFoldername.Text & "\", "*BD", SearchOption.AllDirectories)
-    'Dim TelonDRfiles As String() = Directory.GetFiles(txtTelonFoldername.Text & "\", "*DR", SearchOption.AllDirectories)
-    'CntTelonBatch = TelonBDfiles.Length + TelonDRfiles.Length
-    'Dim TelonSDfiles As String() = Directory.GetFiles(txtTelonFoldername.Text & "\", "*SD", SearchOption.AllDirectories)
-    'CntTelonOnline = TelonSDfiles.Length
-
 
     ' ready the progress bar
     ProgressBar1.Minimum = 0
@@ -630,18 +608,18 @@ Public Class Form1
     Me.Cursor = Cursors.WaitCursor
 
     ' load the jobs to array list
-    lblCopybookMessage.Text = "Loading the JOBS..."
-    LogFile.WriteLine(Date.Now & ",JCL Job files found," & LTrim(Str(NumberOfJobsToProcess)))
-    For Each foundFile As String In My.Computer.FileSystem.GetFiles(txtJCLJOBFolderName.Text)
+    lblStatusMessage.Text = "Loading the JOBS..."
+    LogFile.WriteLine(Date.Now & ",I,JCL Job files found," & LTrim(Str(NumberOfJobsToProcess)))
+    For Each foundFile As String In My.Computer.FileSystem.GetFiles(folderPath & txtJCLJOBFolder.Text)
       ListOfJobs.Add(foundFile)
     Next
 
-    lblCopybookMessage.Text = "Initiating EXCEL..."
+    lblStatusMessage.Text = "Initiating EXCEL..."
     objExcel.Visible = False
 
     ' Load the Data Gathering Form spreadsheet into the ListofDataGatheringForm array
-    lblCopybookMessage.Text = "Loading Data Gather Form to array..."
-    dgfWorkbook = objExcel.Workbooks.Open(txtDataGatheringForm.Text, True)
+    lblStatusMessage.Text = "Loading Data Gather Form to array..."
+    dgfWorkbook = objExcel.Workbooks.Open(folderPath & "\" & txtDataGatheringForm.Text, True)
     SummaryRow = 1
     dgfWorksheet = dgfWorkbook.Sheets.Item(1)
     dgfWorksheet.Select(1)
@@ -657,9 +635,9 @@ Public Class Form1
     dgfWorkbook.Close()
 
 
-    lblCopybookMessage.Text = "Building cross-reference DB2 table names"
+    lblStatusMessage.Text = "Building cross-reference DB2 table names"
     'build a cross-reference table of DB2 Tablenames with source members
-    For Each foundFile As String In My.Computer.FileSystem.GetFiles(txtSourceFolderName.Text)
+    For Each foundFile As String In My.Computer.FileSystem.GetFiles(folderPath & txtCobolFolder.Text)
       Dim memberLines As String() = File.ReadAllLines(foundFile)
       For index = 0 To memberLines.Count - 1
         If memberLines(index).IndexOf(" EXEC SQL DECLARE ") > -1 Then
@@ -683,21 +661,65 @@ Public Class Form1
     '   the Telon folder. If other they will be in the Screens folder. This is because
     '   Telon members hold BOTH database info and Screen info. Other System (IMS/CICS) do not
     '   hold database info only screen info.
-    Call LoadScreenMaps(txtScreenMapsFolderName.Text)
-    Call LoadScreenMaps(txtTelonFoldername.Text)
+    Call LoadScreenMaps(folderPath & txtScreenMapsFolder.Text)
+    Call LoadScreenMaps(folderPath & txtTelonFolder.Text)
+
+    ' Build a list of source files so we don't have to use file exist function, just the list
+    lblStatusMessage.Text = "Building list of COBOL source files..."
+    Dim di As New IO.DirectoryInfo(folderPath & txtCobolFolder.Text)
+    Dim aryFi As IO.FileInfo() = di.GetFiles("*.*")
+    Dim fi As IO.FileInfo
+    For Each fi In aryFi
+      If fi.Name.ToUpper <> "DESKTOP.INI" Then
+        ListofCOBOLFiles.Add(fi.Name.ToUpper)
+      End If
+    Next
+
+    ' Build a list of copybook files so we don't have to use file exist function, just the list
+    lblStatusMessage.Text = "Building list of copybook files..."
+    Dim cbdi As New IO.DirectoryInfo(folderPath & txtCopybookFolder.Text)
+    Dim aryCBFi As IO.FileInfo() = cbdi.GetFiles("*.*")
+    Dim cbfi As IO.FileInfo
+    For Each cbfi In aryCBFi
+      If cbfi.Name.ToUpper <> "DESKTOP.INI" Then
+        ListofCopybookFiles.Add(cbfi.Name.ToUpper)
+      End If
+    Next
+
+    ' Build a list of Easytrieve files so we don't have to use file exist function, just the list
+    lblStatusMessage.Text = "Building list of Easytrieve source files..."
+    Dim eztDi As New IO.DirectoryInfo(folderPath & txtEasytrieveFolder.Text)
+    Dim ezAryFiles As IO.FileInfo() = eztDi.GetFiles("*.*")
+    Dim ezfile As IO.FileInfo
+    For Each ezfile In ezAryFiles
+      If ezfile.Name.ToUpper <> "DESKTOP.INI" Then
+        ListofEasytrieveFiles.Add(ezfile.Name.ToUpper)
+      End If
+    Next
+
+    ' Build a list of Assembler files so we don't have to use file exist function, just the list
+    lblStatusMessage.Text = "Building list of Assembler source files..."
+    Dim asmDi As New IO.DirectoryInfo(folderPath & txtASMFolder.Text)
+    Dim asmAryFiles As IO.FileInfo() = asmDi.GetFiles("*.*")
+    Dim asmfile As IO.FileInfo
+    For Each asmfile In asmAryFiles
+      If asmfile.Name.ToUpper <> "DESKTOP.INI" Then
+        ListofAsmFiles.Add(asmfile.Name.ToUpper)
+      End If
+    Next
 
     ProgressBar1.PerformStep()
     ProgressBar1.Show()
 
 
-    Dim ProgramsFileName = txtOutputFoldername.Text & "\ADDILite.xlsx"
+    Dim ProgramsFileName = folderPath & txtOutputFolder.Text & "\ADDILite.xlsx"
     If File.Exists(ProgramsFileName) Then
-      LogFile.WriteLine(Date.Now & ",Previous Model file deleted," & ProgramsFileName)
+      LogFile.WriteLine(Date.Now & ",I,Previous Model file deleted," & ProgramsFileName)
       Try
         File.Delete(ProgramsFileName)
       Catch ex As Exception
-        LogFile.WriteLine(Date.Now & ",Error deleting Model," & ex.Message)
-        lblCopybookMessage.Text = "Error Deleting Model:" & ex.Message
+        LogFile.WriteLine(Date.Now & ",S,Error deleting Model," & ex.Message)
+        lblStatusMessage.Text = "Error Deleting Model:" & ex.Message
         ProgressBar1.Visible = False
         Exit Sub
       End Try
@@ -707,32 +729,25 @@ Public Class Form1
     CreateSummaryTab()
 
     ' Create, if any, all the in-stream data files as defined in the JOBS
-    lblCopybookMessage.Text = "Creating Instream data files from JOBS..."
+    lblStatusMessage.Text = "Creating Instream data files from JOBS..."
     For Each JobFile In ListOfJobs
       Call CreateInStreamDataSets(JobFile)
     Next
 
-    ' Build a list of source files so we don't have to use file exist function, just the list search.
-    lblCopybookMessage.Text = "Building list of source files..."
-    Dim di As New IO.DirectoryInfo(txtSourceFolderName.Text)
-    Dim aryFi As IO.FileInfo() = di.GetFiles("*.*")
-    Dim fi As IO.FileInfo
-    For Each fi In aryFi
-      ListofSourceFiles.Add(fi.Name.ToUpper)
-    Next
 
-    lblCopybookMessage.Text = "Processing..."
+
+    lblStatusMessage.Text = "Processing..."
     ' Process All the jobs in the JCL Folder.
     '  An addtional job could be created if should there be call subroutines
     Dim Jobcount As Integer = 0
     For Each JobFile In ListOfJobs
       Jobcount += 1
-      lblProcessingJob.Text = "Processing Job #" & Jobcount & ": " & JobFile
-      LogFile.WriteLine(Date.Now & ",Processing Job," & Path.GetFileNameWithoutExtension(JobFile))
       FileNameOnly = Path.GetFileNameWithoutExtension(JobFile)
       FileNameWithExtension = Path.GetFileName(JobFile)
+      lblProcessingJob.Text = "Processing Job #" & Jobcount & ": " & FileNameOnly
+      LogFile.WriteLine(Date.Now & ",I,Processing Job," & Path.GetFileNameWithoutExtension(JobFile))
       Call ProcessJOBFile(JobFile)
-      Call ProcessSourceFiles()
+      Call ProcessExecFiles()
       ProgressBar1.PerformStep()
       ProgressBar1.Show()
       Call InitializeProgramVariables()
@@ -760,7 +775,7 @@ Public Class Form1
       objExcel.Quit()
     Else
       ' Format, Save and close Excel
-      lblCopybookMessage.Text = "Saving Spreadsheet"
+      lblStatusMessage.Text = "Saving Spreadsheet"
       Call FormatWorksheets()
       workbook.SaveAs(ProgramsFileName, DefaultFormat,,, SetAsReadOnly)
       workbook.Close()
@@ -771,13 +786,13 @@ Public Class Form1
     ProgressBar1.PerformStep()
     ProgressBar1.Show()
 
-    LogFile.WriteLine(Date.Now & ",Program Ends,")
-    LogFile.Close()
-    Me.Cursor = Cursors.Default
-    lblCopybookMessage.Text = "Process Complete"
-
     stop_time = Now
     elapsed_time = stop_time.Subtract(start_time)
+
+    LogFile.WriteLine(Date.Now & ",I,Program Ends," & elapsed_time.TotalMinutes.ToString("000.00") & " Minutes")
+    LogFile.Close()
+    Me.Cursor = Cursors.Default
+    lblStatusMessage.Text = "Process Complete"
 
     System.Media.SystemSounds.Beep.Play()
     MessageBox.Show("Process Complete: " & elapsed_time.TotalMinutes.ToString("000.00") & " Minutes")
@@ -980,7 +995,7 @@ Public Class Form1
       Exit Sub
     End If
 
-    ' create the CallPgms.jcl file
+    ' create the CallPgms.jcl file based on ListOfCallPgms
     swCallPgmsFile = New StreamWriter(CallPgmsFileName, False)
     Dim pgmCnt As Integer = 0
     swCallPgmsFile.WriteLine("//CALLPGMS JOB 'INTERNAL','SUBROUTINES CALLED'")
@@ -990,23 +1005,25 @@ Public Class Form1
         Continue For
       End If
       pgmCnt += 1
-      swCallPgmsFile.WriteLine("//PGM" & LTrim(Str(pgmCnt)) & " EXEC PGM=" & execs(0).Replace(Delimiter, ""))
-      swCallPgmsFile.WriteLine("//STEPLIB DD DSN=" & execs(2) & ",DISP=SHR")
+      swCallPgmsFile.WriteLine("//" & execs(2) & " EXEC PGM=" & execs(0).Replace(Delimiter, ""))
+      swCallPgmsFile.WriteLine("//STEPLIB DD DSN=LIBRARY." & execs(1) & ",DISP=SHR")
+      'swCallPgmsFile.WriteLine("//PGM" & LTrim(Str(pgmCnt)) & " EXEC PGM=" & execs(0).Replace(Delimiter, ""))
+      'swCallPgmsFile.WriteLine("//STEPLIB DD DSN=" & execs(2) & ",DISP=SHR")
     Next
     swCallPgmsFile.Close()
 
     'process the CallPgms file
     If File.Exists(CallPgmsFileName) Then
-      lblProcessingJob.Text = "Processing Job CallPgms" & ": " & CallPgmsFileName
-      LogFile.WriteLine(Date.Now & ",Processing Job," & CallPgmsFileName)
+      lblProcessingJob.Text = "Processing CallPgms"
+      LogFile.WriteLine(Date.Now & ",I,Processing Job," & CallPgmsFileName)
       FileNameOnly = Path.GetFileNameWithoutExtension(CallPgmsFileName)
-      ProcessJOBFile(CallPgmsFileName)
-      ProcessSourceFiles()
+      Call ProcessJOBFile(CallPgmsFileName)
+      Call ProcessExecFiles()
       ProgressBar1.PerformStep()
       ProgressBar1.Show()
       Call InitializeProgramVariables()
     Else
-      LogFile.WriteLine(Date.Now & ",Call Pgms File not found?," & CallPgmsFileName)
+      LogFile.WriteLine(Date.Now & ",E,Call Pgms File not found?," & CallPgmsFileName)
     End If
 
   End Sub
@@ -1014,46 +1031,48 @@ Public Class Form1
     FileNamesAreValid = False
     Select Case True
       Case txtDataGatheringForm.TextLength = 0
-        LogFile.WriteLine(Date.Now & ",ERROR! Data Gathering Form name required,")
-      Case Not IsValidFileNameOrPath(txtDataGatheringForm.Text)
-        LogFile.WriteLine(Date.Now & ",ERROR! Data Gathering Form name has invalid characters,")
-      Case Not File.Exists(txtDataGatheringForm.Text)
-        LogFile.WriteLine(Date.Now & ",ERROR! Data Gathering Form not found," & txtDataGatheringForm.Text)
+        LogFile.WriteLine(Date.Now & ",E,ERROR! Data Gathering Form name required,")
+      Case Not IsValidFileNameOrPath(folderPath & "\" & txtDataGatheringForm.Text)
+        LogFile.WriteLine(Date.Now & ",E,ERROR! Data Gathering Form name has invalid characters," &
+                          folderPath & "\" & txtDataGatheringForm.Text)
+      Case Not File.Exists(folderPath & "\" & txtDataGatheringForm.Text)
+        LogFile.WriteLine(Date.Now & ",E,ERROR! Data Gathering Form not found," &
+                          folderPath & "\" & txtDataGatheringForm.Text)
 
-      Case txtJCLJOBFolderName.TextLength = 0
-        LogFile.WriteLine(Date.Now & ",ERROR! JCL JOBS Folder name required,")
-      Case Not IsValidFileNameOrPath(txtJCLJOBFolderName.Text)
-        LogFile.WriteLine(Date.Now & ",ERROR! JCL JOBS Folder name has invalid characters,")
-      Case Not Directory.Exists(txtJCLJOBFolderName.Text)
-        LogFile.WriteLine(Date.Now & ",ERROR! JCL JOBS folder does not exists,")
+      Case txtJCLJOBFolder.TextLength = 0
+        LogFile.WriteLine(Date.Now & ",E,ERROR! JCL JOBS Folder name required,")
+      Case Not IsValidFileNameOrPath(folderPath & txtJCLJOBFolder.Text)
+        LogFile.WriteLine(Date.Now & ",E,ERROR! JCL JOBS Folder name has invalid characters,")
+      Case Not Directory.Exists(folderPath & txtJCLJOBFolder.Text)
+        LogFile.WriteLine(Date.Now & ",E,ERROR! JCL JOBS folder does not exists,")
 
-      Case txtSourceFolderName.TextLength = 0
-        LogFile.WriteLine(Date.Now & ",ERROR! Sources folder name required,")
-      Case Not IsValidFileNameOrPath(txtSourceFolderName.Text)
-        LogFile.WriteLine(Date.Now & ",ERROR! Sources folder name has invalid characters,")
-      Case Not Directory.Exists(txtSourceFolderName.Text)
-        LogFile.WriteLine(Date.Now & ",ERROR! Sources folder does not exists,")
+      Case txtCobolFolder.TextLength = 0
+        LogFile.WriteLine(Date.Now & ",E,ERROR! Sources folder name required,")
+      Case Not IsValidFileNameOrPath(folderPath & txtCobolFolder.Text)
+        LogFile.WriteLine(Date.Now & ",E,ERROR! Sources folder name has invalid characters,")
+      Case Not Directory.Exists(folderPath & txtCobolFolder.Text)
+        LogFile.WriteLine(Date.Now & ",E,ERROR! Sources folder does not exists,")
 
-      Case txtTelonFoldername.TextLength = 0
-        LogFile.WriteLine(Date.Now & ",ERROR! TELON folder name required,")
-      Case Not IsValidFileNameOrPath(txtTelonFoldername.Text)
-        LogFile.WriteLine(Date.Now & ",ERROR! TELON folder name has invalid characters,")
-      Case Not Directory.Exists(txtTelonFoldername.Text)
-        LogFile.WriteLine(Date.Now & ",ERROR! TELON folder name does not exists,")
+      Case txtTelonFolder.TextLength = 0
+        LogFile.WriteLine(Date.Now & ",E,ERROR! TELON folder name required,")
+      Case Not IsValidFileNameOrPath(folderPath & txtTelonFolder.Text)
+        LogFile.WriteLine(Date.Now & ",E,ERROR! TELON folder name has invalid characters,")
+      Case Not Directory.Exists(folderPath & txtTelonFolder.Text)
+        LogFile.WriteLine(Date.Now & ",E,ERROR! TELON folder name does not exists,")
 
-      Case txtScreenMapsFolderName.TextLength = 0
-        LogFile.WriteLine(Date.Now & ",ERROR! SCREENS folder name required,")
-      Case Not IsValidFileNameOrPath(txtScreenMapsFolderName.Text)
-        LogFile.WriteLine(Date.Now & ",ERROR! SCREENS folder name has invalid characters,")
-      Case Not Directory.Exists(txtScreenMapsFolderName.Text)
-        LogFile.WriteLine(Date.Now & ",ERROR! SCREENS folder does not exists,")
+      Case txtScreenMapsFolder.TextLength = 0
+        LogFile.WriteLine(Date.Now & ",E,ERROR! SCREENS folder name required,")
+      Case Not IsValidFileNameOrPath(folderPath & txtScreenMapsFolder.Text)
+        LogFile.WriteLine(Date.Now & ",E,ERROR! SCREENS folder name has invalid characters,")
+      Case Not Directory.Exists(folderPath & txtScreenMapsFolder.Text)
+        LogFile.WriteLine(Date.Now & ",E,ERROR! SCREENS folder does not exists,")
 
-      Case txtOutputFoldername.TextLength = 0
-        LogFile.WriteLine(Date.Now & ",ERROR! OUTPUTS folder name required,")
-      Case Not IsValidFileNameOrPath(txtOutputFoldername.Text)
-        LogFile.WriteLine(Date.Now & ",ERROR! OUTPUTS folder has invalid characters,")
-      Case Not Directory.Exists(txtOutputFoldername.Text)
-        LogFile.WriteLine(Date.Now & ",ERROR! OUTPUTS folder does not exists,")
+      Case txtOutputFolder.TextLength = 0
+        LogFile.WriteLine(Date.Now & ",E,ERROR! OUTPUTS folder name required,")
+      Case Not IsValidFileNameOrPath(folderPath & txtOutputFolder.Text)
+        LogFile.WriteLine(Date.Now & ",E,ERROR! OUTPUTS folder has invalid characters,")
+      Case Not Directory.Exists(folderPath & txtOutputFolder.Text)
+        LogFile.WriteLine(Date.Now & ",E,ERROR! OUTPUTS folder does not exists,")
 
       Case Else
         FileNamesAreValid = True
@@ -1073,9 +1092,7 @@ Public Class Form1
     Return True
   End Function
 
-  ' * Subroutines
   Sub ProcessJOBFile(JobFile As String)
-
     'Load the Jobfile to the jclStmt List
     Dim jclRecordsCount As Integer = LoadJCLStatementsToArray(JobFile)
     If jclRecordsCount = 0 Then
@@ -1092,7 +1109,8 @@ Public Class Form1
       Call LogStmtArray(FileNameOnly, jclStmt)
     End If
 
-    If WriteOutput() = -1 Then
+    Dim WriteOutputResult As Integer = ProcessJCL()
+    If WriteOutputResult = -1 Then
       MessageBox.Show("Error while building output. See log file")
     End If
 
@@ -1150,12 +1168,12 @@ Public Class Form1
           '-need to save the JCL Parms for later substitue.
           Dim ParmValues As String() = JCLStatement(Parameters).Split(",")
           JCLParms = LoadJCLParms(ParmValues)
-          Dim ProcName As String = txtProcFolderName.Text & "\" & ParmValues(0)
+          Dim ProcName As String = folderPath & txtProcFolder.Text & "\" & ParmValues(0)
           If ListOfInstreamProcs.IndexOf(ParmValues(0)) = -1 Then
             Dim PROC As New List(Of String)
             PROC = ReformatJCLAndLoadToArray(ProcName)
             If PROC.Count = 0 Then
-              LogFile.WriteLine(Date.Now & ",Missing PROC member," & ParmValues(0))
+              LogFile.WriteLine(Date.Now & ",E,Missing PROC member," & ParmValues(0))
             End If
             For Each ProcLine In PROC
               Dim ProcLinePlus As String = "++" & ProcLine.Substring(2) 'replace leading // with ++ to indicate PROC
@@ -1323,7 +1341,7 @@ Public Class Form1
       Return theJCLwords(0)
     End If
     ' On the PROC statement, the Proc Source Name and Proc Name is different, adjust to the source name
-    LogFile.WriteLine(Date.Now & ",PROC Name adjusted to PROC Source Name," &
+    LogFile.WriteLine(Date.Now & ",I,PROC Name adjusted to PROC Source Name," &
                       theJCLwords(0) & " vs " & theFileName)
     Return "//" & theFileName
   End Function
@@ -1475,7 +1493,7 @@ Public Class Form1
     ' Output file will be named: <filenameonly>_<jobname>_<stepname>_<ddname>
     numLoadAndGo += 1
     Dim firstPartFileName As String = "#ADDI"
-    Dim InstreamDatasetFileName = txtSourceFolderName.Text & "\" & firstPartFileName & LTrim(Str(numLoadAndGo))
+    Dim InstreamDatasetFileName = folderPath & txtCobolFolder.Text & "\" & firstPartFileName & LTrim(Str(numLoadAndGo))
     swInstreamDatasetFile = My.Computer.FileSystem.OpenTextFileWriter(InstreamDatasetFileName, False)
 
     ' Write the data after the 'DD *' until we reach a '//' or '/*' or end of array
@@ -1517,11 +1535,12 @@ Public Class Form1
   Sub LogStmtArray(ByRef theFileName As String, theStmtArray As List(Of String))
     ' write the stmt array to a file for debugging purposes
     Dim logStmtCount As Integer = -1
-    Dim logStmtFileName As String = txtOutputFoldername.Text & "\Debug\" & theFileName & "_logStmt.txt"
+    Dim logStmtFileName As String = folderPath & txtOutputFolder.Text &
+      "\Debug\" & theFileName & "_logStmt.txt"
     Try
       LogStmtFile = My.Computer.FileSystem.OpenTextFileWriter(logStmtFileName, False)
     Catch ex As Exception
-      LogFile.WriteLine(Date.Now & ",Error creating Log stmt file," & ex.Message)
+      LogFile.WriteLine(Date.Now & ",E,Error creating Log stmt file," & ex.Message)
       Exit Sub
     End Try
     For Each statement In theStmtArray
@@ -1677,16 +1696,14 @@ Public Class Form1
     Return ""
   End Function
 
-  Function WriteOutput() As Integer
-    ' Write the details to the spreadsheet tabs: Jobs, JobComments, Programs and JCLPuml file
-    ' return of -1 means an error
+  Function ProcessJCL() As Integer
+    ' Store the details to the spreadsheet tabs.
+    ' return of -1 means an error (at this time, no errors identified)
     ' return of 0 means all is okay
 
     ListOfDDs.Clear()       'in lieu of the swDDFile
 
     Dim ListOfSymbolics As New List(Of String)
-
-    WriteOutput = 0
 
     JobSourceName = FileNameOnly
 
@@ -1709,12 +1726,12 @@ Public Class Form1
 
     For Each statement As String In jclStmt
       If statement.Substring(0, 2) = "//" Then
-        procName = ""
+        procName = ""                 'not within a PROC
       End If
       Call GetLabelControlParms(statement, jLabel, jControl, jParameters)
       If Len(jControl) = 0 Then
         'MessageBox.Show("JCL control not found:" & statement)
-        LogFile.WriteLine(Date.Now & ",JCL control not found,'" & statement & ": " & FileNameOnly & "'")
+        LogFile.WriteLine(Date.Now & ",E,JCL control not found,'" & statement & ": " & FileNameOnly & "'")
         Continue For
       End If
 
@@ -1723,7 +1740,7 @@ Public Class Form1
         Case "JOB"
           Call ProcessJOB()
         Case "PROC"
-          procName = jLabel
+          procName = jLabel         'instream proc?
           ListOfSymbolics = LoadSymbolics(jParameters)
         Case "PEND"
         Case "EXEC"
@@ -1763,7 +1780,7 @@ Public Class Form1
           If jParameters = "PROC" Then
             Continue For
           End If
-          LogFile.WriteLine(Date.Now & ",Unknown JCL Control Value," & statement.Replace(",", ";") & " file:" & FileNameOnly)
+          LogFile.WriteLine(Date.Now & ",E,Unknown JCL Control Value," & statement.Replace(",", ";") & " file:" & FileNameOnly)
           Continue For
       End Select
 
@@ -1778,7 +1795,7 @@ Public Class Form1
     Call CreateProgramsTab()
     Call CreateFilesTab()
 
-
+    Return 0
   End Function
   Function LoadSymbolics(ByRef jParameters As String) As List(Of String)
     Dim jparms As String() = jParameters.Split(",")
@@ -1827,6 +1844,7 @@ Public Class Form1
   End Sub
   Sub ProcessJOB()
     ' Extract out values from the JCL JOB card
+    procName = ""
     ddSequence = 0
     jobName = jLabel
     jobMsgClass = GetParm(jParameters, "MSGCLASS=")
@@ -1853,6 +1871,7 @@ Public Class Form1
   Sub ProcessEXEC(ByVal NeedSourceType As Boolean, ListOfSymbolics As List(Of String))
     ' The "EXEC" control is for either PROC or a PGM
     ' For PROC it could be "EXEC <procname>" or "EXEC PROC=<procname"
+    '   when it is a PROC we set the Procname and exit this routine.
     ' For PGM it is "EXEC PGM=<pgmname>"
     ' For PGM replace program name if it is a symbolic
 
@@ -1922,6 +1941,7 @@ Public Class Form1
       If NeedSourceType Then
         SourceType = "Unknown"
       End If
+      SourceCount = 0
       Exit Sub
     End If
 
@@ -2073,6 +2093,12 @@ Public Class Form1
       dcbRecfm = GetParm(jParameters, "RECFM=")
     End If
 
+    ' when program name could not be determined, set to MISSING
+    If pgmName.Length = 0 Then
+      pgmName = "MISSING"
+      SourceType = "Utility"
+    End If
+
     ' write the csv record to array instead of to swDDFile.writeline
     ListOfDDs.Add(JobSourceName & txtDelimiter.Text &
                        jobName & txtDelimiter.Text &
@@ -2108,7 +2134,7 @@ Public Class Form1
                        CreateOutputHyperLink(pgmName & "_BR.xlsx") & Delimiter &
                        SourceCount)
       Select Case SourceType
-        Case "COBOL", "EASYTRIEVE"
+        Case "COBOL", "Easytrieve", "Assembler"
           ListOfExecs.Add(pgmName & Delimiter & SourceType)
       End Select
     End If
@@ -2245,7 +2271,8 @@ Public Class Form1
     'SummaryWorksheet.Range("B4").Value = "\JOBS"
     SummaryWorksheet.Range("A1").Value = "Mainframe Documentation Project" & vbNewLine &
                                          "Data Gathering Form" & vbNewLine &
-                                         Path.GetFileName(txtDataGatheringForm.Text) & vbNewLine &
+                                         Path.GetFileName(folderPath & "\" & txtDataGatheringForm.Text) &
+                                         vbNewLine &
                                          "Model Created:" & Date.Now & vbNewLine &
                                          "Accelerator: ADDILite, Version:" & ProgramVersion
     SummaryWorksheet.Range("B1").Value = ""
@@ -2822,31 +2849,33 @@ Public Class Form1
   End Sub
 
 
-  Sub ProcessSourceFiles()
+  Sub ProcessExecFiles()
     Dim SourceRecordsCount As Integer = 0
     Dim execCnt As Integer = 0
     Dim execCount As Integer = ListOfExecs.Count
+
     ' loop through the list of executables. Note we may be adding while processing (called members)
     For Each exec In ListOfExecs
       execCnt += 1
-      lblProcessingSource.Text = "Processing Source " & execCnt & " of " & execCount & ":" & exec
       Dim execs As String() = exec.Split(Delimiter)
       If execs.Count >= 2 Then
         exec = execs(0).Replace(Delimiter, "")
         SourceType = execs(1)
       End If
       If exec.Length = 0 Then
-        LogFile.WriteLine(Date.Now & ",Source file name empty?," & FileNameOnly)
+        LogFile.WriteLine(Date.Now & ",E,Source file name empty?," & FileNameOnly)
         Continue For
       End If
+      lblProcessingSource.Text = "Processing Exec #" & execCnt & ":" & exec
 
-      'Load the infile to the stmt List
-
+      'Load the source file to the stmt array
       Select Case SourceType
         Case "COBOL"
           SourceRecordsCount = LoadCobolStatementsToArray(exec)
         Case "Easytrieve"
           SourceRecordsCount = LoadEasytrieveStatementsToArray(exec)
+        Case "ASM"
+          SourceRecordsCount = LoadAssemblerStatementsToArray(exec)
         Case Else
           Continue For
       End Select
@@ -2854,12 +2883,12 @@ Public Class Form1
         Continue For
       End If
       If SourceRecordsCount = 0 Then
-        LogFile.WriteLine(Date.Now & ",No Source Records Found," & exec)
+        LogFile.WriteLine(Date.Now & ",E,No " & SourceType & " lines Found in file," & exec)
         Continue For
       End If
 
       If SrcStmt.Count = 0 Then
-        LogFile.WriteLine(Date.Now & ",No Source statements found," & exec)
+        LogFile.WriteLine(Date.Now & ",E,No statements load to SrcStmt Array," & exec)
         Continue For
       End If
 
@@ -2883,7 +2912,7 @@ Public Class Form1
       End If
 
       If pgm.ProcedureDivision = -1 Then
-        LogFile.WriteLine(Date.Now & ",Source is not complete," & exec)
+        LogFile.WriteLine(Date.Now & ",E,Source is not complete," & exec)
         Continue For
       End If
 
@@ -2895,12 +2924,12 @@ Public Class Form1
       Select Case SourceType
         Case "COBOL"
           If WriteOutputCOBOL(exec) = -1 Then
-            LogFile.WriteLine(Date.Now & ",Error while building COBOL output,")
+            LogFile.WriteLine(Date.Now & ",E,Error while building COBOL output,")
           End If
 
         Case "Easytrieve"
           If WriteOutputEasytrieve(exec) = -1 Then
-            LogFile.WriteLine(Date.Now & ",Error while building Easytrieve output," & exec)
+            LogFile.WriteLine(Date.Now & ",E,Error while building Easytrieve output," & exec)
           End If
 
       End Select
@@ -2921,7 +2950,7 @@ Public Class Form1
     '
     'Assign the TempFileName for this particular cobolfile
     '
-    tempCobFileName = txtOutputFoldername.Text & "\" & CobolFile & "_expandedCOB.txt"
+    tempCobFileName = folderPath & txtExpandedFolder.Text & "\" & CobolFile & "_expandedCOB.txt"
 
     ' Remove the temporary work file
     Try
@@ -2929,9 +2958,8 @@ Public Class Form1
         My.Computer.FileSystem.DeleteFile(tempCobFileName)
       End If
     Catch ex As Exception
-      LogFile.WriteLine(Date.Now & ",Removal of Temp hlk error," & ex.Message)
-      LoadCobolStatementsToArray = -1
-      Exit Function
+      LogFile.WriteLine(Date.Now & ",E,Removal of Temp hlk error," & ex.Message)
+      Return -1
     End Try
 
     SrcStmt.Clear()
@@ -2968,23 +2996,22 @@ Public Class Form1
     Dim Division As String = ""
 
     ' Verify COBOL FILE exists
-    Dim FoundCobolFileName As String = SourceExists(CobolFile)
+    Dim FoundCobolFileName As String = CobolSourceExists(CobolFile)
     '
     If FoundCobolFileName.Length = 0 Then
-      LogFile.WriteLine(Date.Now & ",Source not found," & CobolFile)
-      LoadCobolStatementsToArray = -1
-      Exit Function
+      LogFile.WriteLine(Date.Now & ",E,COBOL Source not found," & CobolFile)
+      Return -1
     End If
     ' Adjust CobolFile to the FOUND filename
     If CobolFile <> FoundCobolFileName Then
-      LogFile.WriteLine(Date.Now & ",Cobol Alias Used," & CobolFile & "/Alias:" & FoundCobolFileName)
+      LogFile.WriteLine(Date.Now & ",I,Cobol Alias Used," & CobolFile & "/Alias:" & FoundCobolFileName)
       CobolFile = FoundCobolFileName
     End If
     '
-    LogFile.WriteLine(Date.Now & ",Processing Source," & FoundCobolFileName)
+    LogFile.WriteLine(Date.Now & ",I,Processing COBOL Source," & FoundCobolFileName)
 
     ' Load the COBOL file into the working Array
-    Dim CobolLines As String() = File.ReadAllLines(txtSourceFolderName.Text & "\" & FoundCobolFileName)
+    Dim CobolLines As String() = File.ReadAllLines(folderPath & txtCobolFolder.Text & "\" & FoundCobolFileName)
 
     ' If missing first 6 bytes (an asterisk in col 1), add the six bytes to the front of every line.
     Dim Missing6 As Boolean = False
@@ -3003,7 +3030,7 @@ Public Class Form1
       End Select
     Next
     If Missing6 = True Then
-      LogFile.WriteLine(Date.Now & ",ADD MISSING 6 COBOL CHARACTERS," & FoundCobolFileName)
+      LogFile.WriteLine(Date.Now & ",W,ADD MISSING 6 COBOL CHARACTERS," & FoundCobolFileName)
       For index As Integer = 0 To CobolLines.Count - 1
         CobolLines(index) = Space(6) & CobolLines(index)
       Next
@@ -3205,10 +3232,9 @@ Public Class Form1
             Next
             ' safety check
             If endIndex = -1 Then
-              LogFile.WriteLine(Date.Now & ",Malformed SQL statement; missing END-EXEC," &
+              LogFile.WriteLine(Date.Now & ",E,Malformed SQL statement; missing END-EXEC," &
                               CobolLines(index) & " line#:" & index + 1)
-              LoadCobolStatementsToArray = -1
-              Exit Function
+              Return -1
             End If
             ' check to see if this an SQL INCLUDE or some other SQL command
             Dim execDirective As String() = combinedEXEC.Trim.Split(New Char() {" "c})
@@ -3246,13 +3272,13 @@ Public Class Form1
         'Dim CopybookFileName As String = txtSourceFolderName.Text &
         '                                 "\" & CopybookName
         swTemp.WriteLine(Space(6) & "*" & CopyType & " " & CopybookName & " Begin Copy/Include")
-        LogFile.WriteLine(Date.Now & ",Including COBOL " & CopyType & " copybook," & CopybookName)
+        LogFile.WriteLine(Date.Now & ",I,Including COBOL " & CopyType & " copybook," & CopybookName)
         Call IncludeCopyMember(CopybookName, swTemp)
         swTemp.WriteLine(Space(6) & "*" & CopyType & " " & CopybookName & " End Copy/Include")
       Next
       swTemp.Close()
 
-      ' check we expanded any copybooks, if so we scan again for any copy/includes
+      ' check if we expanded any copybooks, if so we scan again for any copy/includes
       If NumberOfCopysFound > 0 Then                      'we found at least 1 COPY stmt
         CobolLines = File.ReadAllLines(tempCobFileName)   ' so load what we got so far
       End If
@@ -3267,7 +3293,7 @@ Public Class Form1
     Dim statement As String = ""
     Dim procIndex As Integer = 0
     Dim continuation As Boolean = True
-    LoadCobolStatementsToArray = 0
+    Dim numCobolStatements As Integer = 0
 
     ' Load the temp file to the array
     CobolLines = File.ReadAllLines(tempCobFileName)
@@ -3301,7 +3327,7 @@ Public Class Form1
 
     For Each text1 As String In CobolLines
       hlkcounter += 1
-      LoadCobolStatementsToArray += 1
+      numCobolStatements += 1
       text1 = text1.Replace(vbTab, Space(4))                'replace TAB(S) with single space!
       text1 = text1.Replace(vbNullChar, Space(1))           'replace nulls with space
       text1 = text1.Replace("�", Space(1))
@@ -3369,7 +3395,7 @@ Public Class Form1
       End If
 
     Next
-
+    Return numCobolStatements
   End Function
   Function GetListOfProgramInfo(ByRef exec As String) As List(Of ProgramInfo)
     ' Scan through the source looking for the programs.
@@ -4113,7 +4139,7 @@ Public Class Form1
                       'Is this a literal or variable name. Literal will have a quote mark
                       If cWord(y).IndexOf("'") > -1 Then
                         MapName = cWord(y).Replace("PROGRAM('", "").Replace("')", "").Trim
-                        If SourceExists(MapName).Length = 0 Then
+                        If CobolSourceExists(MapName).Length = 0 Then
                           NotFound = "NotFound"
                         End If
                       Else
@@ -4126,7 +4152,7 @@ Public Class Form1
                             NotFound = "n/a"
                           Case Else
                             MapName = MapName.Replace("'", "")
-                            If SourceExists(MapName).Length = 0 Then
+                            If CobolSourceExists(MapName).Length = 0 Then
                               NotFound = "NotFound"
                             End If
                         End Select
@@ -4523,17 +4549,17 @@ Public Class Form1
     Next
     Return "NOTFOUND"
   End Function
-  Function SourceExists(ByRef SourceFileName As String) As String
-    'this will return FileName, FileName.cob, or FileName.cbl if exists in the Sources Directory
+  Function CobolSourceExists(ByRef SourceFileName As String) As String
+    'this will return FileName, FileName.cob, FileName.cbl, FileName.txt if exists in the Sources Directory
     ' Empty return means not found
     Select Case True
-      Case ListofSourceFiles.IndexOf(SourceFileName) > -1
+      Case ListofCOBOLFiles.IndexOf(SourceFileName) > -1
         Return SourceFileName
-      Case ListofSourceFiles.IndexOf(SourceFileName & ".COB") > -1
+      Case ListofCOBOLFiles.IndexOf(SourceFileName & ".COB") > -1
         Return SourceFileName & ".COB"
-      Case ListofSourceFiles.IndexOf(SourceFileName & ".CBL") > -1
+      Case ListofCOBOLFiles.IndexOf(SourceFileName & ".CBL") > -1
         Return SourceFileName & ".CBL"
-      Case ListofSourceFiles.IndexOf(SourceFileName & ".TXT") > -1
+      Case ListofCOBOLFiles.IndexOf(SourceFileName & ".TXT") > -1
         Return SourceFileName & ".TXT"
     End Select
     ' See if there is an Alias
@@ -4545,77 +4571,151 @@ Public Class Form1
     '
     Return ""
   End Function
+
+  Function CopybookSourceExists(ByRef SourceFileName As String) As String
+    'this will return FileName, FileName.cpy, FileName.txt if exists in the Copybook Sources Directory
+    ' Empty return means not found
+    Select Case True
+      Case ListofCopybookFiles.IndexOf(SourceFileName) > -1
+        Return SourceFileName
+      Case ListofCopybookFiles.IndexOf(SourceFileName & ".CPY") > -1
+        Return SourceFileName & ".CPY"
+      Case ListofCopybookFiles.IndexOf(SourceFileName & ".TXT") > -1
+        Return SourceFileName & ".TXT"
+    End Select
+    '
+    Return ""
+  End Function
+
+  Function EasytrieveSourceExists(ByRef SourceFileName As String) As String
+    'this will return FileName, FileName.ezt, FileName.txt if exists in the Easytrieve Directory
+    ' Empty return means not found
+    Select Case True
+      Case ListofEasytrieveFiles.IndexOf(SourceFileName) > -1
+        Return SourceFileName
+      Case ListofEasytrieveFiles.IndexOf(SourceFileName & ".EZT") > -1
+        Return SourceFileName & ".EZT"
+      Case ListofEasytrieveFiles.IndexOf(SourceFileName & ".TXT") > -1
+        Return SourceFileName & ".TXT"
+    End Select
+    ' See if there is an Alias
+    Return ""
+  End Function
+
+  Function ASMSourceExists(ByRef SourceFileName As String) As String
+    'this will return FileName, FileName.asm, FileName.txt if exists in the Easytrieve Directory
+    ' Empty return means not found
+    Select Case True
+      Case ListofAsmFiles.IndexOf(SourceFileName) > -1
+        Return SourceFileName
+      Case ListofAsmFiles.IndexOf(SourceFileName & ".ASM") > -1
+        Return SourceFileName & ".ASM"
+      Case ListofAsmFiles.IndexOf(SourceFileName & ".TXT") > -1
+        Return SourceFileName & ".TXT"
+    End Select
+    Return ""
+  End Function
+
+
+
   Function GetSourceType(ByRef FileName As String) As String
     ' Identify if this file is COBOL or Easytrieve or Utility or Assembler
-    ' FileName must exist in the source directory.
-    GetSourceType = ""
+    ' For Utility just check the Utilities array and get out.
+    ' For COBOL, Easytrieve, Assembler, the file must exist in their source directory.
+    ' the deal is it could have various file extensions.
+    'GetSourceType = ""
     SourceCount = 0
+
+    ' Utility ?
     If FileName.Trim.Length = 0 Then
-      LogFile.WriteLine(Date.Now & ",Filename for GetSourcetype is empty," & FileNameOnly)
+      LogFile.WriteLine(Date.Now & ",E,Filename for GetSourcetype is empty," & FileNameOnly)
       Return "UTILITY"
     End If
     If Array.IndexOf(Utilities, FileName) > -1 Then
       Return "UTILITY"
     End If
 
-    Dim FoundCobolFileName As String = SourceExists(FileName)
-    If FoundCobolFileName.Length = 0 Then
-      LogFile.WriteLine(Date.Now & ",Source File Not found," & FileName)
-      Return "NotFound"
+    ' COBOL ?
+    Dim FoundSourceFileName As String = CobolSourceExists(FileName)
+    If FoundSourceFileName.Length > 0 Then
+      Dim sourceLines As String() = File.ReadAllLines(folderPath & txtCobolFolder.Text & "\" & FoundSourceFileName)
+      SourceCount = sourceLines.Count
+      Return "COBOL"
     End If
-    If FoundCobolFileName <> FileName Then
-      LogFile.WriteLine(Date.Now & ",Alias used," & FileName & "/Alias:" & FoundCobolFileName)
-      FileName = FoundCobolFileName
+    ' Easytrieve ?
+    FoundSourceFileName = EasytrieveSourceExists(FileName)
+    If FoundSourceFileName.Length > 0 Then
+      Dim sourceLines As String() = File.ReadAllLines(folderPath & txtEasytrieveFolder.Text & "\" & FoundSourceFileName)
+      SourceCount = sourceLines.Count
+      Return "Easytrieve"
+    End If
+    ' Assembler ?
+    FoundSourceFileName = ASMSourceExists(FileName)
+    If FoundSourceFileName.Length > 0 Then
+      Dim sourceLines As String() = File.ReadAllLines(folderPath & txtASMFolder.Text & "\" & FoundSourceFileName)
+      SourceCount = sourceLines.Count
+      Return "Assembler"
     End If
 
-    If Not File.Exists(txtSourceFolderName.Text & "\" & FoundCobolFileName) Then
-      LogFile.WriteLine(Date.Now & ",Source File Not found," & FileName)
-      Return "NotFound"
-    End If
-    Dim myFileLen As Long = FileLen(txtSourceFolderName.Text & "\" & FoundCobolFileName)
-    If myFileLen = 0 Then
-      LogFile.WriteLine(Date.Now & ",Source File Length is zero," & FileName)
-      Return "NotFound"
-    End If
 
-    Dim CobolLines As String() = File.ReadAllLines(txtSourceFolderName.Text & "\" & FoundCobolFileName)
-    SourceCount = CobolLines.Count
+    'If FoundCobolFileName.Length = 0 Then
+    '  LogFile.WriteLine(Date.Now & ",E,COBOL Source File Not found," & FileName)
+    '  Return "NotFound"
+    'End If
+    'If FoundCobolFileName <> FileName Then
+    '  LogFile.WriteLine(Date.Now & ",I,Alias used," & FileName & "/Alias:" & FoundCobolFileName)
+    '  FileName = FoundCobolFileName
+    'End If
 
-    For index As Integer = 0 To CobolLines.Count - 1
-      If Len(Trim(CobolLines(index))) = 0 Then
-        Continue For
-      End If
-      ' COBOL
-      If (CobolLines(index).ToUpper.IndexOf("IDENTIFICATION DIVISION.") > -1) Or
-        (CobolLines(index).ToUpper.IndexOf("IDENTIFICATION  DIVISION.") > -1) Or
-        (CobolLines(index).ToUpper.IndexOf("IDENTIFICATION   DIVISION.") > -1) Or
-        (CobolLines(index).ToUpper.IndexOf("IDENTIFICATION    DIVISION.") > -1) Or
-        (CobolLines(index).ToUpper.IndexOf("ID DIVISION.") > -1) Then
-        Return "COBOL"
-      End If
-      ' Easytrieve
-      If CobolLines(index).Trim.StartsWith("PARM") Or
-         CobolLines(index).Trim.StartsWith("FILE") Or
-         CobolLines(index).Trim.StartsWith("SORT") Or
-         CobolLines(index).Trim.StartsWith("JOB") Or
-         CobolLines(index).Trim.StartsWith("%") Then
-        Return "Easytrieve"
-      End If
-      'If CobolLines(index).Length >= 4 Then
-      '  Select Case CobolLines(index).ToUpper.Substring(0, 4)
-      '    Case "PARM", "FILE", "SORT", "JOB "
-      '      Return "Easytrieve"
-      '  End Select
-      'End If
-      ' Mainframe Assembler
-      If (CobolLines(index).ToUpper.IndexOf(" CSECT") > -1) Or
-          (CobolLines(index).IndexOf(" AMODE") > -1) Or
-          (CobolLines(index).IndexOf(" RMODE") > -1) Then
-        Return "Assembler"
-      End If
-    Next
-    LogFile.WriteLine(Date.Now & ",Unknown Type of Source File," & FileName)
-    Return "Unknown"
+    'If Not File.Exists(folderPath & txtCobolFolder.Text & "\" & FoundCobolFileName) Then
+    '  LogFile.WriteLine(Date.Now & ",E,COBOL Source File Not found," & FileName)
+    '  Return "NotFound"
+    'End If
+    'Dim myFileLen As Long = FileLen(folderPath & txtCobolFolder.Text & "\" & FoundCobolFileName)
+    'If myFileLen = 0 Then
+    '  LogFile.WriteLine(Date.Now & ",E,COBOL Source File Length is zero," & FileName)
+    '  Return "NotFound"
+    'End If
+
+    'Dim CobolLines As String() = File.ReadAllLines(folderPath & txtCobolFolder.Text & "\" & FoundCobolFileName)
+    'SourceCount = CobolLines.Count
+
+    'For index As Integer = 0 To CobolLines.Count - 1
+    '  If Len(Trim(CobolLines(index))) = 0 Then
+    '    Continue For
+    '  End If
+    '  ' COBOL
+    '  If (CobolLines(index).ToUpper.IndexOf("IDENTIFICATION DIVISION.") > -1) Or
+    '    (CobolLines(index).ToUpper.IndexOf("IDENTIFICATION  DIVISION.") > -1) Or
+    '    (CobolLines(index).ToUpper.IndexOf("IDENTIFICATION   DIVISION.") > -1) Or
+    '    (CobolLines(index).ToUpper.IndexOf("IDENTIFICATION    DIVISION.") > -1) Or
+    '    (CobolLines(index).ToUpper.IndexOf("ID DIVISION.") > -1) Then
+    '    Return "COBOL"
+    '  End If
+    '  ' Easytrieve
+    '  If CobolLines(index).Trim.StartsWith("PARM") Or
+    '     CobolLines(index).Trim.StartsWith("FILE") Or
+    '     CobolLines(index).Trim.StartsWith("SORT") Or
+    '     CobolLines(index).Trim.StartsWith("JOB") Or
+    '     CobolLines(index).Trim.StartsWith("%") Then
+    '    Return "Easytrieve"
+    '  End If
+    '  'If CobolLines(index).Length >= 4 Then
+    '  '  Select Case CobolLines(index).ToUpper.Substring(0, 4)
+    '  '    Case "PARM", "FILE", "SORT", "JOB "
+    '  '      Return "Easytrieve"
+    '  '  End Select
+    '  'End If
+    '  ' Mainframe Assembler
+    '  If (CobolLines(index).ToUpper.IndexOf(" CSECT") > -1) Or
+    '      (CobolLines(index).IndexOf(" AMODE") > -1) Or
+    '      (CobolLines(index).IndexOf(" RMODE") > -1) Then
+    '    Return "Assembler"
+    '  End If
+    'Next
+
+    LogFile.WriteLine(Date.Now & ",E,Source File Not Found," & FileName)
+    Return "NotFound"
 
   End Function
   Sub FillInAreas(ByVal CobolLine As String,
@@ -4640,21 +4740,21 @@ Public Class Form1
   Sub IncludeCopyMember(ByVal CopyMember As String,
                         ByRef swTemp As StreamWriter)
     ' Copy member found?
-    Dim FoundCopyMember As String = SourceExists(CopyMember)
+    Dim FoundCopyMember As String = CopybookSourceExists(CopyMember)
     If FoundCopyMember.Length = 0 Then
       swTemp.WriteLine(Space(6) & "*Copy Member not found:" & CopyMember)
-      LogFile.WriteLine(Date.Now & ",Copy Member not found," & CopyMember)
+      LogFile.WriteLine(Date.Now & ",E,Copy Member not found," & CopyMember)
       Exit Sub
     End If
     ' is the file empty?
-    Dim mysize As Long = FileLen(txtSourceFolderName.Text & "\" & FoundCopyMember)
+    Dim mysize As Long = FileLen(folderPath & txtCopybookFolder.Text & "\" & FoundCopyMember)
     If mysize = 0 Then
       swTemp.WriteLine(Space(6) & "*Copy Member Empty:" & CopyMember)
-      LogFile.WriteLine(Date.Now & ",Copy Member Empty," & CopyMember)
+      LogFile.WriteLine(Date.Now & ",E,Copy Member Empty," & CopyMember)
       Exit Sub
     End If
 
-    Dim IncludeLines As String() = File.ReadAllLines(txtSourceFolderName.Text & "\" & FoundCopyMember)
+    Dim IncludeLines As String() = File.ReadAllLines(folderPath & txtCopybookFolder.Text & "\" & FoundCopyMember)
 
     ' If missing first 6 bytes, add the six bytes to the front of every line.
     Dim Missing6 As Boolean = False
@@ -4679,7 +4779,7 @@ Public Class Form1
       End If
     End If
     If Missing6 = True Or FirstByteAsterisk = True Then
-      LogFile.WriteLine(Date.Now & ",ADD MISSING 6 COBOL CHARACTERS," & FoundCopyMember)
+      LogFile.WriteLine(Date.Now & ",W,ADD MISSING 6 COBOL CHARACTERS," & FoundCopyMember)
       For index As Integer = 0 To IncludeLines.Count - 1
         IncludeLines(index) = Space(6) & IncludeLines(index)
       Next
@@ -4694,13 +4794,13 @@ Public Class Form1
   End Sub
   Sub IncludeCopyMemberEasytrieve(ByVal CopyMember As String,
                         ByRef swTemp As StreamWriter)
-    Dim FoundCopyMember As String = SourceExists(CopyMember)
+    Dim FoundCopyMember As String = CopybookSourceExists(CopyMember)
     If FoundCopyMember.Length = 0 Then
       swTemp.WriteLine(Space(6) & "*Copy Member not found:" & CopyMember)
-      LogFile.WriteLine(Date.Now & ",Copy Member not found," & CopyMember)
+      LogFile.WriteLine(Date.Now & ",E,Copy Member not found," & CopyMember)
       Exit Sub
     End If
-    Dim IncludeLines As String() = File.ReadAllLines(txtSourceFolderName.Text & "\" & FoundCopyMember)
+    Dim IncludeLines As String() = File.ReadAllLines(folderPath & txtCopybookFolder.Text & "\" & FoundCopyMember)
 
     ' append copymember to temp file and drop blank lines
     For Each line As String In IncludeLines
@@ -4772,11 +4872,11 @@ Public Class Form1
     Call CollectRecordsAndFieldsInfo()
 
     'Create a Business Rules spreadsheet file, based on the Procedure division.
-    If cbBusinessRules.Checked Then
-      lblProcessingWorksheet.Text = "Processing Business Rules: " & FileNameOnly & " : #Fields = " & ListOfFields.Count
-      Call CreateCOBOLBusinessRules(SrcStmt, exec, BusinessRulesFolder, PUMLFolder, pgm, ListOfFields)
-      'lblProcessingWorksheet.Text = "Processing Business Rules: Complete.                  "
-    End If
+    'If cbBusinessRules.Checked Then
+    '  lblProcessingWorksheet.Text = "Processing Business Rules: " & FileNameOnly & " : #Fields = " & ListOfFields.Count
+    '  Call CreateCOBOLBusinessRules(SrcStmt, exec, BusinessRulesFolder, PUMLFolder, pgm, ListOfFields)
+    '  'lblProcessingWorksheet.Text = "Processing Business Rules: Complete.                  "
+    'End If
 
     ' Call CreateComponentsFile()
 
@@ -4790,7 +4890,7 @@ Public Class Form1
     '
     'Assign the Temporay File Name for this particular Easytrieve file
     '
-    tempEZTFileName = txtOutputFoldername.Text & "\" & exec & "_expandedEZT.txt"
+    tempEZTFileName = folderPath & txtExpandedFolder.Text & "\" & exec & "_expandedEZT.txt"
 
     ' Remove the temporary work file
     Try
@@ -4798,24 +4898,22 @@ Public Class Form1
         My.Computer.FileSystem.DeleteFile(tempEZTFileName)
       End If
     Catch ex As Exception
-      LogFile.WriteLine(Date.Now & ",Removal of Temp EZT error," & ex.Message)
-      LoadEasytrieveStatementsToArray = -1
-      Exit Function
+      LogFile.WriteLine(Date.Now & ",E,Removal of Temp EZT error," & ex.Message)
+      Return -1
     End Try
-
-    Dim FileName As String = txtSourceFolderName.Text & "\" & exec
-    If ListofSourceFiles.IndexOf(exec) = -1 Then
-      LogFile.WriteLine(Date.Now & ",Source File Not Found?," & exec)
-      LoadEasytrieveStatementsToArray = -1
-      Exit Function
-    Else
-      LogFile.WriteLine(Date.Now & ",Processing Source," & exec)
+    Dim FoundEasytrieveFileName As String = EasytrieveSourceExists(exec)
+    'Dim FileName As String = folderPath & txtEasytrieveFolder.Text & "\" & exec
+    If FoundEasytrieveFileName = 0 Then
+      LogFile.WriteLine(Date.Now & ",E,EASYTRIEVE Source File Not Found?," & exec)
+      Return -1
     End If
+    LogFile.WriteLine(Date.Now & ",I,Processing Easytrieve Source," & FoundEasytrieveFileName)
 
     ' put all the lines into the array
-    Dim EztLinesLoaded As String() = File.ReadAllLines(FileName)
+    Dim EztLinesLoaded As String() = File.ReadAllLines(FoundEasytrieveFileName)
 
     ' Load the COMMENTS found in the program to the ListOfComments array
+    ' We'll use division values same as COBOL
     Dim Division As String = "IDENTIFICATION"
     For index As Integer = 0 To EztLinesLoaded.Count - 1
       ' determine which "Division" we are in
@@ -4925,7 +5023,7 @@ Public Class Form1
             Call IncludeCopyMemberEasytrieve(EZTFileName, swTemp)
           Else
             swTemp.WriteLine("*Crossref to DB2Declares not found in SOURCES folder")
-            LogFile.WriteLine(Date.Now & ",Crossref to DB2Declares not found in SOURCES folder," &
+            LogFile.WriteLine(Date.Now & ",E,Crossref to DB2Declares not found in SOURCES folder," &
                               db2TableName)
           End If
           swTemp.WriteLine("*" & statement & " End Include")
@@ -4956,8 +5054,67 @@ Public Class Form1
       reccnt += 1
     Next
 
-    LoadEasytrieveStatementsToArray = reccnt
+    Return reccnt
   End Function
+
+  Function LoadAssemblerStatementsToArray(ByRef exec As String) As Integer
+    '*---------------------------------------------------------
+    ' Load Assembler lines to a statements array. 
+    '*---------------------------------------------------------
+    '
+    'Assign the Temporay File Name for this particular Easytrieve file
+    '
+    tempAsmFileName = folderPath & txtExpandedFolder.Text & "\" & exec & "_expandedASM.txt"
+
+    ' Remove the temporary work file
+    Try
+      If My.Computer.FileSystem.FileExists(tempAsmFileName) Then
+        My.Computer.FileSystem.DeleteFile(tempAsmFileName)
+      End If
+    Catch ex As Exception
+      LogFile.WriteLine(Date.Now & ",E,Removal of Temp ASM error," & ex.Message)
+      Return -1
+    End Try
+
+    Dim FoundAsmFileName As String = ASMSourceExists(exec)
+    'Dim FileName As String = folderPath & txtAsmFolder.Text & "\" & exec
+    If FoundAsmFileName = 0 Then
+      LogFile.WriteLine(Date.Now & ",E,Assembler Source File Not Found?," & exec)
+      Return -1
+    End If
+    LogFile.WriteLine(Date.Now & ",I,Processing Assembler Source," & FoundAsmFileName)
+
+    ' put all the lines into the array
+    Dim AsmLinesLoaded As String() = File.ReadAllLines(FoundAsmFileName)
+
+    Dim statement As String = ""
+    Dim newLine As String = ""
+    Dim swTemp As StreamWriter = Nothing
+    swTemp = New StreamWriter(tempAsmFileName, False)
+    swTemp.WriteLine("; " & FoundAsmFileName)
+    Dim reccnt As Integer = 0
+
+    ' process the Asmlinesloaded array
+    '
+    For index As Integer = 0 To AsmLinesLoaded.Length - 1
+      swTemp.WriteLine(AsmLinesLoaded(index))
+    Next index
+    swTemp.Close()
+
+    ' load the Source Statement Array with final content
+    SrcStmt.Clear()
+
+    reccnt = 0
+    AsmLinesLoaded = File.ReadAllLines(tempAsmFileName)
+    For index = 0 To AsmLinesLoaded.Count - 1
+      SrcStmt.Add(AsmLinesLoaded(index).Trim)
+      reccnt += 1
+    Next
+
+    Return reccnt
+  End Function
+
+
   Sub CollectRecordsAndFieldsInfo()
     ' This collects the information about Records & Fields
     ' This routine supports both COBOL and Easytrieve syntax
@@ -5968,7 +6125,7 @@ Public Class Form1
     For x As Integer = 0 To ListOfCallPgms.Count - 1
       DelimText = ListOfCallPgms(x).Split(Delimiter)
       For y = 0 To myMaxcols
-        Select Case myMaxcols
+        Select Case y
           Case 0 : tArray(x, y) = DelimText(4)
           Case 1 : tArray(x, y) = DelimText(2)
           Case 2 : tArray(x, y) = DelimText(0)
@@ -6228,7 +6385,7 @@ Public Class Form1
 
   Sub AddToListOfDBDNames()
     ' Process the DBDNames.txt file, if exists, and put into ListOf array
-    Dim DBDFileName = txtSourceFolderName.Text & "\DBDnames.txt"
+    Dim DBDFileName = folderPath & txtCobolFolder.Text & "\DBDnames.txt"
     If Not File.Exists(DBDFileName) Then
       Exit Sub
     End If
@@ -6248,7 +6405,7 @@ Public Class Form1
   End Sub
   Sub AddtoListOfDBDNamesTelons()
     ' Process the TELON files, if any exists and store in ListOf array
-    For Each foundFile As String In My.Computer.FileSystem.GetFiles(txtTelonFoldername.Text)
+    For Each foundFile As String In My.Computer.FileSystem.GetFiles(folderPath & txtTelonFolder.Text)
       Dim memberLines As String() = File.ReadAllLines(foundFile)
       For index As Integer = 0 To memberLines.Count - 1
         If Len(memberLines(index)) = 0 Then
@@ -6284,7 +6441,7 @@ Public Class Form1
     '   an IMS tab on the NEXT rerun of this model.
 
     ' Open the output file PSPNames.txt 
-    Dim PSPFileName = txtOutputFoldername.Text & "\PSPNames.txt"
+    Dim PSPFileName = folderPath & txtOutputFolder.Text & "\PSPNames.txt"
 
     ' Open output. Not worrying (try/catch) about subsequent writes
     Try
@@ -7041,7 +7198,7 @@ Public Class Form1
           End If
         Next
         If fields.RedefField = -1 Then
-          LogFile.WriteLine(Date.Now & ",Redefine parent not found!," & fields.FieldName & "[" & FileNameOnly & "]")
+          LogFile.WriteLine(Date.Now & ",E,Redefine parent not found!," & fields.FieldName & "[" & FileNameOnly & "]")
         End If
         withinRedefines = True
         redefinesLevel = fields.Level
@@ -7811,7 +7968,7 @@ Public Class Form1
       Case Else
         'MessageBox.Show("Unknown 'IS VARYING' syntax@" & pgmName & "FD:" & fdWords.ToString)
         Dim tempx As String = pgmName & " FDwords(0)=" & fdWords(0) & " index=" & Str(index)
-        LogFile.WriteLine(Date.Now & ",Unknown 'IS VARYING' syntax," & tempx)
+        LogFile.WriteLine(Date.Now & ",E,Unknown 'IS VARYING' syntax," & tempx)
         Exit Select
     End Select
   End Function
@@ -8320,12 +8477,11 @@ Public Class Form1
 
 
   Sub InitializeProgramVariables()
-    lblCopybookMessage.Text = ""
+    lblStatusMessage.Text = ""
 
     ' re Initialize all beginning Variables and tables.
     ' JCL
     FileNameOnly = ""
-    tempNoContdJCLFileName = ""
     tempCobFileName = ""
     tempEZTFileName = ""
     jControl = ""
@@ -8397,6 +8553,7 @@ Public Class Form1
         My.Settings.InitDirectory = InitDirectory                             'also now save to distributed 
         My.Settings.Save()
         lblInitDirectory.Text = InitDirectory
+        Environment.SetEnvironmentVariable("ADDILite", InitDirectory, EnvironmentVariableTarget.User)
         Return InitDirectory
     End Select
     MessageBox.Show("Initial Directory set cancelled. Try Sandbox button.")
@@ -8416,6 +8573,7 @@ Public Class Form1
         My.Settings.InitDirectory = InitDirectory                             'also now save
         My.Settings.Save()
         lblInitDirectory.Text = InitDirectory
+        Environment.SetEnvironmentVariable("ADDILite_Sandbox", InitDirectory, EnvironmentVariableTarget.User)
       Case DialogResult.Cancel
         Exit Sub
     End Select
@@ -8624,11 +8782,23 @@ Public Class Form1
 
     btnADDILite.Enabled = True
     btnDataGatheringForm.Enabled = True
-    btnJCLJOBFilename.Enabled = True
-    btnSourceFolder.Enabled = True
-    btnTelonFolder.Enabled = True
-    btnScreenMapsFolder.Enabled = True
-    btnOutputFolder.Enabled = True
+
+    txtJCLJOBFolder.Text = "\JOBS"
+    txtProcFolder.Text = "\PROCS"
+    txtCobolFolder.Text = "\COBOL"
+    txtCopybookFolder.Text = "\COPYBOOKS"
+    txtDECLGenFolder.Text = "\DECLGEN"
+    txtEasytrieveFolder.Text = "\EASYTRIEVE"
+    txtASMFolder.Text = "\ASM"
+    txtTelonFolder.Text = "\TELON"
+    txtScreenMapsFolder.Text = "\SCREENS"
+    txtOutputFolder.Text = "\OUTPUT"
+    txtPUMLFolder.Text = "\PUML"
+    txtExpandedFolder.Text = "\EXPANDED"
+    txtBusinessRulesFolder.Text = "\BUSINESS RULES"
+
+    BusinessRulesFolder = "\BUSINESS RULES"
+
 
 
   End Sub
