@@ -24,8 +24,9 @@ Public Class Form1
   ' - PlantUml for creating flowchart
   '
   '***Be sure to change ProgramVersion when making changes!!!
-  Dim ProgramVersion As String = "v2.0.1"
+  Dim ProgramVersion As String = "v2.1.0"
   'Change-History.
+  ' 2025/05/08 v2.1.0 hk Add JCL EXEC COND column to Programs tab
   ' 2025/03/02 v2.0.1 hk Set Environment variables ADDILite to the folder path
   ' 2025/02/27 v2     hk Add subfolders for sources (ie cbl, cob, cpy, etc.)
   '                      - fix CALLPGMS .jcl to have unique program names
@@ -181,6 +182,7 @@ Public Class Form1
   Dim prevDDName As String = ""
   Dim execName As String = ""
   Dim pgmName As String = ""
+  Dim execCond As String = ""
   Dim DDName As String = ""
   Dim stepName As String = ""
   Dim InstreamProc As String = ""
@@ -1887,8 +1889,10 @@ Public Class Form1
     ddSequence = 0
     execName = ""
     pgmName = ""
+    execCond = ""
 
     pgmName = Trim(GetParmPGM(jParameters)).ToUpper
+    execCond = GetParm(jParameters, "COND=").ToUpper
 
     ' Is this a PROC statement
     If pgmName.Length = 0 Then
@@ -2132,7 +2136,8 @@ Public Class Form1
                        CreateFlowchartHyperLink(pgmName) & Delimiter &
                        CreateFlowchartHyperLink(pgmName & "_P2P") & Delimiter &
                        CreateOutputHyperLink(pgmName & "_BR.xlsx") & Delimiter &
-                       SourceCount)
+                       SourceCount & Delimiter &
+                       execCond)
       Select Case SourceType
         Case "COBOL", "Easytrieve", "Assembler"
           ListOfExecs.Add(pgmName & Delimiter & SourceType)
@@ -2507,6 +2512,7 @@ Public Class Form1
       ProgramsWorksheet.Range("I1").Value = "P2P"
       ProgramsWorksheet.Range("J1").Value = "Business Rules"
       ProgramsWorksheet.Range("K1").Value = "Count"
+      ProgramsWorksheet.Range("L1").Value = "ExecCOND"
       ProgramsRow = 1
       ProgramsWorksheet.Activate()
       ProgramsWorksheet.Application.ActiveWindow.SplitRow = 1
@@ -2517,7 +2523,7 @@ Public Class Form1
     ' convert List to Array 2D
     Dim DelimText As String()
     Dim myMaxRows As Integer = ListOfPrograms.Count - 1
-    Dim myMaxcols As Integer = 10
+    Dim myMaxcols As Integer = 11
     Dim tArray(myMaxRows, myMaxcols) As String
     For x As Integer = 0 To ListOfPrograms.Count - 1
       DelimText = ListOfPrograms(x).Split(Delimiter)
@@ -2527,7 +2533,7 @@ Public Class Form1
     Next
     ' Move data from Array to spreadsheet range
     Dim firstColRow As String = "A" & LTrim(Str(ProgramsRow + 1))
-    Dim LastColRow As String = "K" & LTrim(Str(ProgramsRow + ListOfPrograms.Count))
+    Dim LastColRow As String = "L" & LTrim(Str(ProgramsRow + ListOfPrograms.Count))
     rngPrograms = ProgramsWorksheet.Range(firstColRow, LastColRow)
     rngPrograms.Value = tArray
     rngPrograms.Value = rngPrograms.Formula
@@ -5473,10 +5479,10 @@ Public Class Form1
     If ProgramsRow > 1 Then
       Dim row As Integer = LTrim(Str(ProgramsRow))
       ' Format the Sheet - first row bold the columns
-      rngPrograms = ProgramsWorksheet.Range("A1:K1")
+      rngPrograms = ProgramsWorksheet.Range("A1:L1")
       rngPrograms.Font.Bold = True
       ' data area autofit all columns
-      rngPrograms = ProgramsWorksheet.Range("A1:K" & row)
+      rngPrograms = ProgramsWorksheet.Range("A1:L" & row)
       workbook.Worksheets("Programs").Range("A1").AutoFilter
       rngPrograms.Columns.AutoFit()
       rngPrograms.Rows.AutoFit()
