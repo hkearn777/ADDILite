@@ -55,7 +55,6 @@ Partial Class Form1
         Me.cbCalls = New System.Windows.Forms.CheckBox()
         Me.cbScreenMaps = New System.Windows.Forms.CheckBox()
         Me.cbLibraries = New System.Windows.Forms.CheckBox()
-        Me.cbBusinessRules = New System.Windows.Forms.CheckBox()
         Me.cbDataCom = New System.Windows.Forms.CheckBox()
         Me.btnSandbox = New System.Windows.Forms.Button()
         Me.lblInitDirectory = New System.Windows.Forms.Label()
@@ -404,18 +403,6 @@ Partial Class Form1
         Me.cbLibraries.Text = "Libraries"
         Me.cbLibraries.UseVisualStyleBackColor = True
         '
-        'cbBusinessRules
-        '
-        Me.cbBusinessRules.AutoSize = True
-        Me.cbBusinessRules.Checked = True
-        Me.cbBusinessRules.CheckState = System.Windows.Forms.CheckState.Checked
-        Me.cbBusinessRules.Location = New System.Drawing.Point(264, 509)
-        Me.cbBusinessRules.Name = "cbBusinessRules"
-        Me.cbBusinessRules.Size = New System.Drawing.Size(145, 24)
-        Me.cbBusinessRules.TabIndex = 43
-        Me.cbBusinessRules.Text = "Business Rules"
-        Me.cbBusinessRules.UseVisualStyleBackColor = True
-        '
         'cbDataCom
         '
         Me.cbDataCom.AutoSize = True
@@ -695,7 +682,7 @@ Partial Class Form1
         Me.cbInstream.AutoSize = True
         Me.cbInstream.Checked = True
         Me.cbInstream.CheckState = System.Windows.Forms.CheckState.Checked
-        Me.cbInstream.Location = New System.Drawing.Point(449, 509)
+        Me.cbInstream.Location = New System.Drawing.Point(264, 509)
         Me.cbInstream.Name = "cbInstream"
         Me.cbInstream.Size = New System.Drawing.Size(98, 24)
         Me.cbInstream.TabIndex = 76
@@ -739,7 +726,6 @@ Partial Class Form1
         Me.Controls.Add(Me.lblInitDirectory)
         Me.Controls.Add(Me.btnSandbox)
         Me.Controls.Add(Me.cbDataCom)
-        Me.Controls.Add(Me.cbBusinessRules)
         Me.Controls.Add(Me.cbLibraries)
         Me.Controls.Add(Me.cbScreenMaps)
         Me.Controls.Add(Me.cbCalls)
@@ -810,7 +796,6 @@ Partial Class Form1
     Friend WithEvents cbCalls As CheckBox
     Friend WithEvents cbScreenMaps As CheckBox
     Friend WithEvents cbLibraries As CheckBox
-    Friend WithEvents cbBusinessRules As CheckBox
     Friend WithEvents cbDataCom As CheckBox
     Friend WithEvents btnSandbox As Button
     Friend WithEvents lblInitDirectory As Label

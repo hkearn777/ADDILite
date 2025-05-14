@@ -24,8 +24,9 @@ Public Class Form1
   ' - PlantUml for creating flowchart
   '
   '***Be sure to change ProgramVersion when making changes!!!
-  Dim ProgramVersion As String = "v2.2.0"
+  Dim ProgramVersion As String = "v2.3.0"
   'Change-History.
+  ' 2025/05/14 v2.3.0 hk Remove Business Rules COBOL Module, see CreateCobolBusinessRules.sln
   ' 2025/05/14 v2.2.0 hk Remove Old Comments
   ' 2025/05/08 v2.1.0 hk Add JCL EXEC COND column to Programs tab
   ' 2025/03/02 v2.0.1 hk Set Environment variables ADDILite to the folder path
