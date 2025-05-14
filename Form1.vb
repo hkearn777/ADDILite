@@ -24,8 +24,9 @@ Public Class Form1
   ' - PlantUml for creating flowchart
   '
   '***Be sure to change ProgramVersion when making changes!!!
-  Dim ProgramVersion As String = "v2.1.0"
+  Dim ProgramVersion As String = "v2.2.0"
   'Change-History.
+  ' 2025/05/14 v2.2.0 hk Remove Old Comments
   ' 2025/05/08 v2.1.0 hk Add JCL EXEC COND column to Programs tab
   ' 2025/03/02 v2.0.1 hk Set Environment variables ADDILite to the folder path
   ' 2025/02/27 v2     hk Add subfolders for sources (ie cbl, cob, cpy, etc.)
@@ -271,17 +272,6 @@ Public Class Form1
   Dim DefaultFormat = Microsoft.Office.Interop.Excel.XlFileFormat.xlWorkbookDefault
   Dim SetAsReadOnly = Microsoft.Office.Interop.Excel.XlFileAccess.xlReadOnly
 
-  ' Statistical / Metric fields
-  'Dim CntBatchCobolPrograms As Integer = 0
-  'Dim CntBatchEasytrievePrograms As Integer = 0
-  'Dim CntOnlineCobolPrograms As Integer = 0
-  'Dim CntOnlineEasytrievePrograms As Integer = 0
-  'Dim CntUtilityPrograms As Integer = 0
-  'Dim CntCalledPrograms As Integer = 0
-  'Dim CntDataFiles As Integer = 0
-  'Dim CntReports As Integer = 0
-  'Dim CntTelonBatch As Integer = 0
-  'Dim CntTelonOnline As Integer = 0
 
   Dim CntJobFiles As Integer = 0
   Dim CntProcFiles As Integer = 0
@@ -296,13 +286,11 @@ Public Class Form1
 
 
   Dim ListOfTables As New List(Of String)
-  'Dim ListOfTableNames As New List(Of String)         'array to hold table names
   ' Easytrieve fields
   Dim theProcName As String = ""
   ' COBOL fields
   Dim SourceType As String = ""
   Dim SourceCount As Integer = 0
-  'Dim CalledMember As String = ""
   Dim SrcStmt As New List(Of String)
   Dim cWord As New List(Of String)
   Dim lWord As New List(Of String)                    'Word Level value for IF syncs with cWord
@@ -400,8 +388,6 @@ Public Class Form1
   Dim List_Usage As New List(Of String)({"BINARY", "COMP", "COMP-1", "COMP-2", "COMP-3", "COMP-4", "COMP-5", "COMPUTATIONAL", "COMPUTATIONAL-1", "COMPUTATIONAL-2", "COMPUTATIONAL-3", "COMPUTATIONAL-4", "COMPUTATIONAL-5", "DISPLAY", "DISPLAY-1", "INDEX", "NATIONAL", "PACKED-DECIMAL", "POINTER", "PROCEDURE-POINTER", "FUNCTION-POINTER"})
 
   Private Sub btnAppFolder_Click(sender As Object, e As EventArgs) Handles btnAppFolder.Click
-    ' grab the Application's directory
-
     ' browse for and select Application folder name that is within the Sandbox folder
     Dim bfd_AppFolder As New FolderBrowserDialog With {
       .Description = "Enter Application Folder name",
@@ -501,7 +487,6 @@ Public Class Form1
     End If
 
 
-    'DirectoryName = Path.GetDirectoryName(folderPath & txtJCLJOBFolder.Text)
 
     Delimiter = txtDelimiter.Text
     lblStatusMessage.Text = ""
@@ -768,9 +753,6 @@ Public Class Form1
     Call CreateInstreamTab()
 
 
-    'Call CreateStatsWorksheet()
-
-
     ' Save Application Model Spreadsheet
     If cbScanModeOnly.Checked Then
       objExcel.DisplayAlerts = False
@@ -935,9 +917,6 @@ Public Class Form1
           End If
           If literalsFoundCnt > literalsFoundMax Or MbrLine = "END" Then
             literalsFound = literalsFound.Trim
-            'If literalsFound.Length > 2 Then
-            '  literalsFound = literalsFound.Substring(0, literalsFound.Length - 2)    'remove last vbNewLine
-            'End If
             ListofScreenMaps.Add(Path.GetFileName(foundFile) & Delimiter &
                                   ScreenType & Delimiter &
                                   MapName & Delimiter &
@@ -1009,8 +988,6 @@ Public Class Form1
       pgmCnt += 1
       swCallPgmsFile.WriteLine("//" & execs(2) & " EXEC PGM=" & execs(0).Replace(Delimiter, ""))
       swCallPgmsFile.WriteLine("//STEPLIB DD DSN=LIBRARY." & execs(1) & ",DISP=SHR")
-      'swCallPgmsFile.WriteLine("//PGM" & LTrim(Str(pgmCnt)) & " EXEC PGM=" & execs(0).Replace(Delimiter, ""))
-      'swCallPgmsFile.WriteLine("//STEPLIB DD DSN=" & execs(2) & ",DISP=SHR")
     Next
     swCallPgmsFile.Close()
 
@@ -1556,7 +1533,7 @@ Public Class Form1
     ' takes the input string and breaks into words surrouned by blanks
     ' and drops extra blanks
     jclWords.Clear()
-    'statement = " DISPLAY '*** CRCALCX REC READ        = ' WS-REC-READ.   "
+    ' example where statement is:" DISPLAY '*** CRCALCX REC READ        = ' WS-REC-READ.   "
     statement = statement.Trim
     Dim WithinQuotes As Boolean = False
     Dim word As String = ""
@@ -1732,7 +1709,6 @@ Public Class Form1
       End If
       Call GetLabelControlParms(statement, jLabel, jControl, jParameters)
       If Len(jControl) = 0 Then
-        'MessageBox.Show("JCL control not found:" & statement)
         LogFile.WriteLine(Date.Now & ",E,JCL control not found,'" & statement & ": " & FileNameOnly & "'")
         Continue For
       End If
@@ -1788,7 +1764,6 @@ Public Class Form1
 
     Next
 
-    'Call CreateJCLPuml() see new program: CreateJOBFlowcharts
 
     Call CreateJobsTab()
 
@@ -1949,7 +1924,7 @@ Public Class Form1
       Exit Sub
     End If
 
-    'tempstr = 'DLI,P2BPCSD1,P2BPCSD1'
+    ' example content of tempstr:'DLI,P2BPCSD1,P2BPCSD1'
     Dim temparray As String() = tempstr.Split(",")
     pgmName = temparray(1)
 
@@ -2103,7 +2078,7 @@ Public Class Form1
       SourceType = "Utility"
     End If
 
-    ' write the csv record to array instead of to swDDFile.writeline
+    ' Add to list of DD statements
     ListOfDDs.Add(JobSourceName & txtDelimiter.Text &
                        jobName & txtDelimiter.Text &
                        procName & txtDelimiter.Text &
@@ -2272,8 +2247,6 @@ Public Class Form1
     SummaryWorksheet = workbook.Sheets.Item(1)
     SummaryWorksheet.Name = "Summary"
     SummaryRow = 0
-    'SummaryWorksheet.Range("A4").Value = "JOBS:"
-    'SummaryWorksheet.Range("B4").Value = "\JOBS"
     SummaryWorksheet.Range("A1").Value = "Mainframe Documentation Project" & vbNewLine &
                                          "Data Gathering Form" & vbNewLine &
                                          Path.GetFileName(folderPath & "\" & txtDataGatheringForm.Text) &
@@ -2453,42 +2426,6 @@ Public Class Form1
 
     JobCommentsRow += ListOfJobComments.Count
 
-
-    'For index = 0 To jclStmt.Count - 1
-    '  Dim statement As String = jclStmt(index)
-    '  Call GetLabelControlParms(statement, jLabel, jControl, jParameters)
-    '  Select Case jControl
-    '    Case "EXEC"
-    '      stepName = jLabel
-    '      Call ProcessEXEC(False, ListOfSymbolics)
-    '      Dim comment As String = ""
-    '      For pgmIndex As Integer = index - 1 To 0 Step -1
-    '        Call GetLabelControlParms(jclStmt(pgmIndex), jLabel, jControl, jParameters)
-    '        If jControl = "COMMENT" Then
-    '          comment = jParameters.Replace("=", "") & vbLf & comment
-    '        Else
-    '          If jControl <> "PROC" Then
-    '            Exit For
-    '          End If
-    '        End If
-    '      Next
-    '      If comment.EndsWith(vbLf) Then
-    '        comment = comment.Remove(comment.Length - 1)
-    '      End If
-    '      'write the comment line
-    '      If comment.Length > 0 Then
-    '        JobCommentsRow += 1
-    '        row = LTrim(Str(JobCommentsRow))
-    '        JobCommentsWorksheet.Range("A" & row).Value = FileNameWithExtension
-    '        JobCommentsWorksheet.Range("B" & row).Value = jobName
-    '        JobCommentsWorksheet.Range("C" & row).Value = pgmName
-    '        JobCommentsWorksheet.Range("D" & row).Value = stepName
-    '        JobCommentsWorksheet.Range("E" & row).Value = comment
-    '      End If
-    '  End Select
-    'Next
-    'lblProcessingWorksheet.Text = "Processing Job Comments: " & FileNameOnly & " : Complete"
-
   End Sub
   Sub CreateProgramsTab()
     ' Build the Programs worksheet. Programs sheet is a list of all JCL Jobs with programs.
@@ -2539,73 +2476,6 @@ Public Class Form1
     rngPrograms.Value = rngPrograms.Formula
     ' point to next spreadsheet row
     ProgramsRow += ListOfPrograms.Count
-
-
-    'Dim cnt As Integer = 0
-
-    'For Each DDStmt In ListOfDDs
-    '  Dim csvRecord As String()           ' all fields(columns) for a given record
-    '  csvRecord = DDStmt.Split(Delimiter)
-    '  cnt += 1
-    '  'jobsourcename = csvRecord(0)
-    '  jobName = csvRecord(1)
-    '  procName = csvRecord(3)
-    '  stepName = csvRecord(5)
-    '  pgmName = csvRecord(6)
-    '  ddSequence = Val(csvRecord(9))
-    '  ddConcatSeq = Val(csvRecord(10))
-    '  SourceType = csvRecord(20)
-    '  execName = csvRecord(21)
-    '  SourceCount = Val(csvRecord(22))
-
-    '  ' adjust for utility procs
-    '  If execName = "" Then
-    '    execName = procName
-    '  End If
-    '  If pgmName = "" Then
-    '    pgmName = procName
-    '  End If
-
-    '  ' write to spreadshet
-    '  If ddSequence = 1 And ddConcatSeq = 0 Then
-    '    ProgramsRow += 1
-    '    Dim row As String = LTrim(Str(ProgramsRow))
-    '    ProgramsWorksheet.Range("A" & row).Value = JobSourceName
-    '    ProgramsWorksheet.Range("B" & row).Value = jobName
-    '    If procName = "" Then
-    '      ProgramsWorksheet.Range("C" & row).Value = ""
-    '    Else
-    '      ProgramsWorksheet.Range("C" & row).Formula2 = CreateProcsHyperLink(procName)
-    '    End If
-    '    ProgramsWorksheet.Range("D" & row).Value = stepName
-    '    ProgramsWorksheet.Range("E" & row).Value = execName
-    '    ProgramsWorksheet.Range("G" & row).Value = SourceType
-    '    Select Case SourceType
-    '      Case "COBOL", "EASYTRIEVE"
-    '        ProgramsWorksheet.Range("F" & row).Formula2 = CreateSourcesHyperLink(pgmName)
-    '        ProgramsWorksheet.Range("H" & row).Formula2 = CreateFlowchartHyperLink(pgmName)
-    '        ProgramsWorksheet.Range("I" & row).Formula2 = CreateFlowchartHyperLink(pgmName & "_P2P")
-    '        ProgramsWorksheet.Range("J" & row).Formula2 = CreateOutputHyperLink(pgmName & "_BR.xlsx")
-    '      Case Else
-    '        ProgramsWorksheet.Range("F" & row).Value = pgmName    'view source code
-    '        ProgramsWorksheet.Range("H" & row).Value = ""         'flowchart
-    '        ProgramsWorksheet.Range("I" & row).Value = ""         'flowchart P2P
-    '        ProgramsWorksheet.Range("J" & row).Value = ""         'BR.XLSX
-    '    End Select
-    '    ProgramsWorksheet.Range("K" & row).Value = SourceCount
-    '    ' load up a list of executable programs to analyze
-    '    'If SourceType = "COBOL" Or SourceType = "Easytrieve" Or SourceType = "Assembler" Then
-    '    If ListOfExecs.IndexOf(pgmName & Delimiter & SourceType) = -1 Then
-    '      ListOfExecs.Add(pgmName & Delimiter & SourceType)
-    '    End If
-    '    'End If
-    '  End If
-    '  '
-    '  If cnt Mod 100 = 0 Then
-    '    lblProcessingWorksheet.Text = "Processing Programs: " & FileNameOnly & " : Rows = " & cnt
-    '  End If
-    'Next
-    'lblProcessingWorksheet.Text = "Processing Programs: " & FileNameOnly & " : Complete"
 
   End Sub
   Function CreateSourcesHyperLink(text As String) As String
@@ -2701,66 +2571,6 @@ Public Class Form1
 
     FilesRow += ListOfDDs.Count
 
-
-
-
-    ' Read the DD CSV file back in and load to array
-    'If ListOfDDs.Count = 0 Then
-    '  Exit Sub
-    'End If
-    'Dim csvRecord As String()           ' all fields(columns) for a given record
-    'Dim row As String = ""
-    'Dim cnt As Integer = 0
-
-    ''Do While Not csvFile.EndOfData
-    'For Each DDStmt In ListOfDDs
-    '  csvRecord = DDStmt.Split(Delimiter)
-    '  cnt += 1
-    '  'jobsource = csvRecord(0)
-    '  jobName = csvRecord(1)
-    '  procName = csvRecord(3)
-    '  stepName = csvRecord(5)
-    '  pgmName = csvRecord(6)
-    '  DDName = csvRecord(8)
-    '  ddSequence = val(csvRecord(9))
-    '  ddConcatSeq = Val(csvRecord(10))
-    '  Dim dsn = csvRecord(11)
-    '  Dim startDisp As String = csvRecord(12)
-    '  Dim endDisp As String = csvRecord(13)
-    '  Dim abendDisp As String = csvRecord(14)
-    '  Dim dcbRecFM As String = csvRecord(15)
-    '  Dim dcbLrecl As String = csvRecord(16)
-    '  Dim db2 As String = csvRecord(17)
-    '  Dim reportID As String = csvRecord(18)
-    '  Dim reportDescription As String = csvRecord(19)
-    '  SourceType = csvRecord(20)
-    '  execName = csvRecord(21)
-    '  FilesRow += 1
-    '  row = LTrim(Str(FilesRow))
-    '  FilesWorksheet.Range("A" & row).Value = JobSourceName
-    '  FilesWorksheet.Range("B" & row).Value = jobName
-    '  FilesWorksheet.Range("C" & row).Value = procName
-    '  FilesWorksheet.Range("D" & row).Value = stepName
-    '  FilesWorksheet.Range("E" & row).Value = execName
-    '  FilesWorksheet.Range("F" & row).Value = pgmName
-    '  FilesWorksheet.Range("G" & row).Value = DDName
-    '  FilesWorksheet.Range("H" & row).Value = LTrim(Str(ddSequence))
-    '  FilesWorksheet.Range("I" & row).Value = LTrim(Str(ddConcatSeq))
-    '  FilesWorksheet.Range("J" & row).Value = dsn
-    '  FilesWorksheet.Range("K" & row).Value = startDisp
-    '  FilesWorksheet.Range("L" & row).Value = endDisp
-    '  FilesWorksheet.Range("M" & row).Value = abendDisp
-    '  FilesWorksheet.Range("N" & row).Value = dcbRecFM
-    '  FilesWorksheet.Range("O" & row).Value = dcbLrecl
-    '  FilesWorksheet.Range("P" & row).Value = db2
-    '  FilesWorksheet.Range("Q" & row).Value = reportID
-    '  '
-    '  If cnt Mod 100 = 0 Then
-    '    lblProcessingWorksheet.Text = "Processing Files: " & FileNameOnly & " : Rows = " & cnt
-    '  End If
-    'Next
-    'lblProcessingWorksheet.Text = "Processing Filess: " & FileNameOnly & " : Complete"
-
   End Sub
 
   Sub CreateInstreamTab()
@@ -2821,40 +2631,7 @@ Public Class Form1
     ' point to next spreadsheet row
     InstreamsRow += DictOfInstreams.Count
 
-
-    ' Write the data
-
-    ' Read the list of instreams 
-    'Dim row As String = ""
-    'Dim cnt As Integer = 0
-
-    'For Each kvp As KeyValuePair(Of String, String) In DictOfInstreams
-    '  Dim myKey As String = kvp.Key
-    '  Dim myValue As String = kvp.Value
-    '  Dim myKeys As String() = myKey.Split(Delimiter)
-    '  Dim mySourceFile As String = myKeys(0)
-    '  Dim myStepName As String = myKeys(1)
-    '  Dim myStepSeq As String = myKeys(2)
-    '  If myValue.EndsWith(vbLf) Then
-    '    myValue = myValue.Remove(myValue.Length - 1, 1)
-    '  End If
-    '  cnt += 1
-    '  InstreamsRow += 1
-    '  row = LTrim(Str(InstreamsRow))
-    '  InstreamsWorksheet.Range("A" & row).Value = mySourceFile
-    '  InstreamsWorksheet.Range("B" & row).Value = myStepName
-    '  InstreamsWorksheet.Range("C" & row).Value = myStepSeq
-    '  InstreamsWorksheet.Range("D" & row).Value = myValue
-    '  '
-    '  If cnt Mod 100 = 0 Then
-    '    lblProcessingWorksheet.Text = "Processing Instreams: Rows = " & cnt
-    '  End If
-    'Next
-    'lblProcessingWorksheet.Text = "Processing Instreams: Complete"
-
   End Sub
-
-
   Sub ProcessExecFiles()
     Dim SourceRecordsCount As Integer = 0
     Dim execCnt As Integer = 0
@@ -2908,7 +2685,6 @@ Public Class Form1
       listOfProgramInfo = GetListOfProgramInfo(exec)      'list of programs within the executable source
 
       ' Analyze Source Statement array (SrcStmt) to get list of EXEC SQL statments
-      'ListOfEXECSQL.Clear()
       Call GetListOfEXECSQLorIMS()
 
       Call GetListOfCICSMapNames()
@@ -3199,7 +2975,6 @@ Public Class Form1
         End If
 
         IncludeDirective = AreaAandB.ToUpper
-        'Dim IDirective As String() = IncludeDirective.Trim.Split(New Char() {" "c})
         Dim IDirective As New List(Of String)
         Call GetSourceWords(IncludeDirective, IDirective)
         ' Checking for copy/include statement to process
@@ -3250,33 +3025,18 @@ Public Class Form1
               ' comment out the COMBINED SQL INCLUDE statement(s) as a comment
               swTemp.WriteLine(Space(6) & "* " & combinedEXEC.Trim)
               index = endIndex
-              'For execIndex As Integer = startIndex To endIndex
-              '  Mid(CobolLines(execIndex), 7, 1) = "*"
-              '  swTemp.WriteLine(CobolLines(execIndex))
-              'Next
             Else
               '  ' write out these non-INCLUDE SQL statements
-              '  For execindex As Integer = startIndex To endIndex
-              '    swTemp.WriteLine(CobolLines(execindex))
-              '  Next
               swTemp.WriteLine(CobolLines(index))
               Continue For
             End If
-            '            index = endIndex            'bypass already processed cobolLines
-            '
           Case Else
             swTemp.WriteLine(CobolLines(index))
             Continue For
         End Select
 
-        'If Len(CopybookName) > 8 Then
-        '  CopybookName = Mid(CopybookName, 1, 8)
-        'End If
-
         ' Expand copybooks/includes into the source
         NumberOfCopysFound += 1
-        'Dim CopybookFileName As String = txtSourceFolderName.Text &
-        '                                 "\" & CopybookName
         swTemp.WriteLine(Space(6) & "*" & CopyType & " " & CopybookName & " Begin Copy/Include")
         LogFile.WriteLine(Date.Now & ",I,Including COBOL " & CopyType & " copybook," & CopybookName)
         Call IncludeCopyMember(CopybookName, swTemp)
@@ -3516,8 +3276,6 @@ Public Class Form1
     '   COBOL statement string with all of its phrases
     ' Output is an entry added to the ListOfCallPgms array
     '   
-    'Dim srcWords As New List(Of String)
-
     Dim CalledFileName As String = ""
     Dim CalledType As String = ""
     Dim CalledEntry As String = ""
@@ -3598,7 +3356,6 @@ Public Class Form1
     Dim x As Integer = 0
     Dim y As Integer = 0
     Dim z As Integer = 0
-    'Dim ListOfTables As New List(Of String)
     Dim JustTheTable As String = ""
     For Each pgm In listOfProgramInfo
       Select Case SourceType
@@ -4080,7 +3837,7 @@ Public Class Form1
 
   End Sub
   Function BuildTheStatement(ByRef x As Integer, ByRef cWord As List(Of String)) As String
-    ' Build the statement
+    ' Build the statement placing a space between each word
     Dim theStatement As String = ""
     For y As Integer = x To cWord.Count - 1
       If cWord(y) = "END-EXEC" Then
@@ -4663,63 +4420,6 @@ Public Class Form1
       Return "Assembler"
     End If
 
-
-    'If FoundCobolFileName.Length = 0 Then
-    '  LogFile.WriteLine(Date.Now & ",E,COBOL Source File Not found," & FileName)
-    '  Return "NotFound"
-    'End If
-    'If FoundCobolFileName <> FileName Then
-    '  LogFile.WriteLine(Date.Now & ",I,Alias used," & FileName & "/Alias:" & FoundCobolFileName)
-    '  FileName = FoundCobolFileName
-    'End If
-
-    'If Not File.Exists(folderPath & txtCobolFolder.Text & "\" & FoundCobolFileName) Then
-    '  LogFile.WriteLine(Date.Now & ",E,COBOL Source File Not found," & FileName)
-    '  Return "NotFound"
-    'End If
-    'Dim myFileLen As Long = FileLen(folderPath & txtCobolFolder.Text & "\" & FoundCobolFileName)
-    'If myFileLen = 0 Then
-    '  LogFile.WriteLine(Date.Now & ",E,COBOL Source File Length is zero," & FileName)
-    '  Return "NotFound"
-    'End If
-
-    'Dim CobolLines As String() = File.ReadAllLines(folderPath & txtCobolFolder.Text & "\" & FoundCobolFileName)
-    'SourceCount = CobolLines.Count
-
-    'For index As Integer = 0 To CobolLines.Count - 1
-    '  If Len(Trim(CobolLines(index))) = 0 Then
-    '    Continue For
-    '  End If
-    '  ' COBOL
-    '  If (CobolLines(index).ToUpper.IndexOf("IDENTIFICATION DIVISION.") > -1) Or
-    '    (CobolLines(index).ToUpper.IndexOf("IDENTIFICATION  DIVISION.") > -1) Or
-    '    (CobolLines(index).ToUpper.IndexOf("IDENTIFICATION   DIVISION.") > -1) Or
-    '    (CobolLines(index).ToUpper.IndexOf("IDENTIFICATION    DIVISION.") > -1) Or
-    '    (CobolLines(index).ToUpper.IndexOf("ID DIVISION.") > -1) Then
-    '    Return "COBOL"
-    '  End If
-    '  ' Easytrieve
-    '  If CobolLines(index).Trim.StartsWith("PARM") Or
-    '     CobolLines(index).Trim.StartsWith("FILE") Or
-    '     CobolLines(index).Trim.StartsWith("SORT") Or
-    '     CobolLines(index).Trim.StartsWith("JOB") Or
-    '     CobolLines(index).Trim.StartsWith("%") Then
-    '    Return "Easytrieve"
-    '  End If
-    '  'If CobolLines(index).Length >= 4 Then
-    '  '  Select Case CobolLines(index).ToUpper.Substring(0, 4)
-    '  '    Case "PARM", "FILE", "SORT", "JOB "
-    '  '      Return "Easytrieve"
-    '  '  End Select
-    '  'End If
-    '  ' Mainframe Assembler
-    '  If (CobolLines(index).ToUpper.IndexOf(" CSECT") > -1) Or
-    '      (CobolLines(index).IndexOf(" AMODE") > -1) Or
-    '      (CobolLines(index).IndexOf(" RMODE") > -1) Then
-    '    Return "Assembler"
-    '  End If
-    'Next
-
     LogFile.WriteLine(Date.Now & ",E,Source File Not Found," & FileName)
     Return "NotFound"
 
@@ -4858,33 +4558,16 @@ Public Class Form1
     ' Create a Records/Fields spreadsheet
     Call CollectRecordsAndFieldsInfo()
 
-    ' Call CreateComponentsFile()
-
-
   End Function
   Function WriteOutputCOBOL(ByRef exec As String) As Integer
     ' Write the output Pgm, Data, Procedure, copy files.
     ' return of -1 means an error
     ' return of 0 means all is okay
 
-    'WriteOutputCOBOL = 0
-
-    ' Create a Plantuml file, step by step, based on the Procedure division.
-    'Call CreatePumlCOBOL(exec)
     Call CreateCobolFlowchart(SrcStmt, exec, PUMLFolder)
-
 
     ' Create a Records/Fields spreadsheet
     Call CollectRecordsAndFieldsInfo()
-
-    'Create a Business Rules spreadsheet file, based on the Procedure division.
-    'If cbBusinessRules.Checked Then
-    '  lblProcessingWorksheet.Text = "Processing Business Rules: " & FileNameOnly & " : #Fields = " & ListOfFields.Count
-    '  Call CreateCOBOLBusinessRules(SrcStmt, exec, BusinessRulesFolder, PUMLFolder, pgm, ListOfFields)
-    '  'lblProcessingWorksheet.Text = "Processing Business Rules: Complete.                  "
-    'End If
-
-    ' Call CreateComponentsFile()
 
     Return 0
 
@@ -4908,7 +4591,6 @@ Public Class Form1
       Return -1
     End Try
     Dim FoundEasytrieveFileName As String = EasytrieveSourceExists(exec)
-    'Dim FileName As String = folderPath & txtEasytrieveFolder.Text & "\" & exec
     If FoundEasytrieveFileName = 0 Then
       LogFile.WriteLine(Date.Now & ",E,EASYTRIEVE Source File Not Found?," & exec)
       Return -1
@@ -5083,7 +4765,6 @@ Public Class Form1
     End Try
 
     Dim FoundAsmFileName As String = ASMSourceExists(exec)
-    'Dim FileName As String = folderPath & txtAsmFolder.Text & "\" & exec
     If FoundAsmFileName = 0 Then
       LogFile.WriteLine(Date.Now & ",E,Assembler Source File Not Found?," & exec)
       Return -1
@@ -5297,46 +4978,6 @@ Public Class Form1
 
     RecordsRow += ListOfRecords.Count
 
-
-    'Dim row As Integer = LTrim(Str(RecordsRow))
-    'Dim cnt As Integer = 0
-    'If ListOfRecords.Count > 0 Then
-    '  For Each record In ListOfRecords
-    '    cnt += 1
-    '    RecordsRow += 1
-    '    row = LTrim(Str(RecordsRow))
-    '    DelimText = record.Split(Delimiter)
-    '    If DelimText.Count >= 15 Then
-    '      RecordsWorksheet.Range("A" & row).Value = DelimText(0)       'Source
-    '      RecordsWorksheet.Range("B" & row).Value = DelimText(1)       'Program
-    '      RecordsWorksheet.Range("C" & row).Value = DelimText(2)       'file/table
-    '      RecordsWorksheet.Range("D" & row).Value = DelimText(3)       'DD
-    '      RecordsWorksheet.Range("E" & row).Value = DelimText(4)       'Type
-    '      RecordsWorksheet.Range("F" & row).Value = DelimText(5)       'RecordName
-    '      If DelimText(6).ToUpper = "NONE" Then
-    '        RecordsWorksheet.Range("G" & row).Value = DelimText(6)      'Copybook
-    '      Else
-    '        RecordsWorksheet.Range("G" & row).Formula2 = CreateSourcesHyperLink(DelimText(13))
-    '      End If
-    '      RecordsWorksheet.Range("H" & row).Value = DelimText(7)       'Length
-    '      RecordsWorksheet.Range("I" & row).Value = DelimText(8)       '@line
-    '      RecordsWorksheet.Range("J" & row).Value = DelimText(9)       'Level
-    '      RecordsWorksheet.Range("K" & row).Value = DelimText(10)       'Open Mode
-    '      RecordsWorksheet.Range("L" & row).Value = DelimText(11)      'RecFM
-    '      RecordsWorksheet.Range("M" & row).Value = DelimText(12)      'FDMinLen
-    '      RecordsWorksheet.Range("N" & row).Value = DelimText(13)      'FDMaxLen
-    '      RecordsWorksheet.Range("O" & row).Value = DelimText(14)      'FDOrg
-    '    End If
-    '    If cnt Mod 100 = 0 Then
-    '      lblProcessingWorksheet.Text = "Processing Records: " & FileNameOnly &
-    '        " : Rows = " & ListOfRecords.Count &
-    '        " # " & cnt
-    '    End If
-    '  Next
-
-    'End If
-    'lblProcessingWorksheet.Text = "Processing Records: " & FileNameOnly & " : Complete"
-
   End Sub
   Sub CreateFieldsTab()
     '
@@ -5395,40 +5036,6 @@ Public Class Form1
     rngFieldsName = FieldsWorksheet.Range(firstColRow, LastColRow)
     rngFieldsName.Value = tArray
     FieldsRow += ListOfFields.Count
-
-    'row = LTrim(Str(FieldsRow))
-    'cnt = 0
-    'If ListOfFields.Count > 0 Then
-    '  For Each FieldRow In ListOfFields
-    '    cnt += 1
-    '    FieldsRow += 1
-    '    DelimText = FieldRow.Split(Delimiter)
-    '    row = LTrim(Str(FieldsRow))
-    '    If DelimText.Count >= 15 Then
-    '      FieldsWorksheet.Range("A" & row).Value = DelimText(0)       'Source
-    '      FieldsWorksheet.Range("B" & row).Value = DelimText(1)       'Program
-    '      FieldsWorksheet.Range("C" & row).Value = DelimText(2)       'file/table
-    '      FieldsWorksheet.Range("D" & row).Value = DelimText(3)       'DD
-    '      FieldsWorksheet.Range("E" & row).Value = DelimText(4)       'Type
-    '      FieldsWorksheet.Range("F" & row).Value = DelimText(5)       'RecordName
-    '      FieldsWorksheet.Range("G" & row).Value = DelimText(6)       'Copybook
-    '      FieldsWorksheet.Range("H" & row).Value = DelimText(7)       'FieldSeq
-    '      FieldsWorksheet.Range("I" & row).Value = DelimText(8)       'Level
-    '      FieldsWorksheet.Range("J" & row).Value = DelimText(9)       'Fieldname
-    '      FieldsWorksheet.Range("K" & row).Value = DelimText(10)      'Picture
-    '      FieldsWorksheet.Range("L" & row).Value = DelimText(11)      'Start
-    '      FieldsWorksheet.Range("M" & row).Value = DelimText(12)      'End
-    '      FieldsWorksheet.Range("N" & row).Value = DelimText(13)      'Length
-    '      FieldsWorksheet.Range("O" & row).Value = DelimText(14)      'Redefines fieldnames
-    '    End If
-    '    If cnt Mod 100 = 0 Then
-    '      lblProcessingWorksheet.Text = "Processing Fields: " & FileNameOnly &
-    '        " : Rowss = " & ListOfFields.Count &
-    '        " # " & cnt
-    '    End If
-    '  Next
-    'End If
-    'lblProcessingWorksheet.Text = "Processing Fields: " & FileNameOnly & " : Complete"
 
   End Sub
   Sub FormatWorksheets()
@@ -5759,37 +5366,6 @@ Public Class Form1
 
     CommentsRow += ListOfComments.Count
 
-    ' load comments to spreadsheet. Merge sequential lines numbers into one row/cell
-    'Dim prevLineNum As Integer = -1
-    'Dim currLineNum As Integer = 0
-    'Dim prevProgram As String = ""
-    'Dim currProgram As String = ""
-    'For Each comment In ListOfComments
-    '  cnt += 1
-    '  Dim commentColumns As String() = comment.Split(Delimiter)
-    '  currLineNum = Val(commentColumns(4))
-    '  currProgram = commentColumns(1)
-    '  If currLineNum - 1 <> prevLineNum Or currProgram <> prevProgram Then
-    '    CommentsRow += 1
-    '    row = LTrim(Str(CommentsRow))
-    '    CommentsWorksheet.Range("A" & row).Value = commentColumns(0)       'Source
-    '    CommentsWorksheet.Range("B" & row).Value = commentColumns(1)       'Program
-    '    CommentsWorksheet.Range("C" & row).Value = commentColumns(2)       'TYPE
-    '    CommentsWorksheet.Range("D" & row).Value = commentColumns(3)       'division
-    '    CommentsWorksheet.Range("E" & row).Value = commentColumns(4)       'Line#
-    '    CommentsWorksheet.Range("F" & row).Value = commentColumns(5)       'Comment
-    '  Else
-    '    CommentsWorksheet.Range("F" & row).Value &= vbNewLine & commentColumns(5)
-    '  End If
-    '  prevLineNum = currLineNum
-    '  prevProgram = currProgram
-    '  If cnt Mod 100 = 0 Then
-    '    lblProcessingWorksheet.Text = "Processing Comments: " & FileNameOnly &
-    '      " : Rows = " & ListOfComments.Count &
-    '      " # " & cnt
-    '  End If
-    'Next
-    'lblProcessingWorksheet.Text = "Processing Comments: " & FileNameOnly & " : Complete"
   End Sub
   Sub CreateEXECSQLTab()
     '* Create the ExecSQL worksheet from the listofexecsql array
@@ -5849,41 +5425,6 @@ Public Class Form1
     ' point to next spreadsheet row
     EXECSQLRow += ListOfEXECSQL.Count
 
-
-
-
-    ' load EXECSQL to spreadsheet.
-    'Dim Tables As String()
-    'For Each execsql In ListOfEXECSQL
-    '  cnt += 1
-    '  Dim ExecSqlColumns As String() = execsql.Split(Delimiter)
-    '  EXECSQLRow += 1
-    '  row = LTrim(Str(EXECSQLRow))
-    '  EXECSQLWorksheet.Range("A" & row).Value = ExecSqlColumns(0)       'Source
-    '  EXECSQLWorksheet.Range("B" & row).Value = ExecSqlColumns(1)       'Program
-    '  EXECSQLWorksheet.Range("C" & row).Value = ExecSqlColumns(2)       'ExecSql
-    '  EXECSQLWorksheet.Range("D" & row).Value = ExecSqlColumns(3)       'seq
-    '  Table = ExecSqlColumns(4).Replace(",", vbNewLine).Trim
-    '  EXECSQLWorksheet.Range("E" & row).Value = Table
-    '  EXECSQLWorksheet.Range("F" & row).Value = ExecSqlColumns(5)       'Cursor
-    '  EXECSQLWorksheet.Range("G" & row).Value = AddNewLineAboutEveryNthCharacters(ExecSqlColumns(6), vbNewLine, 60) 'Statement
-
-    '  Tables = Table.Split(",")
-    '  For Each Table In Tables
-    '    If Table.Trim.Length > 0 Then
-    '      If ListOfTableNames.IndexOf(Table) = -1 Then
-    '        ListOfTableNames.Add(Table)
-    '      End If
-    '    End If
-    '  Next
-
-    '  If cnt Mod 100 = 0 Then
-    '    lblProcessingWorksheet.Text = "Processing ExecSQL: " & FileNameOnly &
-    '      " : Rows = " & ListOfEXECSQL.Count &
-    '      " # " & cnt
-    '  End If
-    'Next
-    'lblProcessingWorksheet.Text = "Processing ExecSQL: " & FileNameOnly & " : Complete"
   End Sub
   Sub CreateEXECCICSTab()
     '* Create the ExecCICS worksheet from the listofCICSMapNames array
@@ -5935,31 +5476,6 @@ Public Class Form1
     ' point to next spreadsheet row
     EXECCICSRow += ListOfCICSMapNames.Count
 
-
-
-
-
-    '' load EXECCICS to spreadsheet.
-    'For Each execCICS In ListOfCICSMapNames
-    '  cnt += 1
-    '  Dim ExecCICSColumns As String() = execCICS.Split(Delimiter)
-    '  EXECCICSRow += 1
-    '  row = LTrim(Str(EXECCICSRow))
-    '  EXECCICSWorksheet.Range("A" & row).Value = ExecCICSColumns(0)       'FileName
-    '  EXECCICSWorksheet.Range("B" & row).Value = ExecCICSColumns(1)       'SourceId
-    '  EXECCICSWorksheet.Range("C" & row).Value = ExecCICSColumns(2)       'ProgramId
-    '  EXECCICSWorksheet.Range("D" & row).Value = ExecCICSColumns(3)       'ExecSeq
-    '  EXECCICSWorksheet.Range("E" & row).Value = ExecCICSColumns(4)       'ExecCICS
-    '  EXECCICSWorksheet.Range("F" & row).Value = ExecCICSColumns(5)       'MapName
-    '  EXECCICSWorksheet.Range("G" & row).Value = ExecCICSColumns(6)       'NotFound
-
-    '  If cnt Mod 100 = 0 Then
-    '    lblProcessingWorksheet.Text = "Processing ExecCICS: " & FileNameOnly &
-    '      " : Rows = " & ListOfCICSMapNames.Count &
-    '      " # " & cnt
-    '  End If
-    'Next
-    'lblProcessingWorksheet.Text = "Processing ExecCICS: " & FileNameOnly & " : Complete"
   End Sub
 
   Sub CreateIMSTab()
@@ -6016,21 +5532,6 @@ Public Class Form1
     ' point to next spreadsheet row
     IMSRow += ListOfDBDs.Count
 
-
-
-    'lblProcessingWorksheet.Text = "Processing DBDNames: " & ListOfDBDs.Count
-
-    'For IMSIndx As Integer = 0 To ListOfDBDs.Count - 1
-    '  Dim IMSColumns As String() = ListOfDBDs(IMSIndx).Split(Delimiter)
-    '  IMSRow += 1
-    '  Dim row As String = LTrim(Str(IMSRow))
-    '  IMSWorksheet.Range("A" & row).Value = IMSColumns(0)       'DBD Name
-    '  IMSWorksheet.Range("B" & row).Value = IMSColumns(1)       'PSP Name
-    '  IMSWorksheet.Range("C" & row).Value = IMSColumns(2)       'Source
-    'Next
-
-    'lblProcessingWorksheet.Text = "Processing IMS worksheet for DBDNames Complete"
-
   End Sub
   Sub CreateDataComTab()
     ' Create the DataComs worksheet tab.
@@ -6076,26 +5577,6 @@ Public Class Form1
     rngDataCom.Value = rngDataCom.Formula
     ' point to next spreadsheet row
     DataComRow += ListOfDataComs.Count
-
-
-
-
-
-    'lblProcessingWorksheet.Text = "Processing DataComs: " & ListOfDataComs.Count
-
-    'For DataComIndx As Integer = 0 To ListOfDataComs.Count - 1
-    '  Dim DataComColumns As String() = ListOfDataComs(DataComIndx).Split(Delimiter)
-    '  DataComRow += 1
-    '  Dim row As String = LTrim(Str(DataComRow))
-    '  DataComWorksheet.Range("A" & row).Value = DataComColumns(0)       'Source
-    '  DataComWorksheet.Range("B" & row).Value = DataComColumns(1)       'ProgramId
-    '  DataComWorksheet.Range("C" & row).Value = DataComColumns(2)       'DataCommand
-    '  DataComWorksheet.Range("D" & row).Value = DataComColumns(3)       'DataView
-    '  DataComWorksheet.Range("E" & row).Value = DataComColumns(4)       'Where
-    '  DataComWorksheet.Range("F" & row).Value = DataComColumns(5)       'DataView AT
-    'Next
-
-    'lblProcessingWorksheet.Text = "Processing Datacom worksheet Complete"
 
   End Sub
   Sub CreateCallsTab()
@@ -6149,24 +5630,6 @@ Public Class Form1
     ' point to next spreadsheet row
     CallsRow += ListOfCallPgms.Count
 
-
-
-
-    'lblProcessingWorksheet.Text = "Processing Call routines: " & ListOfCallPgms.Count
-
-    'For CallsIndex As Integer = 0 To ListOfCallPgms.Count - 1
-    '  Dim CallsColumns As String() = ListOfCallPgms(CallsIndex).Split(Delimiter)
-    '  CallsRow += 1
-    '  Dim row As String = LTrim(Str(CallsRow))
-    '  CallsWorksheet.Range("A" & row).Value = CallsColumns(4)       'source-id
-    '  CallsWorksheet.Range("B" & row).Value = CallsColumns(2)       'program-id
-    '  CallsWorksheet.Range("C" & row).Value = CallsColumns(0)       'Module
-    '  CallsWorksheet.Range("D" & row).Value = CallsColumns(1)       'Source Type
-    '  CallsWorksheet.Range("E" & row).Value = CallsColumns(3)       'Call type
-    'Next
-
-    'lblProcessingWorksheet.Text = "Processing CALLS worksheet Complete"
-
   End Sub
   Sub CreateScreenMapTab()
     '* Create the Screen Map worksheet from the listofScreenMaps array
@@ -6219,30 +5682,6 @@ Public Class Form1
     ' point to next spreadsheet row
     ScreenMapRow += ListofScreenMaps.Count
 
-
-
-
-    '' load IMSMapNames to spreadsheet.
-    'For Each IMSMaps In ListofScreenMaps
-    '  cnt += 1
-    '  Dim ScreenMapColumns As String() = IMSMaps.Split(Delimiter)
-    '  ScreenMapRow += 1
-    '  row = LTrim(Str(ScreenMapRow))
-    '  If ScreenMapColumns.Count >= 4 Then
-    '    ScreenMapWorksheet.Range("A" & row).Value = ScreenMapColumns(0)       'MapSource
-    '    ScreenMapWorksheet.Range("B" & row).Value = ScreenMapColumns(1)       'IMS/CICS/PanelType
-    '    ScreenMapWorksheet.Range("C" & row).Value = ScreenMapColumns(2)       'FMTName/DFHMSD/PanelName
-    '    'ScreenMapWorksheet.Range("D" & row).Value = ScreenMapColumns(3)       'Literals or Comments
-    '    ScreenMapWorksheet.Range("D" & row).Value = AddNewLineAboutEveryNthCharacters(ScreenMapColumns(3), vbNewLine, 45)
-    '  End If
-    '  If cnt Mod 100 = 0 Then
-    '    lblProcessingWorksheet.Text = "Processing ScreenMaps: " & FileNameOnly &
-    '      " : Rows = " & ListofScreenMaps.Count &
-    '      " # " & cnt
-    '  End If
-    'Next
-    'lblProcessingWorksheet.Text = "Processing ScreenMaps: " & FileNameOnly & " : Complete"
-
   End Sub
   Sub CreateLibrariesTab()
     ' This will create the Libraries tab worksheet based on the ListOfLibraries array sorted
@@ -6284,111 +5723,7 @@ Public Class Form1
     ' point to next spreadsheet row
     LibrariesRow += ListOfLibraries.Count
 
-
-
-
-    ' load Libraries array to spreadsheet.
-    'ListOfLibraries.Sort()
-    'For Each entry In ListOfLibraries
-    '  Dim LibrariesColumns As String() = entry.Split(Delimiter)
-    '  LibrariesRow += 1
-    '  row = LTrim(Str(LibrariesRow))
-    '  If LibrariesColumns.Count >= 2 Then
-    '    LibrariesWorksheet.Range("A" & row).Value = LibrariesColumns(0)       'Library name
-    '    LibrariesWorksheet.Range("B" & row).Value = LibrariesColumns(1)       'Type: JOBLIB, STEPLIB, JCLLIB
-    '  End If
-    'Next
-
   End Sub
-  'Sub CreateStatsWorksheet()
-  '  ' report out the Statistics / Metrics of this model
-  '  lblProcessingWorksheet.Text = "Processing Stats Worksheet"
-  '  '
-  '  Dim cnt As Integer = 0
-  '  Dim row As Integer = 0
-  '  Dim Statement As String = ""
-  '  Dim Table As String = ""
-  '  If StatsRow = 0 Then
-  '    StatsWorksheet = workbook.Sheets.Add(After:=workbook.Worksheets(workbook.Worksheets.Count))
-  '    StatsWorksheet.Name = "Stats"
-  '    ' Write the Column Headers row
-  '    StatsWorksheet.Range("A1").Value = "Metric"
-  '    StatsWorksheet.Range("B1").Value = "Times"
-  '    StatsWorksheet.Range("C1").Value = "Unique"
-  '    StatsRow = 1
-  '    StatsWorksheet.Activate()
-  '    StatsWorksheet.Application.ActiveWindow.SplitRow = 1
-  '    StatsWorksheet.Application.ActiveWindow.FreezePanes = True
-  '  End If
-  '  ' load all the various counters, etc. to spreadsheet.
-  '  StatsRow += 1 : row = LTrim(Str(StatsRow))
-  '  StatsWorksheet.Range("A" & row).Value = "COBOL Batch Programs"
-  '  StatsWorksheet.Range("B" & row).Value = CntBatchCobolPrograms
-  '  StatsWorksheet.Range("C" & row).Value = ListOfBatchCobolPrograms.Count
-
-  '  StatsRow += 1 : row = LTrim(Str(StatsRow))
-  '  StatsWorksheet.Range("A" & row).Value = "Easytrieve Batch Programs"
-  '  StatsWorksheet.Range("B" & row).Value = CntBatchEasytrievePrograms
-  '  StatsWorksheet.Range("C" & row).Value = ListOfBatchEasytrievePrograms.Count
-
-  '  StatsRow += 1 : row = LTrim(Str(StatsRow))
-  '  StatsWorksheet.Range("A" & row).Value = "COBOL Online Programs"
-  '  StatsWorksheet.Range("B" & row).Value = CntOnlineCobolPrograms
-  '  StatsWorksheet.Range("C" & row).Value = ListOfOnlineCobolPrograms.Count
-
-  '  StatsRow += 1 : row = LTrim(Str(StatsRow))
-  '  StatsWorksheet.Range("A" & row).Value = "Easytrieve Online Programs"
-  '  StatsWorksheet.Range("B" & row).Value = CntOnlineEasytrievePrograms
-  '  StatsWorksheet.Range("C" & row).Value = ListOfOnlineEasytrievePrograms.Count
-
-  '  StatsRow += 1 : row = LTrim(Str(StatsRow))
-  '  StatsWorksheet.Range("A" & row).Value = "Generated Screen Maps (SD)"
-  '  StatsWorksheet.Range("B" & row).Value = ""
-  '  StatsWorksheet.Range("C" & row).Value = CntTelonOnline
-
-  '  StatsRow += 1 : row = LTrim(Str(StatsRow))
-  '  StatsWorksheet.Range("A" & row).Value = "Generated Batch Programs (BD & DR)"
-  '  StatsWorksheet.Range("B" & row).Value = ""
-  '  StatsWorksheet.Range("C" & row).Value = CntTelonBatch
-
-  '  StatsRow += 1 : row = LTrim(Str(StatsRow))
-  '  StatsWorksheet.Range("A" & row).Value = "Utility Programs Executed"
-  '  StatsWorksheet.Range("B" & row).Value = CntUtilityPrograms
-  '  StatsWorksheet.Range("C" & row).Value = ListOfUtilityPrograms.Count
-
-  '  StatsRow += 1 : row = LTrim(Str(StatsRow))
-  '  StatsWorksheet.Range("A" & row).Value = "Data Files"
-  '  StatsWorksheet.Range("B" & row).Value = CntDataFiles
-  '  StatsWorksheet.Range("C" & row).Value = ListOfDataFiles.Count
-
-  '  StatsRow += 1 : row = LTrim(Str(StatsRow))
-  '  StatsWorksheet.Range("A" & row).Value = "Reports created"
-  '  StatsWorksheet.Range("B" & row).Value = CntReports
-  '  StatsWorksheet.Range("C" & row).Value = ListOfReports.Count
-
-  '  StatsRow += 1 : row = LTrim(Str(StatsRow))
-  '  StatsWorksheet.Range("A" & row).Value = "Batch Jobs"
-  '  StatsWorksheet.Range("B" & row).Value = ""
-  '  StatsWorksheet.Range("C" & row).Value = CntBatchJobs
-
-  '  StatsRow += 1 : row = LTrim(Str(StatsRow))
-  '  StatsWorksheet.Range("A" & row).Value = "MFS Maps (IMS)"
-  '  StatsWorksheet.Range("B" & row).Value = ""
-  '  StatsWorksheet.Range("C" & row).Value = ListOfIMSMapNames.Count
-
-  '  StatsRow += 1 : row = LTrim(Str(StatsRow))
-  '  StatsWorksheet.Range("A" & row).Value = "IMS DBDs"
-  '  StatsWorksheet.Range("B" & row).Value = ""
-  '  StatsWorksheet.Range("C" & row).Value = ListOfDBDNames.Count
-
-  '  StatsRow += 1 : row = LTrim(Str(StatsRow))
-  '  StatsWorksheet.Range("A" & row).Value = "DB2 Tables"
-  '  StatsWorksheet.Range("B" & row).Value = ""
-  '  StatsWorksheet.Range("C" & row).Value = ListOfTableNames.Count
-
-  '  lblProcessingWorksheet.Text = "Processing Stats Worksheet Complete."
-  'End Sub
-
   Sub AddToListOfDBDNames()
     ' Process the DBDNames.txt file, if exists, and put into ListOf array
     Dim DBDFileName = folderPath & txtCobolFolder.Text & "\DBDnames.txt"
@@ -6554,32 +5889,21 @@ Public Class Form1
           End If
         End If
 
-
         ' Process every VERB word in this statement 
         ' Every verb should/could be a plum object created.
-
-        'IndentLevel = 1
-        'IFLevelIndex.Clear()
 
         For wordIndex = 0 To cWord.Count - 1
           Select Case cWord(wordIndex)
             Case "JOB"
               Call ProcessPumlParagraphEasytrieve(ParagraphStarted)
               Exit For
-            'Case "INPUT"
-            '  Call ProcessPumlInput(wordIndex)
             Case "SORT"
               Call ProcessPumlSortEasytrieve(wordIndex)
-            'Case "START"
-            '  Call ProcessPumlStart(wordIndex)
-            'Case "FINISH"
-            '  Call ProcessPumlStart(wordIndex)
             Case "SELECT"
               Call ProcessPumlSelectEasytrieve(wordIndex)
             Case "IF"
               IFLevelIndex.Add(wordIndex)
               Call ProcessPumlIFEasytrieve(wordIndex)
-
             Case "ELSE", "OTHERWISE"
               Call ProcessPumlELSE(wordIndex)
             Case "END-IF", "END-IF."
@@ -6600,22 +5924,14 @@ Public Class Form1
               Call ProcessPumlENDEVALUATE(wordIndex)
             Case "PERFORM"
               Call ProcessPumlPerformEasytrieve(wordIndex)
-            'Case "END-PERFORM"
-            '  Call ProcessPumlENDPERFORM(wordIndex)
             Case "DO"
               Call ProcessPumlDO(wordIndex)
             Case "END-DO", "END-DO."
               Call ProcessPumlENDDO(wordIndex)
             Case "COMPUTE"
               Call ProcessPumlCOMPUTE(wordIndex)
-            'Case "READ"
-            '  Call ProcessPumlREAD(wordIndex)
             Case "GET"
               Call ProcessPumlGET(wordIndex)
-            'Case "AT", "END", "NOT"
-            '  ProcessPumlReadCondition(wordIndex)
-            'Case "END-READ"
-            '  ProcessPumlENDREAD(wordIndex)
             Case "GO"
               Call ProcessPumlGOTO(wordIndex)
             Case "EXEC", "DLI"
@@ -6627,10 +5943,6 @@ Public Class Form1
               pumlFile.WriteLine("}")
               pumlFile.WriteLine("")
               ParagraphStarted = False
-            'Case "STOP"
-            '  pumlLineCnt += 2
-            '  pumlFile.WriteLine(Indent() & "stop")
-            '  ParagraphStarted = False
             Case "REPORT"
               Call ProcessPumlParagraphEasytrieve(ParagraphStarted)
               Exit For
@@ -6662,7 +5974,6 @@ Public Class Form1
                   ' a paragraph name but the PROC word is not on same line; store the paragraph name
                   '  for when we eventually get that proc name
                   theProcName = cWord(wordIndex)
-                  'ParagraphStarted = True
                 End If
               Else
                 Dim EndIndex As Integer = 0
@@ -7156,7 +6467,6 @@ Public Class Form1
     '  of all the fields.
     ' Load the fields to array so we can compute lengths, etc.
     Dim fieldWords As New List(Of String)
-    'Dim fields As New RecordInfo
 
     Dim pic As Integer = -1
     Dim usageIndex As Integer = -1
@@ -7324,10 +6634,6 @@ Public Class Form1
       If fields.Picture.Length = 0 Then
         Continue For
       End If
-      'If fields.RedefField = 1 Then
-      '  Continue For
-      'End If
-      'Dim idx = List_Fields.IndexOf(fields)
       If fields.OccursMinimumTimes > -1 Then
         totalRecordLength += fields.Length * fields.OccursMinimumTimes
         totalFieldLength = fields.Length * fields.OccursMinimumTimes
@@ -7374,29 +6680,6 @@ Public Class Form1
         startPos = endPos + 1
       End If
     Next
-    ' resolve group item lengths for its own fields
-    'For Each fields In List_Fields
-    '  If fields.Picture.Length > 0 Then
-    '    For idx = List_Fields.IndexOf(fields) - 1 To 0 Step -1
-    '      Dim searchFields As fieldInfo = List_Fields(idx)
-    '      If searchFields.Picture.Length = 0 And
-    '        searchFields.Level < fields.Level Then
-    '        searchFields.Length += fields.Length
-    '        Exit For
-    '      End If
-    '    Next
-    '  End If
-    'Next
-    ' resolve group lengths that are still zero
-
-    ' put final length on the 01-level. Messy, I know
-    'For Each fields In List_Fields
-    '  If fields.Level = 1 Then
-    '    fields.Length = totalRecordLength
-    '    Exit For
-    '  End If
-    'Next
-
     GetRecordLength = totalRecordLength
   End Function
   Function FindCopybookName(ByRef DataIndex As Integer, ByVal RecordName As String) As String
@@ -8097,7 +7380,6 @@ Public Class Form1
     '
     ' It could have all open modes.
     ' 
-    'GetOpenModeSQL = ""
     Dim srcWords As New List(Of String)
     Dim ListOfOpenModes As New List(Of String)
 
@@ -8191,27 +7473,6 @@ Public Class Form1
             ListOfOpenModes.Add(srcWords(4))
           End If
         End If
-        'Dim filenamefound As Boolean = False
-        'Dim tblIndex As Integer
-        'For tblIndex = tblIndex + 5 To srcWords.Count - 1
-        '  ' find any part of that filename (could have DB Qualifier on it)
-        '  If srcWords(tblIndex) = "END-EXEC" Then
-        '    Exit For
-        '  End If
-        '  ' find the FROM statement
-        '  If srcWords(tblIndex) <> "FROM" Then
-        '    Continue For
-        '  End If
-        '  If InStr(srcWords(tblIndex), filename) > 0 Then
-        '    filenamefound = True
-        '    Exit For
-        '  End If
-        'Next
-        'If filenamefound Then
-        '  If ListOfOpenModes.IndexOf(srcWords(4)) = -1 Then
-        '    ListOfOpenModes.Add(srcWords(4))
-        '  End If
-        'End If
       End If
     Next
     Dim modes As String = ""
@@ -8223,7 +7484,7 @@ Public Class Form1
   Sub GetSourceWords(ByVal statement As String, ByRef srcWords As List(Of String))
     ' takes the stmt and breaks into words and drops blanks
     srcWords.Clear()
-    'statement = " DISPLAY '*** CRCALCX REC READ        = ' WS-REC-READ.   "
+    ' example of statement:" DISPLAY '*** CRCALCX REC READ        = ' WS-REC-READ.   "
     statement = statement.Trim
     Dim WithinQuotes As Boolean = False
     Dim word As String = ""
@@ -8464,13 +7725,6 @@ Public Class Form1
 
     End Select
 
-    ' convert comment to a "sentence case" like text.
-    'If Len(comment) > 1 Then
-    '  comment = Char.ToUpper(comment.First) & comment.Substring(1).ToLower
-    'Else
-    '  comment = comment.ToUpper
-    'End If
-
     If comment.Length > 0 Then
       ListOfComments.Add(FileNameOnly & Delimiter &
                         CobolFile & Delimiter &
@@ -8485,7 +7739,7 @@ Public Class Form1
   Sub InitializeProgramVariables()
     lblStatusMessage.Text = ""
 
-    ' re Initialize all beginning Variables and tables.
+    ' Initialize all beginning Variables and tables.
     ' JCL
     FileNameOnly = ""
     tempCobFileName = ""
