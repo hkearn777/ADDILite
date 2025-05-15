@@ -84,8 +84,6 @@ Partial Class Form1
         Me.Label9 = New System.Windows.Forms.Label()
         Me.txtExpandedFolder = New System.Windows.Forms.TextBox()
         Me.Label10 = New System.Windows.Forms.Label()
-        Me.Label5 = New System.Windows.Forms.Label()
-        Me.txtBusinessRulesFolder = New System.Windows.Forms.TextBox()
         Me.cbInstream = New System.Windows.Forms.CheckBox()
         Me.SuspendLayout()
         '
@@ -661,22 +659,6 @@ Partial Class Form1
         Me.Label10.TabIndex = 73
         Me.Label10.Text = "RUN OPTIONS:"
         '
-        'Label5
-        '
-        Me.Label5.AutoSize = True
-        Me.Label5.Location = New System.Drawing.Point(901, 411)
-        Me.Label5.Name = "Label5"
-        Me.Label5.Size = New System.Drawing.Size(123, 20)
-        Me.Label5.TabIndex = 74
-        Me.Label5.Text = "Business Rules:"
-        '
-        'txtBusinessRulesFolder
-        '
-        Me.txtBusinessRulesFolder.Location = New System.Drawing.Point(1030, 408)
-        Me.txtBusinessRulesFolder.Name = "txtBusinessRulesFolder"
-        Me.txtBusinessRulesFolder.Size = New System.Drawing.Size(185, 26)
-        Me.txtBusinessRulesFolder.TabIndex = 75
-        '
         'cbInstream
         '
         Me.cbInstream.AutoSize = True
@@ -695,8 +677,6 @@ Partial Class Form1
         Me.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font
         Me.ClientSize = New System.Drawing.Size(1279, 683)
         Me.Controls.Add(Me.cbInstream)
-        Me.Controls.Add(Me.txtBusinessRulesFolder)
-        Me.Controls.Add(Me.Label5)
         Me.Controls.Add(Me.Label10)
         Me.Controls.Add(Me.txtExpandedFolder)
         Me.Controls.Add(Me.Label9)
@@ -825,7 +805,5 @@ Partial Class Form1
     Friend WithEvents Label9 As Label
     Friend WithEvents txtExpandedFolder As TextBox
     Friend WithEvents Label10 As Label
-    Friend WithEvents Label5 As Label
-    Friend WithEvents txtBusinessRulesFolder As TextBox
     Friend WithEvents cbInstream As CheckBox
 End Class
