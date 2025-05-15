@@ -24,8 +24,9 @@ Public Class Form1
   ' - PlantUml for creating flowchart
   '
   '***Be sure to change ProgramVersion when making changes!!!
-  Dim ProgramVersion As String = "v2.3.0"
+  Dim ProgramVersion As String = "v2.4.0"
   'Change-History.
+  ' 2025/05/15 v2.4.0 hk Remove BusinessRulesFolder 
   ' 2025/05/14 v2.3.0 hk Remove Business Rules COBOL Module, see CreateCobolBusinessRules.sln
   ' 2025/05/14 v2.2.0 hk Remove Old Comments
   ' 2025/05/08 v2.1.0 hk Add JCL EXEC COND column to Programs tab
@@ -139,7 +140,6 @@ Public Class Form1
   Dim folderPath As String = ""
   Dim Utilities As String()
   Dim ControlLibraries As String()
-  Dim BusinessRulesFolder As String = ""
   Dim PUMLFolder As String = ""
 
   ' Arrays to hold the DB2 Declare to Member names
@@ -224,7 +224,6 @@ Public Class Form1
 
   Dim LogFile As StreamWriter = Nothing
   Dim LogStmtFile As StreamWriter = Nothing
-  Dim swBRFile As StreamWriter = Nothing
   Dim swCallPgmsFile As StreamWriter = Nothing
 
   ' load the Excel References
@@ -514,7 +513,6 @@ Public Class Form1
     LogFile.WriteLine(Date.Now & ",I,Output Folder," & txtOutputFolder.Text)
     LogFile.WriteLine(Date.Now & ",I,PUML Folder," & txtPUMLFolder.Text)
     LogFile.WriteLine(Date.Now & ",I,Expanded Folder," & txtExpandedFolder.Text)
-    LogFile.WriteLine(Date.Now & ",I,Business Rules Folder," & txtBusinessRulesFolder.Text)
     LogFile.WriteLine(Date.Now & ",I,Delimiter," & txtDelimiter.Text)
     LogFile.WriteLine(Date.Now & ",I,ScanModeOnly," & cbScanModeOnly.Checked)
     LogFile.WriteLine(Date.Now & ",I,RunOption Jobs," & cbJOBS.Checked)
@@ -8056,11 +8054,6 @@ Public Class Form1
     txtOutputFolder.Text = "\OUTPUT"
     txtPUMLFolder.Text = "\PUML"
     txtExpandedFolder.Text = "\EXPANDED"
-    txtBusinessRulesFolder.Text = "\BUSINESS RULES"
-
-    BusinessRulesFolder = "\BUSINESS RULES"
-
-
 
   End Sub
 
