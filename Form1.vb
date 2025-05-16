@@ -24,8 +24,9 @@ Public Class Form1
   ' - PlantUml for creating flowchart
   '
   '***Be sure to change ProgramVersion when making changes!!!
-  Dim ProgramVersion As String = "v2.4.0"
+  Dim ProgramVersion As String = "v2.4.1"
   'Change-History.
+  ' 2025/05/15 v2.4.1 hk Remove Hyperlink for Utilities on Programs tab
   ' 2025/05/15 v2.4.0 hk Remove BusinessRulesFolder 
   ' 2025/05/14 v2.3.0 hk Remove Business Rules COBOL Module, see CreateCobolBusinessRules.sln
   ' 2025/05/14 v2.2.0 hk Remove Old Comments
@@ -2098,18 +2099,24 @@ Public Class Form1
                        "" & Delimiter &
                        SourceType & Delimiter &
                        SourceCount)
+
     ' write out the list of programs (presume no duplicates)
     If ddSequence = 1 And ddConcatSeq = 0 Then
-      ListOfPrograms.Add(JobSourceName & txtDelimiter.Text &
-                       jobName & txtDelimiter.Text &
-                       CreateProcsHyperLink(procName) & txtDelimiter.Text &
-                       stepName & txtDelimiter.Text &
+      Dim hlProcName As String = CreateHyperLinkProcs(procName)
+      Dim hlProgramSourceName As String = CreateHyperLinkSources(pgmName)
+      Dim hlProgramFlowchartName As String = CreateHyperLinkSVGFlowchart(pgmName)
+      Dim hlProgramFlowchartP2PName As String = CreateHyperLinkP2PFlowchart(pgmName)
+      Dim hlProgramBRName As String = CreateHyperLinkBRXLS(pgmName)
+      ListOfPrograms.Add(JobSourceName & Delimiter &
+                       jobName & Delimiter &
+                       hlProgramBRName & Delimiter &
+                       stepName & Delimiter &
                        execName & Delimiter &
-                       CreateSourcesHyperLink(pgmName) & txtDelimiter.Text &
+                       hlProgramSourceName & Delimiter &
                        SourceType & Delimiter &
-                       CreateFlowchartHyperLink(pgmName) & Delimiter &
-                       CreateFlowchartHyperLink(pgmName & "_P2P") & Delimiter &
-                       CreateOutputHyperLink(pgmName & "_BR.xlsx") & Delimiter &
+                       hlProgramFlowchartName & Delimiter &
+                       hlProgramFlowchartP2PName & Delimiter &
+                       hlProgramBRName & Delimiter &
                        SourceCount & Delimiter &
                        execCond)
       Select Case SourceType
@@ -2323,8 +2330,8 @@ Public Class Form1
       JobsWorksheet.Range("A" & row).Value = ""
       JobsWorksheet.Range("B" & row).Value = ""
     Else
-      JobsWorksheet.Range("A" & row).Formula2 = CreateJobFlowchartHyperLink(JobSourceName)
-      JobsWorksheet.Range("B" & row).Formula2 = CreateJobSourceHyperLink(JobSourceName)
+      JobsWorksheet.Range("A" & row).Formula2 = CreateHyperLinkJobFlowchart(JobSourceName)
+      JobsWorksheet.Range("B" & row).Formula2 = CreateHyperLinkJobSource(JobSourceName)
     End If
     JobsWorksheet.Range("C" & row).Value = jobName
     JobsWorksheet.Range("D" & row).Value = JobAccountInfo
@@ -2475,44 +2482,54 @@ Public Class Form1
     rngPrograms.Value = rngPrograms.Formula
     ' point to next spreadsheet row
     ProgramsRow += ListOfPrograms.Count
-
   End Sub
-  Function CreateSourcesHyperLink(text As String) As String
-    Dim theString = "=HYPERLINK(Summary!B3&Summary!B6&" &
+
+  Function CreateHyperLinkSources(text As String) As String
+    If Array.IndexOf(Utilities, text) > -1 Then
+      Return "n/a"
+    End If
+    Return "=HYPERLINK(Summary!B3&Summary!B6&" &
              QUOTE & text &
             QUOTE & ", " & QUOTE & text & QUOTE & ")"
-    Return theString
   End Function
-  Function CreateProcsHyperLink(text As String) As String
-    Dim theString = "=HYPERLINK(Summary!B3&Summary!B5&" &
-            QUOTE & text &
+  Function CreateHyperLinkBRXLS(text As String) As String
+    If Array.IndexOf(Utilities, text) > -1 Then
+      Return "n/a"
+    End If
+    Return "=HYPERLINK(Summary!B3&Summary!B8&" &
+             QUOTE & text & "_BR.xlsx" &
             QUOTE & ", " & QUOTE & text & QUOTE & ")"
-    Return theString
   End Function
-  Function CreateOutputHyperLink(text As String) As String
-    Dim theString = "=HYPERLINK(Summary!B3&Summary!B8&" &
-             QUOTE & text &
-            QUOTE & ", " & QUOTE & text & QUOTE & ")"
-    Return theString
-  End Function
-  Function CreateFlowchartHyperLink(text As String) As String
-    Dim theString = "=HYPERLINK(Summary!B3&Summary!B7&" &
+  Function CreateHyperLinkSVGFlowchart(text As String) As String
+    If Array.IndexOf(Utilities, text) > -1 Then
+      Return "n/a"
+    End If
+    Return "=HYPERLINK(Summary!B3&Summary!B7&" &
             QUOTE & text & ".svg" &
             QUOTE & ", " & QUOTE & "view" & QUOTE & ")"
-    Return theString
   End Function
-  Function CreateJobFlowchartHyperLink(text As String) As String
-    Dim theString = "=HYPERLINK(Summary!B3&Summary!B7&" &
+  Function CreateHyperLinkP2PFlowchart(text As String) As String
+    If Array.IndexOf(Utilities, text) > -1 Then
+      Return "n/a"
+    End If
+    Return "=HYPERLINK(Summary!B3&Summary!B7&" &
+            QUOTE & text & "_P2P.svg" &
+            QUOTE & ", " & QUOTE & "view" & QUOTE & ")"
+  End Function
+  Function CreateHyperLinkJobFlowchart(text As String) As String
+    Return "=HYPERLINK(Summary!B3&Summary!B7&" &
             QUOTE & text & "_JOB.svg" &
             QUOTE & ", " & QUOTE & "view" & QUOTE & ")"
-    Return theString
   End Function
-
-  Function CreateJobSourceHyperLink(text As String) As String
-    Dim theString = "=HYPERLINK(Summary!B3&Summary!B4&" &
+  Function CreateHyperLinkProcs(text As String) As String
+    Return "=HYPERLINK(Summary!B3&Summary!B5&" &
             QUOTE & text &
             QUOTE & ", " & QUOTE & text & QUOTE & ")"
-    Return theString
+  End Function
+  Function CreateHyperLinkJobSource(text As String) As String
+    Return "=HYPERLINK(Summary!B3&Summary!B4&" &
+            QUOTE & text &
+            QUOTE & ", " & QUOTE & text & QUOTE & ")"
   End Function
 
   Sub CreateFilesTab()
@@ -4962,7 +4979,7 @@ Public Class Form1
     For x As Integer = 0 To ListOfRecords.Count - 1
       DelimText = ListOfRecords(x).Split(Delimiter)
       If DelimText(6).ToUpper <> "NONE" Then
-        DelimText(6) = CreateSourcesHyperLink(DelimText(6))
+        DelimText(6) = CreateHyperLinkSources(DelimText(6))
       End If
       For y = 0 To 14
         tArray(x, y) = DelimText(y)
