@@ -24,8 +24,9 @@ Public Class Form1
   ' - PlantUml for creating flowchart
   '
   '***Be sure to change ProgramVersion when making changes!!!
-  Dim ProgramVersion As String = "v2.4.1"
+  Dim ProgramVersion As String = "v2.4.2"
   'Change-History.
+  ' 2025/05/16 v2.4.2 hk Fix Folder names on Summary Tab and hyperlinks
   ' 2025/05/15 v2.4.1 hk Remove Hyperlink for Utilities on Programs tab
   ' 2025/05/15 v2.4.0 hk Remove BusinessRulesFolder 
   ' 2025/05/14 v2.3.0 hk Remove Business Rules COBOL Module, see CreateCobolBusinessRules.sln
@@ -2103,13 +2104,13 @@ Public Class Form1
     ' write out the list of programs (presume no duplicates)
     If ddSequence = 1 And ddConcatSeq = 0 Then
       Dim hlProcName As String = CreateHyperLinkProcs(procName)
-      Dim hlProgramSourceName As String = CreateHyperLinkSources(pgmName)
+      Dim hlProgramSourceName As String = CreateHyperLinkSources(pgmName, SourceType)
       Dim hlProgramFlowchartName As String = CreateHyperLinkSVGFlowchart(pgmName)
       Dim hlProgramFlowchartP2PName As String = CreateHyperLinkP2PFlowchart(pgmName)
       Dim hlProgramBRName As String = CreateHyperLinkBRXLS(pgmName)
       ListOfPrograms.Add(JobSourceName & Delimiter &
                        jobName & Delimiter &
-                       hlProgramBRName & Delimiter &
+                       hlProcName & Delimiter &
                        stepName & Delimiter &
                        execName & Delimiter &
                        hlProgramSourceName & Delimiter &
@@ -2271,17 +2272,23 @@ Public Class Form1
     SummaryWorksheet.Range("B4").Value = "/JOBS/"
     SummaryWorksheet.Range("A5").Value = "PROCS:"
     SummaryWorksheet.Range("B5").Value = "/PROCS/"
-    SummaryWorksheet.Range("A6").Value = "SOURCES:"
-    SummaryWorksheet.Range("B6").Value = "/SOURCES/"
-    SummaryWorksheet.Range("A7").Value = "FLOWCHARTS:"
-    SummaryWorksheet.Range("B7").Value = "/FLOWCHARTS/"
-    SummaryWorksheet.Range("A8").Value = "BUSINESS RULES:"
-    SummaryWorksheet.Range("B8").Value = "/BUSINESS RULES/"
-    SummaryWorksheet.Range("A9").Value = ""
-    SummaryWorksheet.Range("B9").Value = ""
-    SummaryWorksheet.Range("A10").Value = "Data Gathering Form Contents:"
-    SummaryWorksheet.Range("B10").Value = ""
-    SummaryRow = 10
+    SummaryWorksheet.Range("A6").Value = "COBOL:"
+    SummaryWorksheet.Range("B6").Value = "/COBOL/"
+    SummaryWorksheet.Range("A7").Value = "EASYTRIEVE:"
+    SummaryWorksheet.Range("B7").Value = "/EASYTRIEVE/"
+    SummaryWorksheet.Range("A8").Value = "ASSEMBLER:"
+    SummaryWorksheet.Range("B8").Value = "/ASM/"
+    SummaryWorksheet.Range("A9").Value = "COPYBOOKS:"
+    SummaryWorksheet.Range("B9").Value = "/COPYBOOKS/"
+    SummaryWorksheet.Range("A10").Value = "FLOWCHARTS:"
+    SummaryWorksheet.Range("B10").Value = "/FLOWCHARTS/"
+    SummaryWorksheet.Range("A11").Value = "BUSINESS RULES:"
+    SummaryWorksheet.Range("B11").Value = "/BUSINESS RULES/"
+    SummaryWorksheet.Range("A12").Value = ""
+    SummaryWorksheet.Range("B12").Value = ""
+    SummaryWorksheet.Range("A13").Value = "Data Gathering Form Contents:"
+    SummaryWorksheet.Range("B13").Value = ""
+    SummaryRow = 14
     For Each dgf In ListOfDataGathering
       SummaryRow += 1
       Dim row As Integer = LTrim(Str(SummaryRow))
@@ -2484,7 +2491,20 @@ Public Class Form1
     ProgramsRow += ListOfPrograms.Count
   End Sub
 
-  Function CreateHyperLinkSources(text As String) As String
+  Function CreateHyperLinkSources(text As String, ByRef SourceType As String) As String
+    ' Based on Sourcetype, determine which CreateHyperlink routine to call
+    Select Case SourceType
+      Case "COBOL"
+        Return CreateHyperLinkCobolSources(text)
+      Case "Easytrieve"
+        Return CreateHyperLinkEasytreiveSources(text)
+      Case "Assembler"
+        Return CreateHyperLinkAssemblerSources(text)
+      Case Else
+        Return "n/a"
+    End Select
+  End Function
+  Function CreateHyperLinkCobolSources(text As String) As String
     If Array.IndexOf(Utilities, text) > -1 Then
       Return "n/a"
     End If
@@ -2492,11 +2512,32 @@ Public Class Form1
              QUOTE & text &
             QUOTE & ", " & QUOTE & text & QUOTE & ")"
   End Function
-  Function CreateHyperLinkBRXLS(text As String) As String
+  Function CreateHyperLinkEasytreiveSources(text As String) As String
+    If Array.IndexOf(Utilities, text) > -1 Then
+      Return "n/a"
+    End If
+    Return "=HYPERLINK(Summary!B3&Summary!B7&" &
+             QUOTE & text &
+            QUOTE & ", " & QUOTE & text & QUOTE & ")"
+  End Function
+  Function CreateHyperLinkAssemblerSources(text As String) As String
     If Array.IndexOf(Utilities, text) > -1 Then
       Return "n/a"
     End If
     Return "=HYPERLINK(Summary!B3&Summary!B8&" &
+             QUOTE & text &
+            QUOTE & ", " & QUOTE & text & QUOTE & ")"
+  End Function
+  Function CreateHyperLinkCopybookSources(text As String) As String
+    Return "=HYPERLINK(Summary!B3&Summary!B9&" &
+             QUOTE & text &
+            QUOTE & ", " & QUOTE & text & QUOTE & ")"
+  End Function
+  Function CreateHyperLinkBRXLS(text As String) As String
+    If Array.IndexOf(Utilities, text) > -1 Then
+      Return "n/a"
+    End If
+    Return "=HYPERLINK(Summary!B3&Summary!B11&" &
              QUOTE & text & "_BR.xlsx" &
             QUOTE & ", " & QUOTE & text & QUOTE & ")"
   End Function
@@ -2504,7 +2545,7 @@ Public Class Form1
     If Array.IndexOf(Utilities, text) > -1 Then
       Return "n/a"
     End If
-    Return "=HYPERLINK(Summary!B3&Summary!B7&" &
+    Return "=HYPERLINK(Summary!B3&Summary!B10&" &
             QUOTE & text & ".svg" &
             QUOTE & ", " & QUOTE & "view" & QUOTE & ")"
   End Function
@@ -2512,12 +2553,12 @@ Public Class Form1
     If Array.IndexOf(Utilities, text) > -1 Then
       Return "n/a"
     End If
-    Return "=HYPERLINK(Summary!B3&Summary!B7&" &
+    Return "=HYPERLINK(Summary!B3&Summary!B10&" &
             QUOTE & text & "_P2P.svg" &
             QUOTE & ", " & QUOTE & "view" & QUOTE & ")"
   End Function
   Function CreateHyperLinkJobFlowchart(text As String) As String
-    Return "=HYPERLINK(Summary!B3&Summary!B7&" &
+    Return "=HYPERLINK(Summary!B3&Summary!B10&" &
             QUOTE & text & "_JOB.svg" &
             QUOTE & ", " & QUOTE & "view" & QUOTE & ")"
   End Function
@@ -4979,7 +5020,7 @@ Public Class Form1
     For x As Integer = 0 To ListOfRecords.Count - 1
       DelimText = ListOfRecords(x).Split(Delimiter)
       If DelimText(6).ToUpper <> "NONE" Then
-        DelimText(6) = CreateHyperLinkSources(DelimText(6))
+        DelimText(6) = CreateHyperLinkCopybookSources(DelimText(6))
       End If
       For y = 0 To 14
         tArray(x, y) = DelimText(y)
