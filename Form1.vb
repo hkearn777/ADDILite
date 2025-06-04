@@ -2313,7 +2313,7 @@ Public Class Form1
     If Not cbJOBS.Checked Then
       Exit Sub
     End If
-    LogFile.WriteLine(Date.Now & ",I,CreateJobTab," & jobName)
+    LogFile.WriteLine(Date.Now & ",I,CreateJobsTab," & jobName)
     If JobRow = 0 Then
       ' Write the column headings row
       JobsWorksheet.Cell("A1").Value = "Flow"
@@ -2343,7 +2343,9 @@ Public Class Form1
       JobsWorksheet.Cell("B" & row).Value = ""
     Else
       JobsWorksheet.Cell("A" & row).FormulaA1 = hlBuilder.CreateHyperLinkJobFlowchart(JobSourceName)
+      JobsWorksheet.Cell("A" & row).Style.Font.Underline = XLFontUnderlineValues.Single
       JobsWorksheet.Cell("B" & row).FormulaA1 = hlBuilder.CreateHyperLinkJobSource(JobSourceName)
+      JobsWorksheet.Cell("B" & row).Style.Font.Underline = XLFontUnderlineValues.Single
     End If
     JobsWorksheet.Cell("C" & row).Value = jobName
     JobsWorksheet.Cell("D" & row).Value = JobAccountInfo
@@ -2469,15 +2471,8 @@ Public Class Form1
       Dim fields() As String = myRow.Split(New String() {Delimiter}, StringSplitOptions.None)
       For colIndex As Integer = 0 To theColIndex
         If fields(colIndex).StartsWith("=HYPERLINK") Then
-          Dim myFields() As String = fields(colIndex).Split(New String() {","}, StringSplitOptions.None)
-          Dim myLink As String = myFields(0).Replace("=HYPERLINK(", "").Replace(QUOTE, "").Trim()
-          Dim myText As String = myFields(1).Replace(QUOTE, "").Replace(")", "").Trim()
-          If myText.Length = 0 Then
-            theWorksheet.Cell(theRowIndex, colIndex + 1).Value = ""
-          Else
-            theWorksheet.Cell(theRowIndex, colIndex + 1).Value = myText
-            theWorksheet.Cell(theRowIndex, colIndex + 1).SetHyperlink(New XLHyperlink(myLink))
-          End If
+          theWorksheet.Cell(theRowIndex, colIndex + 1).FormulaA1 = fields(colIndex)
+          theWorksheet.Cell(theRowIndex, colIndex + 1).Style.Font.Underline = XLFontUnderlineValues.Single
         Else
           theWorksheet.Cell(theRowIndex, colIndex + 1).Value = fields(colIndex)
         End If
